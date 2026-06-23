@@ -2429,7 +2429,10 @@ function App() {
       <div className="shell auth-shell">
         <div className="ambient ambient-a" />
         <div className="ambient ambient-b" />
-        <LoginPage session={session} redirectTo={page === 'login' ? '#dashboard' : hash} onLoginSuccess={setSession} onShowPromo={() => { void loadAdminSettings().then((s) => { if (s.promo?.enabled) setPromoPopup(s.promo); }); }} />
+        <LandingSeo />
+        <div id="rs-login">
+          <LoginPage session={session} redirectTo={page === 'login' ? '#dashboard' : hash} onLoginSuccess={setSession} onShowPromo={() => { void loadAdminSettings().then((s) => { if (s.promo?.enabled) setPromoPopup(s.promo); }); }} />
+        </div>
         <UpdateToast />
       </div>
     );
@@ -2638,6 +2641,67 @@ function App() {
       </main>
       <UpdateToast />
     </div>
+  );
+}
+
+// Landing ber-konten SEO yang tampil di atas form login untuk pengunjung yang
+// belum masuk (termasuk crawler Google). User yang sudah login tidak melihat ini.
+function LandingSeo() {
+  const scrollToLogin = () => {
+    document.getElementById('rs-login')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  return (
+    <header className="landing-seo">
+      <nav className="landing-nav">
+        <span className="landing-brand">Ruang Sosmed<span className="landing-brand-id">ID</span></span>
+        <button type="button" className="landing-login-link" onClick={scrollToLogin}>Masuk</button>
+      </nav>
+
+      <section className="landing-hero">
+        <p className="landing-eyebrow">Ruang Sosmed ID · by Snail</p>
+        <h1 className="landing-title">Kelas Belajar Jadi Social Media Specialist</h1>
+        <p className="landing-tagline">Gak semua anak sosmed itu specialist — di sini kamu belajar jadi yang specialist.</p>
+        <p className="landing-sub">
+          Tempat upgrade skill untuk kamu yang ingin serius menekuni dunia social
+          media. Belajar content strategy, visual design, analytics, dan social media
+          marketing lewat materi terstruktur, sesi 1:1 bersama mentor, serta komunitas
+          yang aktif berbagi insight.
+        </p>
+        <button type="button" className="landing-cta" onClick={scrollToLogin}>Masuk ke kelas →</button>
+      </section>
+
+      <section className="landing-section">
+        <h2>Apa itu Social Media Specialist?</h2>
+        <p>
+          Social media specialist adalah orang yang mengelola dan mengembangkan akun
+          sosial media sebuah brand secara strategis — mulai dari merancang konten,
+          membaca data performa, sampai menumbuhkan audiens. Di Ruang Sosmed ID kamu
+          belajar semua skill itu dari nol secara terarah, bukan asal posting.
+        </p>
+      </section>
+
+      <section className="landing-section">
+        <h2>Yang kamu pelajari</h2>
+        <ul className="landing-list">
+          <li><strong>Content Strategy</strong> — merancang ide, ritme posting, dan pesan yang konsisten.</li>
+          <li><strong>Visual Design</strong> — membuat konten yang menarik dan sesuai identitas brand.</li>
+          <li><strong>Analytics</strong> — membaca metrik dan mengambil keputusan berbasis data.</li>
+          <li><strong>Social Media Marketing</strong> — strategi pertumbuhan lintas platform.</li>
+          <li><strong>Mindset &amp; Growth</strong> — pola pikir profesional sosial media.</li>
+        </ul>
+      </section>
+
+      <section className="landing-section">
+        <h2>Kenapa Ruang Sosmed ID?</h2>
+        <ul className="landing-list">
+          <li><strong>Materi terstruktur</strong> — belajar bertahap dari dasar sampai mahir.</li>
+          <li><strong>Sesi 1:1 dengan mentor</strong> — konsultasi langsung sesuai kebutuhanmu.</li>
+          <li><strong>Komunitas aktif</strong> — diskusi, tanya jawab, dan berbagi insight.</li>
+          <li><strong>Sertifikat</strong> — bukti kompetensi setelah menyelesaikan kelas.</li>
+        </ul>
+        <button type="button" className="landing-cta" onClick={scrollToLogin}>Mulai sekarang →</button>
+      </section>
+    </header>
   );
 }
 
