@@ -2205,6 +2205,12 @@ function App() {
     return null;
   });
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('rs-dark-mode') === '1');
+  const [landingContent, setLandingContent] = useState<LandingContent>(defaultLandingContent);
+
+  useEffect(() => {
+    if (session) return;
+    void loadLandingContent().then(setLandingContent);
+  }, [session]);
 
   useEffect(() => {
     document.body.classList.toggle('dark', darkMode);
@@ -2432,7 +2438,7 @@ function App() {
         <div className="shell landing-shell">
           <div className="ambient ambient-a" />
           <div className="ambient ambient-b" />
-          <LandingPage onMasuk={() => { window.location.hash = '#login'; }} />
+          <LandingPage content={landingContent} onMasuk={() => { window.location.hash = '#login'; }} />
           <UpdateToast />
         </div>
       );
@@ -2653,10 +2659,167 @@ function App() {
   );
 }
 
+// Editor admin untuk konten landing page: teks, tombol, foto (upload),
+// tambah/hapus langkah, fitur, dan FAQ. Disimpan ke Supabase.
+function LandingImageInput({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  return (
+    <div className="landing-edit-image">
+      {value ? <img src={value} alt="" className="landing-edit-thumb" /> : <div className="landing-edit-thumb empty" />}
+      <div className="landing-edit-image-actions">
+        <label className="admin-mini-btn">
+          {uploading ? 'Mengunggah…' : 'Upload Foto'}
+          <input
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setUploading(true);
+              try { onChange(await uploadLandingImage(file)); } catch { alert('Gagal upload gambar.'); }
+              setUploading(false);
+            }}
+          />
+        </label>
+        {value && <button type="button" className="admin-mini-btn ghost" onClick={() => onChange('')}>Hapus</button>}
+      </div>
+    </div>
+  );
+}
+
+function LandingEditor() {
+  const [content, setContent] = useState<LandingContent | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(false);
+
+  useEffect(() => { void loadLandingContent().then(setContent); }, []);
+
+  if (!content) return <div className="forum-loading">memuat konten landing…</div>;
+  const c = content;
+  const set = (patch: Partial<LandingContent>) => setContent({ ...c, ...patch });
+
+  const save = async () => {
+    setSaving(true);
+    await saveLandingContent(c);
+    setSaving(false);
+    setSavedAt(true);
+    setTimeout(() => setSavedAt(false), 2500);
+  };
+
+  return (
+    <div className="landing-editor">
+      <div className="landing-editor-head">
+        <p className="admin-section-label" style={{ margin: 0 }}>Editor Landing Page</p>
+        <div className="landing-editor-head-actions">
+          <a className="admin-mini-btn ghost" href="#" onClick={(e) => { e.preventDefault(); window.open('/', '_blank'); }}>Lihat Halaman ↗</a>
+          <button type="button" className="admin-add-btn" disabled={saving} onClick={() => void save()}>
+            {saving ? 'Menyimpan…' : savedAt ? '✓ Tersimpan' : 'Simpan Perubahan'}
+          </button>
+        </div>
+      </div>
+
+      {/* Hero */}
+      <fieldset className="landing-edit-group">
+        <legend>Hero (bagian atas)</legend>
+        <label>Badge<input value={c.badge} onChange={(e) => set({ badge: e.target.value })} /></label>
+        <label>Judul utama<textarea rows={2} value={c.heroTitle} onChange={(e) => set({ heroTitle: e.target.value })} /></label>
+        <label>Deskripsi<textarea rows={3} value={c.heroSubtitle} onChange={(e) => set({ heroSubtitle: e.target.value })} /></label>
+        <div className="landing-edit-row">
+          <label>Teks tombol<input value={c.heroCtaLabel} onChange={(e) => set({ heroCtaLabel: e.target.value })} /></label>
+          <label>Placeholder email<input value={c.emailPlaceholder} onChange={(e) => set({ emailPlaceholder: e.target.value })} /></label>
+        </div>
+      </fieldset>
+
+      {/* Steps */}
+      <fieldset className="landing-edit-group">
+        <legend>Bagian "Cara Kerja"</legend>
+        <label>Judul bagian<input value={c.howTitle} onChange={(e) => set({ howTitle: e.target.value })} /></label>
+        {c.steps.map((s, i) => (
+          <div className="landing-edit-item" key={s.id}>
+            <div className="landing-edit-item-head">
+              <strong>Langkah {i + 1}</strong>
+              <button type="button" className="admin-mini-btn ghost" onClick={() => set({ steps: c.steps.filter((x) => x.id !== s.id) })}>Hapus</button>
+            </div>
+            <LandingImageInput value={s.image} onChange={(url) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, image: url } : x) })} />
+            <label>Label<input value={s.label} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, label: e.target.value } : x) })} /></label>
+            <label>Judul<input value={s.title} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, title: e.target.value } : x) })} /></label>
+            <label>Deskripsi<textarea rows={2} value={s.desc} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, desc: e.target.value } : x) })} /></label>
+          </div>
+        ))}
+        <button type="button" className="admin-mini-btn" onClick={() => set({ steps: [...c.steps, { id: `s${Date.now()}`, image: '', label: `Langkah 0${c.steps.length + 1}`, title: 'Judul langkah', desc: 'Deskripsi langkah' }] })}>+ Tambah Langkah</button>
+      </fieldset>
+
+      {/* Features */}
+      <fieldset className="landing-edit-group">
+        <legend>Bagian Fitur (split kiri/kanan)</legend>
+        <label>Judul bagian<input value={c.featuresTitle} onChange={(e) => set({ featuresTitle: e.target.value })} /></label>
+        {c.features.map((f, i) => (
+          <div className="landing-edit-item" key={f.id}>
+            <div className="landing-edit-item-head">
+              <strong>Fitur {i + 1}</strong>
+              <button type="button" className="admin-mini-btn ghost" onClick={() => set({ features: c.features.filter((x) => x.id !== f.id) })}>Hapus</button>
+            </div>
+            <LandingImageInput value={f.image} onChange={(url) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, image: url } : x) })} />
+            <label>Label kecil<input value={f.eyebrow} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, eyebrow: e.target.value } : x) })} /></label>
+            <label>Judul<input value={f.title} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, title: e.target.value } : x) })} /></label>
+            <label>Deskripsi<textarea rows={2} value={f.desc} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, desc: e.target.value } : x) })} /></label>
+            <div className="landing-edit-row">
+              <label>Teks tombol<input value={f.ctaLabel} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, ctaLabel: e.target.value } : x) })} /></label>
+              <label>Posisi gambar
+                <select value={f.imageSide} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, imageSide: e.target.value as 'left' | 'right' } : x) })}>
+                  <option value="right">Kanan</option>
+                  <option value="left">Kiri</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        ))}
+        <button type="button" className="admin-mini-btn" onClick={() => set({ features: [...c.features, { id: `f${Date.now()}`, eyebrow: 'Label', title: 'Judul fitur', desc: 'Deskripsi fitur', ctaLabel: 'Pelajari', image: '', imageSide: 'right' }] })}>+ Tambah Fitur</button>
+      </fieldset>
+
+      {/* FAQ */}
+      <fieldset className="landing-edit-group">
+        <legend>FAQ</legend>
+        <label>Judul bagian<input value={c.faqTitle} onChange={(e) => set({ faqTitle: e.target.value })} /></label>
+        {c.faqs.map((q, i) => (
+          <div className="landing-edit-item" key={q.id}>
+            <div className="landing-edit-item-head">
+              <strong>FAQ {i + 1}</strong>
+              <button type="button" className="admin-mini-btn ghost" onClick={() => set({ faqs: c.faqs.filter((x) => x.id !== q.id) })}>Hapus</button>
+            </div>
+            <label>Pertanyaan<input value={q.q} onChange={(e) => set({ faqs: c.faqs.map((x) => x.id === q.id ? { ...x, q: e.target.value } : x) })} /></label>
+            <label>Jawaban<textarea rows={2} value={q.a} onChange={(e) => set({ faqs: c.faqs.map((x) => x.id === q.id ? { ...x, a: e.target.value } : x) })} /></label>
+          </div>
+        ))}
+        <button type="button" className="admin-mini-btn" onClick={() => set({ faqs: [...c.faqs, { id: `q${Date.now()}`, q: 'Pertanyaan baru?', a: 'Jawaban.' }] })}>+ Tambah FAQ</button>
+      </fieldset>
+
+      {/* Final + footer */}
+      <fieldset className="landing-edit-group">
+        <legend>Penutup &amp; Footer</legend>
+        <label>Judul ajakan akhir<input value={c.finalTitle} onChange={(e) => set({ finalTitle: e.target.value })} /></label>
+        <label>Deskripsi ajakan<textarea rows={2} value={c.finalSubtitle} onChange={(e) => set({ finalSubtitle: e.target.value })} /></label>
+        <div className="landing-edit-row">
+          <label>Teks tombol akhir<input value={c.finalCtaLabel} onChange={(e) => set({ finalCtaLabel: e.target.value })} /></label>
+          <label>Teks footer<input value={c.footerText} onChange={(e) => set({ footerText: e.target.value })} /></label>
+        </div>
+        <label>Link Instagram<input value={c.instagramUrl} onChange={(e) => set({ instagramUrl: e.target.value })} /></label>
+      </fieldset>
+
+      <div className="landing-editor-foot">
+        <button type="button" className="admin-add-btn" disabled={saving} onClick={() => void save()}>
+          {saving ? 'Menyimpan…' : savedAt ? '✓ Tersimpan' : 'Simpan Perubahan'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Halaman landing khusus (SEO) untuk pengunjung yang belum login, termasuk
 // crawler Google. Tombol "Masuk" mengarahkan ke halaman login (#login).
 // User yang sudah login tidak pernah melihat halaman ini.
-function LandingPage({ onMasuk }: { onMasuk: () => void }) {
+function LandingPage({ content, onMasuk }: { content: LandingContent; onMasuk: () => void }) {
   return (
     <div className="landing">
       <nav className="landing-nav">
@@ -2666,120 +2829,72 @@ function LandingPage({ onMasuk }: { onMasuk: () => void }) {
 
       {/* Hero */}
       <header className="landing-hero">
-        <p className="landing-eyebrow">Ruang Sosmed ID · by Snail</p>
-        <h1 className="landing-title">Belajar Jadi Social Media Specialist, dari Nol sampai Pro</h1>
-        <p className="landing-tagline">Gak semua anak sosmed itu specialist — di sini kamu belajar jadi yang specialist.</p>
-        <p className="landing-sub">
-          Ruang Sosmed ID adalah platform belajar social media specialist terlengkap
-          untuk kamu yang ingin serius menekuni dunia sosial media. Kuasai content
-          strategy, visual design, analytics, dan social media marketing lewat materi
-          terstruktur, sesi 1:1 bersama mentor berpengalaman, serta komunitas yang
-          aktif berbagi insight.
-        </p>
-        <div className="landing-cta-row">
-          <button type="button" className="landing-cta" onClick={onMasuk}>Masuk ke kelas →</button>
-          <a className="landing-cta-ghost" href="#kurikulum">Lihat materi</a>
-        </div>
+        {content.badge && <span className="landing-badge">✨ {content.badge}</span>}
+        <h1 className="landing-title">{content.heroTitle}</h1>
+        <p className="landing-sub">{content.heroSubtitle}</p>
+        <form className="landing-hero-form" onSubmit={(e) => { e.preventDefault(); onMasuk(); }}>
+          <input type="email" className="landing-hero-email" placeholder={content.emailPlaceholder} />
+          <button type="submit" className="landing-cta">{content.heroCtaLabel} ↗</button>
+        </form>
       </header>
 
       <main className="landing-main">
-        <section className="landing-section" id="tentang">
-          <h2>Apa itu Social Media Specialist?</h2>
-          <p>
-            Social media specialist adalah profesional yang mengelola dan mengembangkan
-            akun sosial media sebuah brand secara strategis — mulai dari riset audiens,
-            merancang konten, mengeksekusi visual, menjadwalkan posting, sampai membaca
-            data performa untuk mengambil keputusan. Profesi ini makin dibutuhkan karena
-            hampir semua bisnis kini bergantung pada kehadiran sosial media yang kuat.
-          </p>
-          <p>
-            Masalahnya, banyak yang merasa "bisa main sosmed" tapi belum tentu paham
-            strategi di baliknya. Di Ruang Sosmed ID, kamu belajar fondasi dan praktik
-            nyata seorang specialist secara terarah — bukan sekadar ikut tren atau asal
-            posting.
-          </p>
-        </section>
-
-        <section className="landing-section" id="kurikulum">
-          <h2>Yang kamu pelajari</h2>
-          <p>Kurikulum disusun bertahap supaya kamu paham gambaran besar sekaligus jago di detail teknisnya.</p>
-          <div className="landing-grid">
-            <article className="landing-card">
-              <h3>Content Strategy</h3>
-              <p>Riset audiens, pilar konten, ritme posting, dan pesan brand yang konsisten dan relevan.</p>
-            </article>
-            <article className="landing-card">
-              <h3>Visual Design</h3>
-              <p>Membuat konten yang menarik, rapi, dan sesuai identitas brand tanpa harus jadi desainer.</p>
-            </article>
-            <article className="landing-card">
-              <h3>Analytics</h3>
-              <p>Membaca metrik penting, memahami insight, dan mengambil keputusan berbasis data.</p>
-            </article>
-            <article className="landing-card">
-              <h3>Social Media Marketing</h3>
-              <p>Strategi pertumbuhan lintas platform: Instagram, TikTok, dan lainnya.</p>
-            </article>
-            <article className="landing-card">
-              <h3>Mindset &amp; Growth</h3>
-              <p>Pola pikir profesional, manajemen waktu, dan kebiasaan yang bikin kamu konsisten berkembang.</p>
-            </article>
-            <article className="landing-card">
-              <h3>Asset &amp; Tools</h3>
-              <p>Template, materi, dan tools siap pakai untuk mempercepat kerjamu sebagai specialist.</p>
-            </article>
+        {/* How it works */}
+        <section className="landing-block" id="cara-kerja">
+          <h2 className="landing-h2 center">{content.howTitle}</h2>
+          <div className="landing-steps-grid">
+            {content.steps.map((s) => (
+              <article className="landing-step-card" key={s.id}>
+                <div className="landing-step-media">
+                  {s.image ? <img src={s.image} alt={s.title} /> : <div className="landing-media-empty" />}
+                </div>
+                <span className="landing-step-label">{s.label}</span>
+                <h3>{s.title}</h3>
+                <p>{s.desc}</p>
+              </article>
+            ))}
           </div>
         </section>
 
-        <section className="landing-section" id="cara-kerja">
-          <h2>Cara mulai belajar</h2>
-          <ol className="landing-steps">
-            <li><span>1</span><div><strong>Buat akun &amp; masuk</strong><p>Daftar gratis, lalu masuk ke ruang belajarmu.</p></div></li>
-            <li><span>2</span><div><strong>Ikuti materi terstruktur</strong><p>Pelajari video & modul bertahap sesuai jalurmu.</p></div></li>
-            <li><span>3</span><div><strong>Praktik &amp; konsultasi 1:1</strong><p>Terapkan ilmu dan tanyakan langsung ke mentor.</p></div></li>
-            <li><span>4</span><div><strong>Dapatkan sertifikat</strong><p>Selesaikan kelas dan buktikan kompetensimu.</p></div></li>
-          </ol>
+        {/* Feature split sections */}
+        <section className="landing-block" id="fitur">
+          <h2 className="landing-h2 center">{content.featuresTitle}</h2>
+          {content.features.map((f) => (
+            <div className={`landing-feature ${f.imageSide === 'left' ? 'media-left' : 'media-right'}`} key={f.id}>
+              <div className="landing-feature-text">
+                {f.eyebrow && <span className="landing-pill">{f.eyebrow}</span>}
+                <h3>{f.title}</h3>
+                <p>{f.desc}</p>
+                {f.ctaLabel && <button type="button" className="landing-cta small" onClick={onMasuk}>{f.ctaLabel} →</button>}
+              </div>
+              <div className="landing-feature-media">
+                {f.image ? <img src={f.image} alt={f.title} /> : <div className="landing-media-empty tall" />}
+              </div>
+            </div>
+          ))}
         </section>
 
-        <section className="landing-section" id="keunggulan">
-          <h2>Kenapa belajar di Ruang Sosmed ID?</h2>
-          <ul className="landing-list">
-            <li><strong>Materi terstruktur</strong> — belajar bertahap dari dasar sampai mahir, tidak loncat-loncat.</li>
-            <li><strong>Sesi 1:1 dengan mentor</strong> — konsultasi personal sesuai kebutuhan dan kasus nyatamu.</li>
-            <li><strong>Komunitas aktif</strong> — forum diskusi, tanya jawab, dan berbagi insight antar member.</li>
-            <li><strong>Sertifikat kelulusan</strong> — bukti kompetensi untuk portofolio dan lamaran kerja.</li>
-            <li><strong>Materi &amp; asset siap pakai</strong> — hemat waktu dengan template dan sumber belajar lengkap.</li>
-          </ul>
-        </section>
+        {/* FAQ */}
+        {content.faqs.length > 0 && (
+          <section className="landing-faq" id="faq">
+            <h2 className="landing-h2 center">{content.faqTitle}</h2>
+            {content.faqs.map((q) => (
+              <details key={q.id}><summary>{q.q}</summary><p>{q.a}</p></details>
+            ))}
+          </section>
+        )}
 
-        <section className="landing-section" id="untuk-siapa">
-          <h2>Cocok untuk siapa?</h2>
-          <ul className="landing-list">
-            <li>Pemula yang ingin <strong>berkarier sebagai social media specialist</strong> atau admin sosmed.</li>
-            <li>Freelancer &amp; content creator yang ingin <strong>naik kelas jadi lebih strategis</strong>.</li>
-            <li>Pemilik usaha yang ingin <strong>mengelola sosial media bisnisnya sendiri</strong>.</li>
-            <li>Siapa pun yang ingin <strong>upgrade skill sosial media</strong> secara serius dan terarah.</li>
-          </ul>
-        </section>
-
-        <section className="landing-faq" id="faq">
-          <h2>Pertanyaan yang sering diajukan</h2>
-          <details><summary>Apakah cocok untuk pemula total?</summary><p>Sangat cocok. Materi dimulai dari dasar, jadi kamu yang belum punya pengalaman pun bisa mengikuti dengan nyaman.</p></details>
-          <details><summary>Apa yang akan saya kuasai setelah belajar?</summary><p>Kamu akan mampu menyusun strategi konten, membuat visual, membaca analytics, dan menjalankan social media marketing sebagai seorang specialist.</p></details>
-          <details><summary>Apakah ada sesi bersama mentor?</summary><p>Ya. Kamu bisa booking sesi 1:1 untuk konsultasi langsung sesuai kebutuhanmu.</p></details>
-          <details><summary>Apakah dapat sertifikat?</summary><p>Ya, kamu mendapat sertifikat setelah menyelesaikan kelas sebagai bukti kompetensi.</p></details>
-        </section>
-
+        {/* Final CTA */}
         <section className="landing-final">
-          <h2>Siap jadi social media specialist sungguhan?</h2>
-          <p>Gabung sekarang dan mulai upgrade skill sosial mediamu bersama Ruang Sosmed ID.</p>
-          <button type="button" className="landing-cta" onClick={onMasuk}>Masuk ke kelas →</button>
+          <h2>{content.finalTitle}</h2>
+          <p>{content.finalSubtitle}</p>
+          <button type="button" className="landing-cta" onClick={onMasuk}>{content.finalCtaLabel} ↗</button>
         </section>
       </main>
 
       <footer className="landing-footer">
-        <span>© {new Date().getFullYear()} Ruang Sosmed ID by Snail</span>
-        <a href="https://www.instagram.com/ruangsosmedid" target="_blank" rel="noreferrer">Instagram @ruangsosmedid</a>
+        <span>© {new Date().getFullYear()} {content.footerText}</span>
+        {content.instagramUrl && <a href={content.instagramUrl} target="_blank" rel="noreferrer">Instagram</a>}
       </footer>
     </div>
   );
@@ -8349,6 +8464,89 @@ async function saveAdminSettings(settings: AdminSettings) {
   });
 }
 
+// ── Landing Page content (editable via admin) ───────────────
+type LandingStep = { id: string; image: string; label: string; title: string; desc: string };
+type LandingFeature = { id: string; eyebrow: string; title: string; desc: string; ctaLabel: string; image: string; imageSide: 'left' | 'right' };
+type LandingFaq = { id: string; q: string; a: string };
+type LandingContent = {
+  badge: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  heroCtaLabel: string;
+  emailPlaceholder: string;
+  howTitle: string;
+  steps: LandingStep[];
+  featuresTitle: string;
+  features: LandingFeature[];
+  faqTitle: string;
+  faqs: LandingFaq[];
+  finalTitle: string;
+  finalSubtitle: string;
+  finalCtaLabel: string;
+  footerText: string;
+  instagramUrl: string;
+};
+
+const landingContentKey = 'landing_page_content';
+
+const defaultLandingContent: LandingContent = {
+  badge: 'Ruang Sosmed ID · by Snail',
+  heroTitle: 'Belajar Jadi Social Media Specialist, dari Nol sampai Pro',
+  heroSubtitle:
+    'Platform belajar social media specialist terlengkap. Kuasai content strategy, visual design, analytics, dan social media marketing lewat materi terstruktur, sesi 1:1 mentor, dan komunitas aktif.',
+  heroCtaLabel: 'Masuk ke kelas',
+  emailPlaceholder: 'Masukkan email kamu',
+  howTitle: 'Bagaimana Ruang Sosmed ID Bekerja',
+  steps: [
+    { id: 's1', image: '', label: 'Langkah 01', title: 'Buat Akun & Masuk', desc: 'Daftar gratis lalu masuk ke ruang belajarmu.' },
+    { id: 's2', image: '', label: 'Langkah 02', title: 'Ikuti Materi Terstruktur', desc: 'Pelajari video & modul bertahap sesuai jalurmu.' },
+    { id: 's3', image: '', label: 'Langkah 03', title: 'Praktik & Dapat Sertifikat', desc: 'Konsultasi 1:1 dengan mentor lalu raih sertifikat.' },
+  ],
+  featuresTitle: 'Yang Membuat Ruang Sosmed ID Powerful',
+  features: [
+    { id: 'f1', eyebrow: 'Materi Terstruktur', title: 'Belajar bertahap dari dasar sampai mahir', desc: 'Kurikulum tersusun rapi: content strategy, visual design, analytics, hingga social media marketing.', ctaLabel: 'Mulai belajar', image: '', imageSide: 'right' },
+    { id: 'f2', eyebrow: 'Mentor & Komunitas', title: 'Sesi 1:1 dan komunitas yang aktif', desc: 'Konsultasi langsung dengan mentor dan berbagi insight bersama member lain.', ctaLabel: 'Gabung sekarang', image: '', imageSide: 'left' },
+  ],
+  faqTitle: 'Pertanyaan yang Sering Diajukan',
+  faqs: [
+    { id: 'q1', q: 'Apakah cocok untuk pemula total?', a: 'Sangat cocok. Materi dimulai dari dasar, jadi yang belum berpengalaman pun bisa mengikuti.' },
+    { id: 'q2', q: 'Apakah ada sesi bersama mentor?', a: 'Ya, kamu bisa booking sesi 1:1 untuk konsultasi langsung.' },
+    { id: 'q3', q: 'Apakah dapat sertifikat?', a: 'Ya, kamu mendapat sertifikat setelah menyelesaikan kelas.' },
+  ],
+  finalTitle: 'Siap jadi social media specialist sungguhan?',
+  finalSubtitle: 'Gabung sekarang dan mulai upgrade skill sosial mediamu bersama Ruang Sosmed ID.',
+  finalCtaLabel: 'Masuk ke kelas',
+  footerText: 'Ruang Sosmed ID by Snail',
+  instagramUrl: 'https://www.instagram.com/ruangsosmedid',
+};
+
+async function loadLandingContent(): Promise<LandingContent> {
+  const { data } = await supabase
+    .from('learning_hub_content')
+    .select('content')
+    .eq('content_key', landingContentKey)
+    .maybeSingle();
+  if (!data?.content) return defaultLandingContent;
+  const raw = (typeof data.content === 'string' ? JSON.parse(data.content) : data.content) as Partial<LandingContent>;
+  return { ...defaultLandingContent, ...raw };
+}
+
+async function saveLandingContent(content: LandingContent) {
+  await supabase.from('learning_hub_content').upsert({
+    content_key: landingContentKey,
+    content_group: 'landing',
+    content,
+  });
+}
+
+async function uploadLandingImage(file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `landing/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from('lesson-assets').upload(path, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+  return supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
+}
+
 async function validateReferralCode(code: string): Promise<ReferralCode | null> {
   if (!code.trim()) return null;
   const settings = await loadAdminSettings();
@@ -9185,7 +9383,7 @@ function HppCalculator({ coinRate: coinRateDefault, packages }: { coinRate: numb
 // ── AdminPage ────────────────────────────────────────────────
 
 function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: AppSession; featureCosts: FeatureCosts; onFeatureCostsChange: (c: FeatureCosts) => void }) {
-  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing'>('users');
   const [certCourses, setCertCourses] = useState<{ key: string; title: string }[]>([]);
   const [certSelectedKey, setCertSelectedKey] = useState<string | null>(null);
   const [promo, setPromo] = useState<PromoPopup>({ ...defaultPromo });
@@ -9566,9 +9764,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
       {/* Tabs */}
       <div className="admin-tabs">
-        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp'] as const).map((tab) => (
+        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp', 'landing'] as const).map((tab) => (
           <button key={tab} type="button" className={`admin-tab${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
-            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : 'Kalkulator HPP'}
+            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : tab === 'hpp' ? 'Kalkulator HPP' : 'Landing Page'}
           </button>
         ))}
       </div>
@@ -10332,6 +10530,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           )}
 
           {activeTab === 'hpp' && <HppCalculator coinRate={draftCoinRate} packages={packages} />}
+
+          {activeTab === 'landing' && <LandingEditor />}
 
       {/* Modal: Tambah User */}
       {showAddUser && createPortal(
