@@ -28,7 +28,9 @@
       content="Platform belajar social media specialist terlengkap: content strategy, visual design, analytics, sesi 1:1 dengan mentor, dan komunitas."
     />
     <meta property="og:url" content="https://ruangsosmedid.com/" />
-    <meta property="og:image" content="https://ruangsosmedid.com/icon-512.png" />
+    <meta property="og:image" content="https://ruangsosmedid.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="id_ID" />
 
     <!-- Twitter Card -->
@@ -38,7 +40,7 @@
       name="twitter:description"
       content="Platform belajar social media specialist terlengkap: content strategy, visual design, analytics, sesi 1:1 dengan mentor, dan komunitas."
     />
-    <meta name="twitter:image" content="https://ruangsosmedid.com/icon-512.png" />
+    <meta name="twitter:image" content="https://ruangsosmedid.com/og-image.png" />
 
     <!-- Structured data: organisasi/website agar Google paham nama situs -->
     <script type="application/ld+json">
@@ -62,7 +64,19 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Konten fallback untuk crawler & pengguna tanpa JavaScript.
+           Disembunyikan begitu aplikasi React ter-mount. -->
+      <noscript>
+        <h1>Ruang Belajar Sosmed Specialist Terlengkap</h1>
+        <p>
+          Ruang Sosmed adalah platform belajar social media specialist terlengkap di Indonesia.
+          Pelajari content strategy, visual design, analytics, hingga mindset & growth lewat
+          materi terstruktur, sesi 1:1 bersama mentor, dan komunitas yang aktif berbagi insight.
+        </p>
+        <p>Aktifkan JavaScript untuk membuka aplikasi Ruang Sosmed.</p>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
   </html>
