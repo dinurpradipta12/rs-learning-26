@@ -1894,7 +1894,7 @@ function CreditConfirmModal({ ctx, onClose }: { ctx: CreditConfirmContext; onClo
   );
 }
 
-function TopUpModal({ context, onClose, session }: { context: { feature: string; needed: number; balance: number }; onClose: () => void; session?: AppSession | null }) {
+function TopUpModal({ context, onClose, session, initialPackageId }: { context: { feature: string; needed: number; balance: number }; onClose: () => void; session?: AppSession | null; initialPackageId?: string }) {
   const [packages, setPackages] = useState<CreditPackage[]>(defaultCreditPackages);
   const [payment, setPayment] = useState<PaymentInfo>(defaultPaymentInfo);
   const [selectedPkg, setSelectedPkg] = useState<CreditPackage | null>(null);
@@ -1907,13 +1907,15 @@ function TopUpModal({ context, onClose, session }: { context: { feature: string;
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const proofInputRef = useRef<HTMLInputElement>(null);
 
+  const autoRan = useRef(false);
   useEffect(() => {
     void loadAdminSettings().then((s) => {
       setPackages(s.packages);
       setPayment(s.payment);
-      setSelectedPkg(s.packages[1] ?? s.packages[0]);
+      const preset = initialPackageId ? s.packages.find((p) => p.id === initialPackageId) : null;
+      setSelectedPkg(preset ?? s.packages[1] ?? s.packages[0]);
     });
-  }, []);
+  }, [initialPackageId]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -1945,6 +1947,15 @@ function TopUpModal({ context, onClose, session }: { context: { feature: string;
     setProcessing(false);
     setStep('payment');
   };
+
+  // Dari pricing landing: setelah daftar, langsung ke halaman pembayaran.
+  useEffect(() => {
+    if (!initialPackageId || autoRan.current) return;
+    if (selectedPkg?.id === initialPackageId && step === 'select') {
+      autoRan.current = true;
+      void handleProsesTopup();
+    }
+  }, [initialPackageId, selectedPkg, step]);
 
   const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2206,10 +2217,22 @@ function App() {
   });
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('rs-dark-mode') === '1');
   const [landingContent, setLandingContent] = useState<LandingContent>(defaultLandingContent);
+  const [pendingTopupPkgId, setPendingTopupPkgId] = useState<string | null>(null);
 
   useEffect(() => {
     if (session) return;
     void loadLandingContent().then(setLandingContent);
+  }, [session]);
+
+  // Setelah daftar/login dari pricing landing → buka langsung halaman pembayaran.
+  useEffect(() => {
+    if (!session) return;
+    const pkgId = sessionStorage.getItem('pending_topup_pkg_id');
+    if (pkgId) {
+      setPendingTopupPkgId(pkgId);
+      sessionStorage.removeItem('pending_topup_pkg_id');
+      sessionStorage.removeItem('landing_register');
+    }
   }, [session]);
 
   useEffect(() => {
@@ -2438,7 +2461,15 @@ function App() {
         <div className="shell landing-shell">
           <div className="ambient ambient-a" />
           <div className="ambient ambient-b" />
-          <LandingPage content={landingContent} onMasuk={() => { window.location.hash = '#login'; }} />
+          <LandingPage
+            content={landingContent}
+            onMasuk={() => { window.location.hash = '#login'; }}
+            onPickPackage={(id) => {
+              sessionStorage.setItem('pending_topup_pkg_id', id);
+              sessionStorage.setItem('landing_register', '1');
+              window.location.hash = '#login';
+            }}
+          />
           <UpdateToast />
         </div>
       );
@@ -2447,7 +2478,7 @@ function App() {
       <div className="shell auth-shell">
         <div className="ambient ambient-a" />
         <div className="ambient ambient-b" />
-        <LoginPage session={session} redirectTo={page === 'login' ? '#dashboard' : hash} onLoginSuccess={setSession} onShowPromo={() => { void loadAdminSettings().then((s) => { if (s.promo?.enabled) setPromoPopup(s.promo); }); }} />
+        <LoginPage session={session} redirectTo={page === 'login' ? '#dashboard' : hash} initialAuthMode={sessionStorage.getItem('landing_register') === '1' ? 'sign-up' : 'sign-in'} onLoginSuccess={setSession} onShowPromo={() => { void loadAdminSettings().then((s) => { if (s.promo?.enabled) setPromoPopup(s.promo); }); }} />
         <UpdateToast />
       </div>
     );
@@ -2611,6 +2642,14 @@ function App() {
         {page === 'calendar' && <CalendarPage canManage={isDeveloper} sessionUsername={session?.username ?? ''} featureCosts={featureCosts} userPerks={userPerks} onCreditChange={setUserCredits} onInsufficientCredits={(f, n, b) => setTopUpContext({ feature: f, needed: n, balance: b })} onRequestConfirm={(ctx) => setConfirmContext(ctx)} />}
         {page === 'community' && <CommunityPage session={session} initialThreadId={initialThreadId} featureCosts={featureCosts} userPerks={userPerks} onCreditChange={setUserCredits} onInsufficientCredits={(f, n, b) => setTopUpContext({ feature: f, needed: n, balance: b })} onRequestConfirm={(ctx) => setConfirmContext(ctx)} />}
         {topUpContext && <TopUpModal context={topUpContext} onClose={() => setTopUpContext(null)} session={session} />}
+        {pendingTopupPkgId && (
+          <TopUpModal
+            context={{ feature: 'topup', needed: 0, balance: 0 }}
+            initialPackageId={pendingTopupPkgId}
+            session={session}
+            onClose={() => { setPendingTopupPkgId(null); window.location.hash = '#dashboard'; }}
+          />
+        )}
         {confirmContext && <CreditConfirmModal ctx={confirmContext} onClose={() => setConfirmContext(null)} />}
         {promoPopup && <PromoPopupModal promo={promoPopup} onClose={() => setPromoPopup(null)} onTopUp={() => setTopUpContext({ feature: 'promo', needed: 0, balance: 0 })} />}
         {searchOpen && <GlobalSearchModal onClose={() => setSearchOpen(false)} />}
@@ -2750,6 +2789,18 @@ function LandingEditor() {
         <button type="button" className="admin-mini-btn" onClick={() => set({ steps: [...c.steps, { id: `s${Date.now()}`, image: '', label: `Langkah 0${c.steps.length + 1}`, title: 'Judul langkah', desc: 'Deskripsi langkah' }] })}>+ Tambah Langkah</button>
       </fieldset>
 
+      {/* Pricing */}
+      <fieldset className="landing-edit-group">
+        <legend>Bagian Pricing (paket Ruang Coin)</legend>
+        <label className="landing-edit-inline">
+          <input type="checkbox" checked={c.showPricing} onChange={(e) => set({ showPricing: e.target.checked })} />
+          Tampilkan bagian pricing di landing
+        </label>
+        <label>Judul bagian<input value={c.pricingTitle} onChange={(e) => set({ pricingTitle: e.target.value })} /></label>
+        <label>Subjudul<input value={c.pricingSubtitle} onChange={(e) => set({ pricingSubtitle: e.target.value })} /></label>
+        <p className="landing-edit-hint">Daftar paket diambil otomatis dari tab <strong>Ruang Coin → Pengaturan Paket</strong>. Tombol "Ambil paket" akan mengarahkan pengunjung ke pendaftaran lalu halaman pembayaran.</p>
+      </fieldset>
+
       {/* Features */}
       <fieldset className="landing-edit-group">
         <legend>Bagian Fitur (split kiri/kanan)</legend>
@@ -2819,7 +2870,9 @@ function LandingEditor() {
 // Halaman landing khusus (SEO) untuk pengunjung yang belum login, termasuk
 // crawler Google. Tombol "Masuk" mengarahkan ke halaman login (#login).
 // User yang sudah login tidak pernah melihat halaman ini.
-function LandingPage({ content, onMasuk }: { content: LandingContent; onMasuk: () => void }) {
+function LandingPage({ content, onMasuk, onPickPackage }: { content: LandingContent; onMasuk: () => void; onPickPackage: (pkgId: string) => void }) {
+  const [packages, setPackages] = useState<CreditPackage[]>(defaultCreditPackages);
+  useEffect(() => { void loadAdminSettings().then((s) => setPackages(s.packages)); }, []);
   return (
     <div className="landing">
       <nav className="landing-nav">
@@ -2873,6 +2926,25 @@ function LandingPage({ content, onMasuk }: { content: LandingContent; onMasuk: (
             </div>
           ))}
         </section>
+
+        {/* Pricing */}
+        {content.showPricing && packages.length > 0 && (
+          <section className="landing-block" id="pricing">
+            <h2 className="landing-h2 center">{content.pricingTitle}</h2>
+            {content.pricingSubtitle && <p className="landing-pricing-sub">{content.pricingSubtitle}</p>}
+            <div className="landing-pricing-grid">
+              {packages.map((p, i) => (
+                <article className={`landing-price-card${i === 1 ? ' featured' : ''}`} key={p.id}>
+                  {i === 1 && <span className="landing-price-badge">Populer</span>}
+                  <h3 className="landing-price-name">{p.label}</h3>
+                  <div className="landing-price-coins">{p.credits.toLocaleString('id-ID')} <span>Ruang Coin</span></div>
+                  <div className="landing-price-amount">{formatRupiah(p.price)}</div>
+                  <button type="button" className="landing-cta" onClick={() => onPickPackage(p.id)}>Ambil paket ini →</button>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* FAQ */}
         {content.faqs.length > 0 && (
@@ -6015,13 +6087,15 @@ function LoginPage({
   redirectTo,
   onLoginSuccess,
   onShowPromo,
+  initialAuthMode = 'sign-in',
 }: {
   session: AppSession | null;
   redirectTo: string;
   onLoginSuccess: (session: AppSession) => void;
   onShowPromo?: () => void;
+  initialAuthMode?: 'sign-in' | 'sign-up';
 }) {
-  const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>(initialAuthMode);
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
@@ -8478,6 +8552,9 @@ type LandingContent = {
   steps: LandingStep[];
   featuresTitle: string;
   features: LandingFeature[];
+  showPricing: boolean;
+  pricingTitle: string;
+  pricingSubtitle: string;
   faqTitle: string;
   faqs: LandingFaq[];
   finalTitle: string;
@@ -8502,6 +8579,9 @@ const defaultLandingContent: LandingContent = {
     { id: 's2', image: '', label: 'Langkah 02', title: 'Ikuti Materi Terstruktur', desc: 'Pelajari video & modul bertahap sesuai jalurmu.' },
     { id: 's3', image: '', label: 'Langkah 03', title: 'Praktik & Dapat Sertifikat', desc: 'Konsultasi 1:1 dengan mentor lalu raih sertifikat.' },
   ],
+  showPricing: true,
+  pricingTitle: 'Pilih Paket Ruang Coin',
+  pricingSubtitle: 'Ambil paket yang kamu mau — daftar dulu, lalu lanjut ke pembayaran.',
   featuresTitle: 'Yang Membuat Ruang Sosmed ID Powerful',
   features: [
     { id: 'f1', eyebrow: 'Materi Terstruktur', title: 'Belajar bertahap dari dasar sampai mahir', desc: 'Kurikulum tersusun rapi: content strategy, visual design, analytics, hingga social media marketing.', ctaLabel: 'Mulai belajar', image: '', imageSide: 'right' },

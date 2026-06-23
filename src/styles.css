@@ -11637,3 +11637,43 @@ body.dark .landing-edit-group select {
 .admin-mini-btn.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
 .admin-mini-btn.ghost:hover { color: var(--text); border-color: var(--accent); }
 @media (max-width: 640px) { .landing-edit-row { grid-template-columns: 1fr; } }
+
+/* ── Landing Pricing ── */
+.landing-pricing-sub { text-align: center; color: #64748b; margin: -20px auto 36px; max-width: 52ch; font-size: 1.02rem; }
+.landing-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+.landing-price-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid #eef1f8;
+  border-radius: 22px;
+  padding: 28px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 16px 40px rgba(30, 41, 59, 0.06);
+}
+.landing-price-card.featured {
+  border-color: #2f6bff;
+  box-shadow: 0 22px 54px rgba(47, 107, 255, 0.22);
+  transform: translateY(-4px);
+}
+.landing-price-badge {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  background: #2f6bff; color: #fff; font-size: 0.74rem; font-weight: 700;
+  padding: 5px 14px; border-radius: 999px;
+}
+.landing-price-name { margin: 0; font-size: 1.1rem; color: #1e293b; letter-spacing: -0.02em; }
+.landing-price-coins { font-size: 1.9rem; font-weight: 800; color: #1e293b; letter-spacing: -0.03em; }
+.landing-price-coins span { font-size: 0.9rem; font-weight: 600; color: #94a3b8; display: block; }
+.landing-price-amount { font-size: 1.15rem; font-weight: 700; color: #2f6bff; margin-bottom: 8px; }
+.landing-price-card .landing-cta { width: 100%; margin-top: auto; }
+
+.landing-edit-inline { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; font-size: 0.9rem !important; color: var(--text) !important; }
+.landing-edit-inline input { width: auto !important; }
+.landing-edit-hint { font-size: 0.8rem; color: var(--muted); margin: 4px 0 0; line-height: 1.5; }
