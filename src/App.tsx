@@ -2425,14 +2425,23 @@ function App() {
   }, [isDeveloper]);
 
   if (!session) {
+    // Landing untuk pengunjung di root/home; login untuk #login atau deep-link.
+    const showLogin = hash === '#login' || page !== 'dashboard';
+    if (!showLogin) {
+      return (
+        <div className="shell landing-shell">
+          <div className="ambient ambient-a" />
+          <div className="ambient ambient-b" />
+          <LandingPage onMasuk={() => { window.location.hash = '#login'; }} />
+          <UpdateToast />
+        </div>
+      );
+    }
     return (
       <div className="shell auth-shell">
         <div className="ambient ambient-a" />
         <div className="ambient ambient-b" />
-        <LandingSeo />
-        <div id="rs-login">
-          <LoginPage session={session} redirectTo={page === 'login' ? '#dashboard' : hash} onLoginSuccess={setSession} onShowPromo={() => { void loadAdminSettings().then((s) => { if (s.promo?.enabled) setPromoPopup(s.promo); }); }} />
-        </div>
+        <LoginPage session={session} redirectTo={page === 'login' ? '#dashboard' : hash} onLoginSuccess={setSession} onShowPromo={() => { void loadAdminSettings().then((s) => { if (s.promo?.enabled) setPromoPopup(s.promo); }); }} />
         <UpdateToast />
       </div>
     );
@@ -2644,64 +2653,135 @@ function App() {
   );
 }
 
-// Landing ber-konten SEO yang tampil di atas form login untuk pengunjung yang
-// belum masuk (termasuk crawler Google). User yang sudah login tidak melihat ini.
-function LandingSeo() {
-  const scrollToLogin = () => {
-    document.getElementById('rs-login')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
+// Halaman landing khusus (SEO) untuk pengunjung yang belum login, termasuk
+// crawler Google. Tombol "Masuk" mengarahkan ke halaman login (#login).
+// User yang sudah login tidak pernah melihat halaman ini.
+function LandingPage({ onMasuk }: { onMasuk: () => void }) {
   return (
-    <header className="landing-seo">
+    <div className="landing">
       <nav className="landing-nav">
         <span className="landing-brand">Ruang Sosmed<span className="landing-brand-id">ID</span></span>
-        <button type="button" className="landing-login-link" onClick={scrollToLogin}>Masuk</button>
+        <button type="button" className="landing-login-link" onClick={onMasuk}>Masuk</button>
       </nav>
 
-      <section className="landing-hero">
+      {/* Hero */}
+      <header className="landing-hero">
         <p className="landing-eyebrow">Ruang Sosmed ID · by Snail</p>
-        <h1 className="landing-title">Kelas Belajar Jadi Social Media Specialist</h1>
+        <h1 className="landing-title">Belajar Jadi Social Media Specialist, dari Nol sampai Pro</h1>
         <p className="landing-tagline">Gak semua anak sosmed itu specialist — di sini kamu belajar jadi yang specialist.</p>
         <p className="landing-sub">
-          Tempat upgrade skill untuk kamu yang ingin serius menekuni dunia social
-          media. Belajar content strategy, visual design, analytics, dan social media
-          marketing lewat materi terstruktur, sesi 1:1 bersama mentor, serta komunitas
-          yang aktif berbagi insight.
+          Ruang Sosmed ID adalah platform belajar social media specialist terlengkap
+          untuk kamu yang ingin serius menekuni dunia sosial media. Kuasai content
+          strategy, visual design, analytics, dan social media marketing lewat materi
+          terstruktur, sesi 1:1 bersama mentor berpengalaman, serta komunitas yang
+          aktif berbagi insight.
         </p>
-        <button type="button" className="landing-cta" onClick={scrollToLogin}>Masuk ke kelas →</button>
-      </section>
+        <div className="landing-cta-row">
+          <button type="button" className="landing-cta" onClick={onMasuk}>Masuk ke kelas →</button>
+          <a className="landing-cta-ghost" href="#kurikulum">Lihat materi</a>
+        </div>
+      </header>
 
-      <section className="landing-section">
-        <h2>Apa itu Social Media Specialist?</h2>
-        <p>
-          Social media specialist adalah orang yang mengelola dan mengembangkan akun
-          sosial media sebuah brand secara strategis — mulai dari merancang konten,
-          membaca data performa, sampai menumbuhkan audiens. Di Ruang Sosmed ID kamu
-          belajar semua skill itu dari nol secara terarah, bukan asal posting.
-        </p>
-      </section>
+      <main className="landing-main">
+        <section className="landing-section" id="tentang">
+          <h2>Apa itu Social Media Specialist?</h2>
+          <p>
+            Social media specialist adalah profesional yang mengelola dan mengembangkan
+            akun sosial media sebuah brand secara strategis — mulai dari riset audiens,
+            merancang konten, mengeksekusi visual, menjadwalkan posting, sampai membaca
+            data performa untuk mengambil keputusan. Profesi ini makin dibutuhkan karena
+            hampir semua bisnis kini bergantung pada kehadiran sosial media yang kuat.
+          </p>
+          <p>
+            Masalahnya, banyak yang merasa "bisa main sosmed" tapi belum tentu paham
+            strategi di baliknya. Di Ruang Sosmed ID, kamu belajar fondasi dan praktik
+            nyata seorang specialist secara terarah — bukan sekadar ikut tren atau asal
+            posting.
+          </p>
+        </section>
 
-      <section className="landing-section">
-        <h2>Yang kamu pelajari</h2>
-        <ul className="landing-list">
-          <li><strong>Content Strategy</strong> — merancang ide, ritme posting, dan pesan yang konsisten.</li>
-          <li><strong>Visual Design</strong> — membuat konten yang menarik dan sesuai identitas brand.</li>
-          <li><strong>Analytics</strong> — membaca metrik dan mengambil keputusan berbasis data.</li>
-          <li><strong>Social Media Marketing</strong> — strategi pertumbuhan lintas platform.</li>
-          <li><strong>Mindset &amp; Growth</strong> — pola pikir profesional sosial media.</li>
-        </ul>
-      </section>
+        <section className="landing-section" id="kurikulum">
+          <h2>Yang kamu pelajari</h2>
+          <p>Kurikulum disusun bertahap supaya kamu paham gambaran besar sekaligus jago di detail teknisnya.</p>
+          <div className="landing-grid">
+            <article className="landing-card">
+              <h3>Content Strategy</h3>
+              <p>Riset audiens, pilar konten, ritme posting, dan pesan brand yang konsisten dan relevan.</p>
+            </article>
+            <article className="landing-card">
+              <h3>Visual Design</h3>
+              <p>Membuat konten yang menarik, rapi, dan sesuai identitas brand tanpa harus jadi desainer.</p>
+            </article>
+            <article className="landing-card">
+              <h3>Analytics</h3>
+              <p>Membaca metrik penting, memahami insight, dan mengambil keputusan berbasis data.</p>
+            </article>
+            <article className="landing-card">
+              <h3>Social Media Marketing</h3>
+              <p>Strategi pertumbuhan lintas platform: Instagram, TikTok, dan lainnya.</p>
+            </article>
+            <article className="landing-card">
+              <h3>Mindset &amp; Growth</h3>
+              <p>Pola pikir profesional, manajemen waktu, dan kebiasaan yang bikin kamu konsisten berkembang.</p>
+            </article>
+            <article className="landing-card">
+              <h3>Asset &amp; Tools</h3>
+              <p>Template, materi, dan tools siap pakai untuk mempercepat kerjamu sebagai specialist.</p>
+            </article>
+          </div>
+        </section>
 
-      <section className="landing-section">
-        <h2>Kenapa Ruang Sosmed ID?</h2>
-        <ul className="landing-list">
-          <li><strong>Materi terstruktur</strong> — belajar bertahap dari dasar sampai mahir.</li>
-          <li><strong>Sesi 1:1 dengan mentor</strong> — konsultasi langsung sesuai kebutuhanmu.</li>
-          <li><strong>Komunitas aktif</strong> — diskusi, tanya jawab, dan berbagi insight.</li>
-          <li><strong>Sertifikat</strong> — bukti kompetensi setelah menyelesaikan kelas.</li>
-        </ul>
-        <button type="button" className="landing-cta" onClick={scrollToLogin}>Mulai sekarang →</button>
-      </section>
-    </header>
+        <section className="landing-section" id="cara-kerja">
+          <h2>Cara mulai belajar</h2>
+          <ol className="landing-steps">
+            <li><span>1</span><div><strong>Buat akun &amp; masuk</strong><p>Daftar gratis, lalu masuk ke ruang belajarmu.</p></div></li>
+            <li><span>2</span><div><strong>Ikuti materi terstruktur</strong><p>Pelajari video & modul bertahap sesuai jalurmu.</p></div></li>
+            <li><span>3</span><div><strong>Praktik &amp; konsultasi 1:1</strong><p>Terapkan ilmu dan tanyakan langsung ke mentor.</p></div></li>
+            <li><span>4</span><div><strong>Dapatkan sertifikat</strong><p>Selesaikan kelas dan buktikan kompetensimu.</p></div></li>
+          </ol>
+        </section>
+
+        <section className="landing-section" id="keunggulan">
+          <h2>Kenapa belajar di Ruang Sosmed ID?</h2>
+          <ul className="landing-list">
+            <li><strong>Materi terstruktur</strong> — belajar bertahap dari dasar sampai mahir, tidak loncat-loncat.</li>
+            <li><strong>Sesi 1:1 dengan mentor</strong> — konsultasi personal sesuai kebutuhan dan kasus nyatamu.</li>
+            <li><strong>Komunitas aktif</strong> — forum diskusi, tanya jawab, dan berbagi insight antar member.</li>
+            <li><strong>Sertifikat kelulusan</strong> — bukti kompetensi untuk portofolio dan lamaran kerja.</li>
+            <li><strong>Materi &amp; asset siap pakai</strong> — hemat waktu dengan template dan sumber belajar lengkap.</li>
+          </ul>
+        </section>
+
+        <section className="landing-section" id="untuk-siapa">
+          <h2>Cocok untuk siapa?</h2>
+          <ul className="landing-list">
+            <li>Pemula yang ingin <strong>berkarier sebagai social media specialist</strong> atau admin sosmed.</li>
+            <li>Freelancer &amp; content creator yang ingin <strong>naik kelas jadi lebih strategis</strong>.</li>
+            <li>Pemilik usaha yang ingin <strong>mengelola sosial media bisnisnya sendiri</strong>.</li>
+            <li>Siapa pun yang ingin <strong>upgrade skill sosial media</strong> secara serius dan terarah.</li>
+          </ul>
+        </section>
+
+        <section className="landing-faq" id="faq">
+          <h2>Pertanyaan yang sering diajukan</h2>
+          <details><summary>Apakah cocok untuk pemula total?</summary><p>Sangat cocok. Materi dimulai dari dasar, jadi kamu yang belum punya pengalaman pun bisa mengikuti dengan nyaman.</p></details>
+          <details><summary>Apa yang akan saya kuasai setelah belajar?</summary><p>Kamu akan mampu menyusun strategi konten, membuat visual, membaca analytics, dan menjalankan social media marketing sebagai seorang specialist.</p></details>
+          <details><summary>Apakah ada sesi bersama mentor?</summary><p>Ya. Kamu bisa booking sesi 1:1 untuk konsultasi langsung sesuai kebutuhanmu.</p></details>
+          <details><summary>Apakah dapat sertifikat?</summary><p>Ya, kamu mendapat sertifikat setelah menyelesaikan kelas sebagai bukti kompetensi.</p></details>
+        </section>
+
+        <section className="landing-final">
+          <h2>Siap jadi social media specialist sungguhan?</h2>
+          <p>Gabung sekarang dan mulai upgrade skill sosial mediamu bersama Ruang Sosmed ID.</p>
+          <button type="button" className="landing-cta" onClick={onMasuk}>Masuk ke kelas →</button>
+        </section>
+      </main>
+
+      <footer className="landing-footer">
+        <span>© {new Date().getFullYear()} Ruang Sosmed ID by Snail</span>
+        <a href="https://www.instagram.com/ruangsosmedid" target="_blank" rel="noreferrer">Instagram @ruangsosmedid</a>
+      </footer>
+    </div>
   );
 }
 
