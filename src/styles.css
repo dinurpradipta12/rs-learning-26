@@ -710,10 +710,13 @@ body.dark .progress-bar-track { background: rgba(255,255,255,0.08); }
 
 html {
   scroll-behavior: smooth;
+  background-color: var(--bg);
+  overscroll-behavior: none;
 }
 
 body {
   margin: 0;
+  overscroll-behavior: none;
   min-width: 320px;
   color: var(--text);
   background:
