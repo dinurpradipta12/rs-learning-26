@@ -1,0 +1,2 @@
+[functions.student-bot]
+verify_jwt = false

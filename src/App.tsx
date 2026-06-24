@@ -4,7 +4,7 @@ import { supabase } from './lib/supabase';
 import logo1 from './logo1.png';
 import ruangCoinImg from './ruang-coin.png';
 
-// ── Telegram Bot ─────────────────────────────────────────────
+// ── Telegram Bot (Admin) ──────────────────────────────────────
 const TG_TOKEN = '8366984234:AAHjA8l7QqvVNtc7kajGwaTwkzAy4t52Sko';
 const TG_CHAT  = '8830130248';
 
@@ -18,6 +18,41 @@ async function sendTelegram(text: string, buttons?: Array<Array<{ text: string; 
       body: JSON.stringify(body),
     });
   } catch { /* silent */ }
+}
+
+// ── Student Bot (Ruang Admin) ─────────────────────────────────
+async function sendStudentBot(chatId: string, text: string, token: string, buttons?: Array<Array<{ text: string; callback_data: string }>>): Promise<void> {
+  if (!token || !chatId) return;
+  try {
+    const body: Record<string, unknown> = { chat_id: chatId, text, parse_mode: 'HTML' };
+    if (buttons) body.reply_markup = { inline_keyboard: buttons };
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch { /* silent */ }
+}
+
+async function getStudentBotToken(): Promise<string> {
+  const { data } = await supabase.from('learning_hub_content').select('content').eq('content_key', 'admin_credit_settings').maybeSingle();
+  if (!data?.content) return '';
+  const s = (typeof data.content === 'string' ? JSON.parse(data.content) : data.content) as { student_bot_token?: string };
+  return s.student_bot_token ?? '';
+}
+
+async function getStudentChatId(username: string): Promise<string | null> {
+  const { data } = await supabase.from('app_users').select('telegram_chat_id').eq('username', username).maybeSingle();
+  return (data as { telegram_chat_id?: string } | null)?.telegram_chat_id ?? null;
+}
+
+async function notifyStudent(username: string, text: string): Promise<void> {
+  const [chatId, token] = await Promise.all([getStudentChatId(username), getStudentBotToken()]);
+  if (chatId && token) await sendStudentBot(chatId, text, token);
+}
+
+function generateLinkCode(): string {
+  return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
 
 async function answerCallback(callbackQueryId: string, text?: string): Promise<void> {
@@ -45,7 +80,7 @@ async function processTelegramCommand(text: string): Promise<string | null> {
     await Promise.all([
       supabase.from('topup_requests').update({ status: 'approved' }).eq('id', req.id),
       supabase.from('user_credits').upsert({ username: req.username, balance: current + req.credits }),
-      supabase.from('credit_transactions').insert({ username: req.username, amount: req.credits, type: 'topup', description: `Topup ${req.package_label} — disetujui via Telegram` }),
+      supabase.from('credit_transactions').insert({ username: req.username, amount: req.credits, type: 'topup', description: `Topup ${req.package_label}` }),
     ]);
     return `✅ <b>Topup disetujui!</b>\n\n👤 @${req.username}\n💰 +${req.credits.toLocaleString('id-ID')} Ruang Coin\nSaldo baru: ${(current + req.credits).toLocaleString('id-ID')} Ruang Coin`;
   }
@@ -141,8 +176,84 @@ function useTelegramPolling(active: boolean) {
   }, [active]);
 }
 
-function CoinIcon({ size = 16 }: { size?: number }) {
-  return <img src={ruangCoinImg} alt="Ruang Coin" width={size} height={size} style={{ display: 'inline-block', verticalAlign: 'middle', objectFit: 'contain', marginRight: 2 }} />;
+function CoinIcon({ size = 16, animate = false }: { size?: number; animate?: boolean }) {
+  const [anim, setAnim] = useState<'idle' | 'spin' | 'bounce'>('idle');
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!animate) return;
+    const cycle = () => {
+      // alternate between spin and bounce
+      setAnim((prev) => prev === 'idle' || prev === 'bounce' ? 'spin' : 'bounce');
+      setTimeout(() => setAnim('idle'), 800);
+      timerRef.current = setTimeout(cycle, 10000);
+    };
+    timerRef.current = setTimeout(cycle, 2000); // first play after 2s
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [animate]);
+
+  return (
+    <img
+      src={ruangCoinImg}
+      alt="Ruang Coin"
+      width={size}
+      height={size}
+      className={anim === 'spin' ? 'coin-anim-spin' : anim === 'bounce' ? 'coin-anim-bounce' : ''}
+      style={{ display: 'inline-block', verticalAlign: 'middle', objectFit: 'contain', marginRight: 2 }}
+    />
+  );
+}
+
+function CoinBalanceDisplay({ balance }: { balance: number | null }) {
+  const displayed = useCountUp(balance);
+  const [pulse, setPulse] = useState(false);
+  const prevBalance = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (balance !== null && prevBalance.current !== null && balance !== prevBalance.current) {
+      setPulse(true);
+      setTimeout(() => setPulse(false), 700);
+    }
+    prevBalance.current = balance;
+  }, [balance]);
+
+  return (
+    <div className={`credit-balance-amount${pulse ? ' coin-pulse' : ''}`}>
+      <CoinIcon size={32} animate />
+      <span className="credit-balance-number">
+        {displayed === null ? '…' : displayed.toLocaleString('id-ID')}
+      </span>
+      <span className="credit-balance-unit">Ruang Coin</span>
+    </div>
+  );
+}
+
+// Count-up hook
+function useCountUp(target: number | null, duration = 900): number | null {
+  const [displayed, setDisplayed] = useState<number | null>(null);
+  const prevRef = useRef<number>(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (target === null) return;
+    const start = prevRef.current;
+    const diff = target - start;
+    if (diff === 0) { setDisplayed(target); return; }
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // ease-out cubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setDisplayed(Math.round(start + diff * ease));
+      if (progress < 1) { rafRef.current = requestAnimationFrame(tick); }
+      else { prevRef.current = target; setDisplayed(target); }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target]);
+
+  return displayed;
 }
 
 const menu = [
@@ -2463,7 +2574,7 @@ function App() {
           <div className="ambient ambient-b" />
           <LandingPage
             content={landingContent}
-            onMasuk={() => { window.location.hash = '#login'; }}
+            onMasuk={() => { sessionStorage.removeItem('landing_register'); window.location.hash = '#login'; }}
             onPickPackage={(id) => {
               sessionStorage.setItem('pending_topup_pkg_id', id);
               sessionStorage.setItem('landing_register', '1');
@@ -2698,6 +2809,630 @@ function App() {
   );
 }
 
+// ── Database Monitor ───────────────────────────────────────────
+type TableStat = { name: string; label: string; count: number; warnAt: number; limitAt: number };
+type BucketStat = { name: string; label: string; files: number; warnAt: number; sizeBytes: number };
+
+const CHART_TABLES = [
+  { key: 'app_users',           label: 'Users',          color: '#6366f1', limitAt: 1000  },
+  { key: 'credit_transactions', label: 'Transaksi Coin', color: '#f59e0b', limitAt: 20000 },
+  { key: 'one_on_one_bookings', label: 'Booking 1:1',    color: '#22c55e', limitAt: 5000  },
+  { key: 'forum_posts',         label: 'Forum Posts',    color: '#ec4899', limitAt: 10000 },
+];
+type ChartPoint = { time: Date; counts: Record<string, number> };
+
+// ── Monitor sub-components ──────────────────────────────────────
+
+function StatRingCard({ value, limit, color, label, delta }: { value: number; limit: number; color: string; label: string; delta: number | null }) {
+  const r = 26; const circ = 2 * Math.PI * r;
+  const pct = Math.min(1, value / limit);
+  const dash = pct * circ;
+  const up = delta === null ? null : delta > 0 ? true : delta < 0 ? false : null;
+  return (
+    <div className="dbmon2-stat-card">
+      <div className="dbmon2-stat-ring">
+        <svg width="68" height="68" viewBox="0 0 68 68">
+          <circle cx="34" cy="34" r={r} fill="none" stroke="var(--line)" strokeWidth="5" />
+          <circle cx="34" cy="34" r={r} fill="none" stroke={color} strokeWidth="5"
+            strokeDasharray={`${dash.toFixed(1)} ${circ.toFixed(1)}`}
+            strokeDashoffset={(circ / 4).toFixed(1)}
+            strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.6s ease' }} />
+        </svg>
+        <span className="dbmon2-stat-arrow" style={{ color: up === true ? '#22c55e' : up === false ? '#ef4444' : 'var(--muted)' }}>
+          {up === true ? '↗' : up === false ? '↙' : '→'}
+        </span>
+      </div>
+      <div className="dbmon2-stat-info">
+        <div className="dbmon2-stat-value" style={{ color }}>{value.toLocaleString('id-ID')}</div>
+        <div className="dbmon2-stat-label">{label}</div>
+        {delta !== null && delta !== 0 && (
+          <div className="dbmon2-stat-delta" style={{ color: delta > 0 ? '#22c55e' : '#ef4444' }}>
+            {delta > 0 ? '+' : ''}{delta} sejak poll terakhir
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MultiLineChart({ history }: { history: ChartPoint[] }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const W = 800; const H = 180; const padL = 40; const padR = 12; const padT = 16; const padB = 32;
+  const n = history.length;
+
+  if (n < 2) {
+    return (
+      <div className="dbmon2-chart-empty">
+        <span>⏳</span>
+        <span>Memuat data historis 24 jam…</span>
+      </div>
+    );
+  }
+
+  const allValues = CHART_TABLES.flatMap((ct) => history.map((h) => h.counts[ct.key] ?? 0));
+  const globalMin = Math.min(...allValues);
+  const globalMax = Math.max(...allValues) || 1;
+  const range = globalMax - globalMin || 1;
+
+  const toX = (i: number) => padL + (i / (n - 1)) * (W - padL - padR);
+  const toY = (v: number) => padT + (1 - (v - globalMin) / range) * (H - padT - padB);
+
+  const YTICKS = 4;
+  const yTicks = Array.from({ length: YTICKS + 1 }, (_, i) => globalMin + (i / YTICKS) * range);
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const relX = (e.clientX - rect.left) * (W / rect.width);
+    const idx = Math.round(((relX - padL) / (W - padL - padR)) * (n - 1));
+    setHoverIdx(Math.max(0, Math.min(n - 1, idx)));
+  };
+
+  const hi = hoverIdx ?? n - 1;
+  const hPoint = history[hi];
+
+  return (
+    <div className="dbmon2-chart-wrap">
+      {/* Tooltip */}
+      <div className="dbmon2-chart-tooltip">
+        <span className="dbmon2-chart-tooltip-time">{hPoint.time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+        {CHART_TABLES.map((ct) => (
+          <span key={ct.key} className="dbmon2-chart-tooltip-item">
+            <span className="dbmon2-chart-tooltip-dot" style={{ background: ct.color }} />
+            <span style={{ color: ct.color }}>{ct.label}:</span>
+            <span>{(hPoint.counts[ct.key] ?? 0).toLocaleString('id-ID')}</span>
+          </span>
+        ))}
+      </div>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="dbmon2-chart-svg"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        <defs>
+          {CHART_TABLES.map((ct) => (
+            <linearGradient key={ct.key} id={`dbm-grad-${ct.key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={ct.color} stopOpacity="0.18" />
+              <stop offset="100%" stopColor={ct.color} stopOpacity="0.01" />
+            </linearGradient>
+          ))}
+        </defs>
+        {/* Grid lines */}
+        {yTicks.map((v, i) => {
+          const y = toY(v);
+          return (
+            <g key={i}>
+              <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--line)" strokeWidth="0.5" strokeDasharray="3 4" />
+              <text x={padL - 4} y={y + 4} fontSize="9" fill="var(--muted)" textAnchor="end">{Math.round(v).toLocaleString('id-ID')}</text>
+            </g>
+          );
+        })}
+        {/* X axis labels — every 4 points */}
+        {history.map((h, i) => {
+          if (i % 4 !== 0 && i !== n - 1) return null;
+          return (
+            <text key={i} x={toX(i)} y={H - 4} fontSize="9" fill="var(--muted)" textAnchor="middle">
+              {h.time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+            </text>
+          );
+        })}
+        {/* Area fills */}
+        {CHART_TABLES.map((ct) => {
+          const pts = history.map((h, i) => ({ x: toX(i), y: toY(h.counts[ct.key] ?? 0) }));
+          const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+          const areaPath = `${linePath} L${pts[pts.length - 1].x.toFixed(1)},${H - padB} L${pts[0].x.toFixed(1)},${H - padB} Z`;
+          return <path key={ct.key} d={areaPath} fill={`url(#dbm-grad-${ct.key})`} />;
+        })}
+        {/* Lines */}
+        {CHART_TABLES.map((ct) => {
+          const pts = history.map((h, i) => ({ x: toX(i), y: toY(h.counts[ct.key] ?? 0) }));
+          const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+          return <path key={ct.key} d={linePath} fill="none" stroke={ct.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />;
+        })}
+        {/* Hover crosshair */}
+        {hoverIdx !== null && (
+          <>
+            <line x1={toX(hi)} x2={toX(hi)} y1={padT} y2={H - padB} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
+            {CHART_TABLES.map((ct) => {
+              const v = hPoint.counts[ct.key] ?? 0;
+              return <circle key={ct.key} cx={toX(hi)} cy={toY(v)} r="4" fill={ct.color} stroke="var(--card)" strokeWidth="2" />;
+            })}
+          </>
+        )}
+        {/* Endpoint dots */}
+        {hoverIdx === null && CHART_TABLES.map((ct) => {
+          const v = hPoint.counts[ct.key] ?? 0;
+          return <circle key={ct.key} cx={toX(n - 1)} cy={toY(v)} r="4" fill={ct.color} stroke="var(--card)" strokeWidth="2" />;
+        })}
+      </svg>
+      {/* Legend */}
+      <div className="dbmon2-chart-legend">
+        {CHART_TABLES.map((ct) => (
+          <span key={ct.key} className="dbmon2-legend-item">
+            <span className="dbmon2-legend-dot" style={{ background: ct.color }} />
+            {ct.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StorageGauge({ used, total, label, sublabel }: { used: number; total: number; label: string; sublabel: string }) {
+  const pct = Math.min(1, used / total);
+  const R = 70; const cx = 100; const cy = 90;
+  const startAngle = Math.PI; const endAngle = 2 * Math.PI;
+  const sweepAngle = endAngle - startAngle;
+  const angle = startAngle + pct * sweepAngle;
+  const arcX = (r: number, a: number) => cx + r * Math.cos(a);
+  const arcY = (r: number, a: number) => cy + r * Math.sin(a);
+  const trackPath = `M${arcX(R, startAngle).toFixed(1)},${arcY(R, startAngle).toFixed(1)} A${R},${R} 0 1 1 ${arcX(R, endAngle - 0.001).toFixed(1)},${arcY(R, endAngle - 0.001).toFixed(1)}`;
+  const fillPath = pct > 0.001
+    ? `M${arcX(R, startAngle).toFixed(1)},${arcY(R, startAngle).toFixed(1)} A${R},${R} 0 ${pct > 0.5 ? 1 : 0} 1 ${arcX(R, angle).toFixed(1)},${arcY(R, angle).toFixed(1)}`
+    : '';
+  const gaugeColor = pct >= 0.8 ? '#ef4444' : pct >= 0.5 ? '#f59e0b' : '#6366f1';
+  return (
+    <div className="dbmon2-gauge-wrap">
+      <svg viewBox="0 0 200 100" className="dbmon2-gauge-svg">
+        <defs>
+          <linearGradient id="gauge-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#6366f1" />
+            <stop offset="60%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#ef4444" />
+          </linearGradient>
+        </defs>
+        <path d={trackPath} fill="none" stroke="var(--line)" strokeWidth="10" strokeLinecap="round" />
+        {fillPath && <path d={fillPath} fill="none" stroke="url(#gauge-grad)" strokeWidth="10" strokeLinecap="round" />}
+        <text x={cx} y={cy - 10} textAnchor="middle" fontSize="22" fontWeight="800" fill={gaugeColor}>{(pct * 100).toFixed(0)}%</text>
+        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="var(--muted)">{label}</text>
+        <text x={18} y={cy + 16} textAnchor="middle" fontSize="8" fill="var(--muted)">0%</text>
+        <text x={182} y={cy + 16} textAnchor="middle" fontSize="8" fill="var(--muted)">100%</text>
+      </svg>
+      <div className="dbmon2-gauge-sub">{sublabel}</div>
+    </div>
+  );
+}
+
+function formatBytes(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+type ActivityItem = { id: string; type: 'transaksi' | 'booking' | 'topup' | 'user'; label: string; sub: string; time: string; color: string };
+type TodayStats = { newUsers: number; transactions: number; bookings: number; topups: number };
+
+function DbMonitor() {
+  const [tables, setTables] = useState<TableStat[]>([]);
+  const [buckets, setBuckets] = useState<BucketStat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshed, setRefreshed] = useState<Date | null>(null);
+  const [history, setHistory] = useState<ChartPoint[]>([]);
+  const [polling, setPolling] = useState(true);
+  const [paused, setPaused] = useState(false);
+  const POLL_INTERVAL = 60;
+  const [countdown, setCountdown] = useState(POLL_INTERVAL);
+  const prevCounts = useRef<Record<string, number>>({});
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [todayStats, setTodayStats] = useState<TodayStats>({ newUsers: 0, transactions: 0, bookings: 0, topups: 0 });
+
+  const TABLE_DEFS: { name: string; label: string; warnAt: number; limitAt: number }[] = [
+    { name: 'app_users',            label: 'Users',              warnAt: 500,   limitAt: 1000  },
+    { name: 'user_profiles',        label: 'User Profiles',      warnAt: 500,   limitAt: 1000  },
+    { name: 'user_credits',         label: 'Credits',            warnAt: 500,   limitAt: 1000  },
+    { name: 'credit_transactions',  label: 'Transaksi Coin',     warnAt: 5000,  limitAt: 20000 },
+    { name: 'courses',              label: 'Kelas',              warnAt: 50,    limitAt: 200   },
+    { name: 'lessons',              label: 'Lessons',            warnAt: 500,   limitAt: 2000  },
+    { name: 'lesson_progress',      label: 'Progres Belajar',    warnAt: 5000,  limitAt: 20000 },
+    { name: 'lesson_notes',         label: 'Catatan',            warnAt: 2000,  limitAt: 10000 },
+    { name: 'one_on_one_bookings',  label: 'Booking 1:1',        warnAt: 1000,  limitAt: 5000  },
+    { name: 'topup_requests',       label: 'Request Topup',      warnAt: 1000,  limitAt: 5000  },
+    { name: 'forum_posts',          label: 'Forum Posts',        warnAt: 2000,  limitAt: 10000 },
+    { name: 'notifications',        label: 'Notifikasi',         warnAt: 5000,  limitAt: 20000 },
+    { name: 'learning_hub_content', label: 'Konten & Settings',  warnAt: 50,    limitAt: 200   },
+    { name: 'shared_assets',        label: 'Shared Assets',      warnAt: 500,   limitAt: 2000  },
+  ];
+
+  const BUCKET_DEFS: { name: string; label: string; warnAt: number; sizeLimitBytes: number }[] = [
+    { name: 'profile-avatars', label: 'Avatar Profile', warnAt: 500, sizeLimitBytes: 500 * 1024 * 1024 },
+    { name: 'lesson-assets',   label: 'Aset Kelas',     warnAt: 200, sizeLimitBytes: 500 * 1024 * 1024 },
+  ];
+  // Supabase free tier limits
+  const DB_SIZE_LIMIT_BYTES = 500 * 1024 * 1024;
+  const STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024;
+  // Rough estimate: avg 512 bytes/row
+  const AVG_ROW_BYTES = 512;
+
+  const load24hHistory = async () => {
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const [txData, bookData, forumData, userNewData] = await Promise.all([
+      supabase.from('credit_transactions').select('created_at').gte('created_at', since.toISOString()),
+      supabase.from('one_on_one_bookings').select('created_at').gte('created_at', since.toISOString()),
+      supabase.from('forum_posts').select('created_at').gte('created_at', since.toISOString()),
+      supabase.from('app_users').select('created_at').gte('created_at', since.toISOString()),
+    ]);
+
+    const countInHour = (data: { created_at: string }[] | null, start: Date, end: Date) =>
+      (data ?? []).filter((r) => { const t = new Date(r.created_at); return t >= start && t < end; }).length;
+
+    const buckets: ChartPoint[] = [];
+    for (let i = 0; i < 24; i++) {
+      const bucketStart = new Date(since.getTime() + i * 3600 * 1000);
+      const bucketEnd   = new Date(bucketStart.getTime() + 3600 * 1000);
+      buckets.push({
+        time: bucketEnd,
+        counts: {
+          app_users:           countInHour(userNewData.data, bucketStart, bucketEnd),
+          credit_transactions: countInHour(txData.data,     bucketStart, bucketEnd),
+          one_on_one_bookings: countInHour(bookData.data,   bucketStart, bucketEnd),
+          forum_posts:         countInHour(forumData.data,  bucketStart, bucketEnd),
+        },
+      });
+    }
+    setHistory(buckets);
+  };
+
+  const loadActivity = async () => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const iso = todayStart.toISOString();
+
+    const [txRes, bookRes, topupRes, newUserRes, recentTx, recentBook, recentTopup, recentUser] = await Promise.all([
+      supabase.from('credit_transactions').select('*', { count: 'exact', head: true }).gte('created_at', iso),
+      supabase.from('one_on_one_bookings').select('*', { count: 'exact', head: true }).gte('created_at', iso),
+      supabase.from('topup_requests').select('*', { count: 'exact', head: true }).gte('created_at', iso),
+      supabase.from('app_users').select('*', { count: 'exact', head: true }).gte('created_at', iso),
+      supabase.from('credit_transactions').select('id,type,amount,created_at,username').order('created_at', { ascending: false }).limit(5),
+      supabase.from('one_on_one_bookings').select('id,status,created_at,student_username').order('created_at', { ascending: false }).limit(5),
+      supabase.from('topup_requests').select('id,status,amount,created_at,username').order('created_at', { ascending: false }).limit(4),
+      supabase.from('app_users').select('id,username,created_at').order('created_at', { ascending: false }).limit(4),
+    ]);
+
+    setTodayStats({
+      newUsers: newUserRes.count ?? 0,
+      transactions: txRes.count ?? 0,
+      bookings: bookRes.count ?? 0,
+      topups: topupRes.count ?? 0,
+    });
+
+    const fmt = (iso: string) => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const items: ActivityItem[] = [
+      ...(recentTx.data ?? []).map((r: Record<string,unknown>) => ({
+        id: `tx-${r.id}`, type: 'transaksi' as const,
+        label: `Transaksi ${String(r.type ?? '')}`,
+        sub: `${String(r.username ?? '—')} · ${Number(r.amount ?? 0).toLocaleString('id-ID')} coin`,
+        time: fmt(String(r.created_at)), color: '#f59e0b',
+      })),
+      ...(recentBook.data ?? []).map((r: Record<string,unknown>) => ({
+        id: `bk-${r.id}`, type: 'booking' as const,
+        label: `Booking 1:1`,
+        sub: `${String(r.student_username ?? '—')} · ${String(r.status ?? '')}`,
+        time: fmt(String(r.created_at)), color: '#22c55e',
+      })),
+      ...(recentTopup.data ?? []).map((r: Record<string,unknown>) => ({
+        id: `tp-${r.id}`, type: 'topup' as const,
+        label: `Topup ${String(r.status ?? '')}`,
+        sub: `${String(r.username ?? '—')} · Rp${Number(r.amount ?? 0).toLocaleString('id-ID')}`,
+        time: fmt(String(r.created_at)), color: '#6366f1',
+      })),
+      ...(recentUser.data ?? []).map((r: Record<string,unknown>) => ({
+        id: `usr-${r.id}`, type: 'user' as const,
+        label: `User baru`,
+        sub: String(r.username ?? '—'),
+        time: fmt(String(r.created_at)), color: '#ec4899',
+      })),
+    ].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 12);
+    setActivity(items);
+  };
+
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
+    const counts = await Promise.all(
+      TABLE_DEFS.map(async (t) => {
+        const { count } = await supabase.from(t.name as never).select('*', { count: 'exact', head: true });
+        return { ...t, count: count ?? 0 };
+      })
+    );
+    setTables(counts);
+
+    void load24hHistory();
+
+    const bucketStats = await Promise.all(
+      BUCKET_DEFS.map(async (b) => {
+        const { data } = await supabase.storage.from(b.name).list('', { limit: 1000 });
+        const files = data?.length ?? 0;
+        const sizeBytes = data?.reduce((acc, f) => acc + ((f.metadata as { size?: number })?.size ?? 0), 0) ?? 0;
+        return { name: b.name, label: b.label, files, warnAt: b.warnAt, sizeBytes };
+      })
+    );
+    setBuckets(bucketStats);
+    void loadActivity();
+    prevCounts.current = snap;
+    setRefreshed(new Date());
+    setCountdown(POLL_INTERVAL);
+    if (!silent) setLoading(false);
+  };
+
+  // Initial load
+  useEffect(() => { void load(); }, []);
+
+  // Auto-pause when tab is hidden
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        setPaused(true);
+      } else {
+        setPaused(false);
+        void load(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  // Poll interval — suspended when paused or manually stopped
+  useEffect(() => {
+    if (!polling || paused) return;
+    const interval = setInterval(() => { void load(true); }, POLL_INTERVAL * 1000);
+    return () => clearInterval(interval);
+  }, [polling, paused]);
+
+  // Countdown ticker
+  useEffect(() => {
+    if (!polling || paused) return;
+    const tick = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(tick);
+  }, [polling, paused]);
+
+  // Derived stats
+  const totalRows = tables.reduce((a, t) => a + t.count, 0);
+  const estimatedDbBytes = totalRows * AVG_ROW_BYTES;
+  const totalStorageBytes = buckets.reduce((a, b) => a + b.sizeBytes, 0);
+  const freeStorageBytes = Math.max(0, STORAGE_LIMIT_BYTES - totalStorageBytes);
+  const freeDbBytes = Math.max(0, DB_SIZE_LIMIT_BYTES - estimatedDbBytes);
+
+  // Stat ring deltas (compare latest two history points)
+  const getDelta = (key: string): number | null => {
+    if (history.length < 2) return null;
+    const cur = history[history.length - 1].counts[key] ?? 0;
+    const prev = history[history.length - 2].counts[key] ?? 0;
+    return cur - prev;
+  };
+
+  const STAT_CARDS = [
+    ...CHART_TABLES.map((ct) => ({
+      key: ct.key,
+      label: ct.label,
+      color: ct.color,
+      value: tables.find((t) => t.name === ct.key)?.count ?? 0,
+      limit: ct.limitAt,
+      delta: getDelta(ct.key),
+    })),
+    {
+      key: 'storage_used',
+      label: 'Storage Dipakai',
+      color: '#3b82f6',
+      value: Math.round(totalStorageBytes / (1024 * 1024)),
+      limit: Math.round(STORAGE_LIMIT_BYTES / (1024 * 1024)),
+      delta: null,
+    },
+    {
+      key: 'db_rows',
+      label: 'Total Baris DB',
+      color: '#8b5cf6',
+      value: totalRows,
+      limit: 100000,
+      delta: null,
+    },
+  ];
+
+  return (
+    <div className="dbmon2-shell">
+      {/* Header */}
+      <div className="dbmon2-header">
+        <div>
+          <h2 className="dbmon2-title">Overview</h2>
+          {refreshed && (
+            <p className="dbmon2-subtitle">
+              Diperbarui {refreshed.toLocaleTimeString('id-ID')} ·{' '}
+              {paused ? '⏸ dijeda (tab tidak aktif)' : polling ? `auto-refresh dalam ${countdown}d` : 'auto-refresh off'}
+              {' · '}Supabase Free Tier: 500 MB database · 1 GB storage
+            </p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="admin-mini-btn ghost" onClick={() => setPolling((p) => !p)}>
+            {polling ? '⏸ Pause' : '▶ Resume'}
+          </button>
+          <button type="button" className="admin-mini-btn" onClick={() => void load()} disabled={loading}>
+            {loading ? 'Memuat…' : '+ Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {/* Stat ring cards */}
+      <div className="dbmon2-stat-row">
+        {STAT_CARDS.map((s) => (
+          <StatRingCard key={s.key} value={s.value} limit={s.limit} color={s.color} label={s.label} delta={s.delta} />
+        ))}
+      </div>
+
+      {/* Today stats bar */}
+      <div className="dbmon2-today-bar">
+        {[
+          { label: 'User baru hari ini',    value: todayStats.newUsers,     color: '#ec4899' },
+          { label: 'Transaksi hari ini',    value: todayStats.transactions,  color: '#f59e0b' },
+          { label: 'Booking hari ini',      value: todayStats.bookings,      color: '#22c55e' },
+          { label: 'Topup hari ini',        value: todayStats.topups,        color: '#6366f1' },
+        ].map((s) => (
+          <div key={s.label} className="dbmon2-today-item">
+            <span className="dbmon2-today-dot" style={{ background: s.color }} />
+            <span className="dbmon2-today-value" style={{ color: s.color }}>{s.value}</span>
+            <span className="dbmon2-today-label">{s.label}</span>
+          </div>
+        ))}
+        <span className="dbmon2-today-note">Data sejak 00:00 hari ini</span>
+      </div>
+
+      {/* Middle row: line chart + storage gauge */}
+      <div className="dbmon2-mid-row">
+        <div className="dbmon2-chart-card">
+          <div className="dbmon2-card-head">
+            <span className="dbmon2-card-title">Aktivitas 24 Jam Terakhir</span>
+            <span className="dbmon2-card-sub">per jam · diperbarui tiap {POLL_INTERVAL}d</span>
+          </div>
+          <MultiLineChart history={history} />
+        </div>
+        <div className="dbmon2-side-col">
+          <div className="dbmon2-gauge-card">
+            <div className="dbmon2-card-head">
+              <span className="dbmon2-card-title">Storage</span>
+            </div>
+            <StorageGauge
+              used={totalStorageBytes}
+              total={STORAGE_LIMIT_BYTES}
+              label="terpakai"
+              sublabel={`${formatBytes(totalStorageBytes)} dipakai · ${formatBytes(freeStorageBytes)} tersisa`}
+            />
+          </div>
+          <div className="dbmon2-gauge-card">
+            <div className="dbmon2-card-head">
+              <span className="dbmon2-card-title">Database (estimasi)</span>
+            </div>
+            <StorageGauge
+              used={estimatedDbBytes}
+              total={DB_SIZE_LIMIT_BYTES}
+              label="est. terpakai"
+              sublabel={`~${formatBytes(estimatedDbBytes)} · ~${formatBytes(freeDbBytes)} tersisa`}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom row: table bar chart + bucket stats */}
+      {!loading && (
+        <div className="dbmon2-bot-row">
+          <div className="dbmon2-perf-card">
+            <div className="dbmon2-card-head">
+              <span className="dbmon2-card-title">Semua Tabel</span>
+              <span className="dbmon2-card-sub">jumlah baris vs batas estimasi</span>
+            </div>
+            <div className="dbmon2-perf-list">
+              {tables.map((t) => {
+                const pct = Math.min(100, (t.count / t.limitAt) * 100);
+                const color = pct >= 80 ? '#ef4444' : pct >= 50 ? '#f59e0b' : '#6366f1';
+                return (
+                  <div key={t.name} className="dbmon2-perf-row">
+                    <div className="dbmon2-perf-meta">
+                      <span className="dbmon2-perf-label">{t.label}</span>
+                      <span className="dbmon2-perf-pct" style={{ color }}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="dbmon2-perf-track">
+                      <div className="dbmon2-perf-fill" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                    <span className="dbmon2-perf-count">{t.count.toLocaleString('id-ID')}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="dbmon2-bucket-card">
+            <div className="dbmon2-card-head">
+              <span className="dbmon2-card-title">Storage Bucket</span>
+              <span className="dbmon2-card-sub">ukuran aktual file</span>
+            </div>
+            <div className="dbmon2-bucket-list">
+              {buckets.map((b) => {
+                const pct = Math.min(100, (b.sizeBytes / (STORAGE_LIMIT_BYTES / 2)) * 100);
+                const color = pct >= 80 ? '#ef4444' : pct >= 50 ? '#f59e0b' : '#3b82f6';
+                return (
+                  <div key={b.name} className="dbmon2-bucket-item">
+                    <div className="dbmon2-bucket-top">
+                      <span className="dbmon2-bucket-label">{b.label}</span>
+                      <span className="dbmon2-bucket-name">{b.name}</span>
+                    </div>
+                    <div className="dbmon2-bucket-stats">
+                      <span className="dbmon2-bucket-files">{b.files} file</span>
+                      <span className="dbmon2-bucket-size" style={{ color }}>{formatBytes(b.sizeBytes)}</span>
+                    </div>
+                    <div className="dbmon2-perf-track">
+                      <div className="dbmon2-perf-fill" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                    <div className="dbmon2-bucket-meta">
+                      Tersisa: {formatBytes(Math.max(0, STORAGE_LIMIT_BYTES / 2 - b.sizeBytes))} dari 500 MB
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Total storage summary */}
+            <div className="dbmon2-storage-total">
+              <div className="dbmon2-storage-row">
+                <span>Total dipakai</span>
+                <span style={{ color: '#3b82f6', fontWeight: 700 }}>{formatBytes(totalStorageBytes)}</span>
+              </div>
+              <div className="dbmon2-storage-row">
+                <span>Tersisa (1 GB limit)</span>
+                <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatBytes(freeStorageBytes)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity feed */}
+      {activity.length > 0 && (
+        <div className="dbmon2-activity-card">
+          <div className="dbmon2-card-head">
+            <span className="dbmon2-card-title">Aktivitas Terbaru</span>
+            <span className="dbmon2-card-sub">12 event terbaru · diperbarui tiap {POLL_INTERVAL}d</span>
+          </div>
+          <div className="dbmon2-activity-grid">
+            {activity.map((a) => (
+              <div key={a.id} className="dbmon2-activity-item">
+                <span className="dbmon2-activity-dot" style={{ background: a.color }} />
+                <div className="dbmon2-activity-body">
+                  <span className="dbmon2-activity-label">{a.label}</span>
+                  <span className="dbmon2-activity-sub">{a.sub}</span>
+                </div>
+                <span className="dbmon2-activity-time">{a.time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading && tables.length === 0 && <div className="forum-loading">Mengambil data…</div>}
+    </div>
+  );
+}
+
 // Editor admin untuk konten landing page: teks, tombol, foto (upload),
 // tambah/hapus langkah, fitur, dan FAQ. Disimpan ke Supabase.
 function LandingImageInput({ value, onChange }: { value: string; onChange: (url: string) => void }) {
@@ -2731,12 +3466,15 @@ function LandingEditor() {
   const [content, setContent] = useState<LandingContent | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
+  const [openSections, setOpenSections] = useState<string[]>(['hero']);
 
   useEffect(() => { void loadLandingContent().then(setContent); }, []);
 
   if (!content) return <div className="forum-loading">memuat konten landing…</div>;
   const c = content;
   const set = (patch: Partial<LandingContent>) => setContent({ ...c, ...patch });
+  const toggle = (id: string) => setOpenSections((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const isOpen = (id: string) => openSections.includes(id);
 
   const save = async () => {
     setSaving(true);
@@ -2747,122 +3485,149 @@ function LandingEditor() {
   };
 
   return (
-    <div className="landing-editor">
-      <div className="landing-editor-head">
-        <p className="admin-section-label" style={{ margin: 0 }}>Editor Landing Page</p>
-        <div className="landing-editor-head-actions">
-          <a className="admin-mini-btn ghost" href="#" onClick={(e) => { e.preventDefault(); window.open('/', '_blank'); }}>Lihat Halaman ↗</a>
-          <button type="button" className="admin-add-btn" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Menyimpan…' : savedAt ? '✓ Tersimpan' : 'Simpan Perubahan'}
+    <div className="lpb-shell">
+
+      {/* ── Live Preview 80% ── */}
+      <div className="lpb-preview">
+        <div className="lpb-preview-bar">
+          <span className="lpb-preview-label">Live Preview</span>
+          <a className="admin-mini-btn ghost" href="#" onClick={(e) => { e.preventDefault(); window.open('/', '_blank'); }}>Buka ↗</a>
+        </div>
+        <div className="lpb-preview-viewport">
+          <div className="lpb-preview-scaler">
+            <LandingPage content={c} onMasuk={() => {}} onPickPackage={() => {}} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Sidebar Editor 20% ── */}
+      <aside className="lpb-sidebar">
+        <div className="lpb-sidebar-head">
+          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>Editor</span>
+          <button type="button" className="admin-add-btn" style={{ padding: '6px 14px', fontSize: '0.82rem' }} disabled={saving} onClick={() => void save()}>
+            {saving ? '…' : savedAt ? '✓ Tersimpan' : 'Simpan'}
           </button>
         </div>
-      </div>
 
-      {/* Hero */}
-      <fieldset className="landing-edit-group">
-        <legend>Hero (bagian atas)</legend>
-        <label>Badge<input value={c.badge} onChange={(e) => set({ badge: e.target.value })} /></label>
-        <label>Judul utama<textarea rows={2} value={c.heroTitle} onChange={(e) => set({ heroTitle: e.target.value })} /></label>
-        <label>Deskripsi<textarea rows={3} value={c.heroSubtitle} onChange={(e) => set({ heroSubtitle: e.target.value })} /></label>
-        <div className="landing-edit-row">
-          <label>Teks tombol<input value={c.heroCtaLabel} onChange={(e) => set({ heroCtaLabel: e.target.value })} /></label>
-          <label>Placeholder email<input value={c.emailPlaceholder} onChange={(e) => set({ emailPlaceholder: e.target.value })} /></label>
+        {/* Hero */}
+        <div className={`lpb-acc${isOpen('hero') ? ' open' : ''}`}>
+          <button className="lpb-acc-trigger" onClick={() => toggle('hero')}>
+            <span>🏠 Hero</span><span className="lpb-chevron">{isOpen('hero') ? '▴' : '▾'}</span>
+          </button>
+          <div className="lpb-acc-body">
+            <label>Badge<input value={c.badge} onChange={(e) => set({ badge: e.target.value })} /></label>
+            <label>Judul utama<textarea rows={2} value={c.heroTitle} onChange={(e) => set({ heroTitle: e.target.value })} /></label>
+            <label>Deskripsi<textarea rows={3} value={c.heroSubtitle} onChange={(e) => set({ heroSubtitle: e.target.value })} /></label>
+            <label>Teks tombol<input value={c.heroCtaLabel} onChange={(e) => set({ heroCtaLabel: e.target.value })} /></label>
+            <label>Placeholder email<input value={c.emailPlaceholder} onChange={(e) => set({ emailPlaceholder: e.target.value })} /></label>
+          </div>
         </div>
-      </fieldset>
 
-      {/* Steps */}
-      <fieldset className="landing-edit-group">
-        <legend>Bagian "Cara Kerja"</legend>
-        <label>Judul bagian<input value={c.howTitle} onChange={(e) => set({ howTitle: e.target.value })} /></label>
-        {c.steps.map((s, i) => (
-          <div className="landing-edit-item" key={s.id}>
-            <div className="landing-edit-item-head">
-              <strong>Langkah {i + 1}</strong>
-              <button type="button" className="admin-mini-btn ghost" onClick={() => set({ steps: c.steps.filter((x) => x.id !== s.id) })}>Hapus</button>
-            </div>
-            <LandingImageInput value={s.image} onChange={(url) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, image: url } : x) })} />
-            <label>Label<input value={s.label} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, label: e.target.value } : x) })} /></label>
-            <label>Judul<input value={s.title} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, title: e.target.value } : x) })} /></label>
-            <label>Deskripsi<textarea rows={2} value={s.desc} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, desc: e.target.value } : x) })} /></label>
+        {/* Cara Kerja */}
+        <div className={`lpb-acc${isOpen('steps') ? ' open' : ''}`}>
+          <button className="lpb-acc-trigger" onClick={() => toggle('steps')}>
+            <span>📋 Cara Kerja</span><span className="lpb-chevron">{isOpen('steps') ? '▴' : '▾'}</span>
+          </button>
+          <div className="lpb-acc-body">
+            <label>Teks kecil di atas judul<input value={c.painEyebrow ?? ''} onChange={(e) => set({ painEyebrow: e.target.value })} /></label>
+            <label>Judul bagian<input value={c.howTitle} onChange={(e) => set({ howTitle: e.target.value })} /></label>
+            {c.steps.map((s, i) => (
+              <div className="lpb-sub-item" key={s.id}>
+                <div className="lpb-sub-head">
+                  <strong>Card {i + 1}</strong>
+                  <button type="button" className="admin-mini-btn ghost" onClick={() => set({ steps: c.steps.filter((x) => x.id !== s.id) })}>Hapus</button>
+                </div>
+                <label>Ikon (emoji)<input value={s.label} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, label: e.target.value } : x) })} /></label>
+                <label>Judul<input value={s.title} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, title: e.target.value } : x) })} /></label>
+                <label>Deskripsi<textarea rows={2} value={s.desc} onChange={(e) => set({ steps: c.steps.map((x) => x.id === s.id ? { ...x, desc: e.target.value } : x) })} /></label>
+              </div>
+            ))}
+            <button type="button" className="admin-mini-btn" onClick={() => set({ steps: [...c.steps, { id: `s${Date.now()}`, image: '', label: `Langkah 0${c.steps.length + 1}`, title: 'Judul langkah', desc: 'Deskripsi langkah' }] })}>+ Tambah Langkah</button>
           </div>
-        ))}
-        <button type="button" className="admin-mini-btn" onClick={() => set({ steps: [...c.steps, { id: `s${Date.now()}`, image: '', label: `Langkah 0${c.steps.length + 1}`, title: 'Judul langkah', desc: 'Deskripsi langkah' }] })}>+ Tambah Langkah</button>
-      </fieldset>
-
-      {/* Pricing */}
-      <fieldset className="landing-edit-group">
-        <legend>Bagian Pricing (paket Ruang Coin)</legend>
-        <label className="landing-edit-inline">
-          <input type="checkbox" checked={c.showPricing} onChange={(e) => set({ showPricing: e.target.checked })} />
-          Tampilkan bagian pricing di landing
-        </label>
-        <label>Judul bagian<input value={c.pricingTitle} onChange={(e) => set({ pricingTitle: e.target.value })} /></label>
-        <label>Subjudul<input value={c.pricingSubtitle} onChange={(e) => set({ pricingSubtitle: e.target.value })} /></label>
-        <p className="landing-edit-hint">Daftar paket diambil otomatis dari tab <strong>Ruang Coin → Pengaturan Paket</strong>. Tombol "Ambil paket" akan mengarahkan pengunjung ke pendaftaran lalu halaman pembayaran.</p>
-      </fieldset>
-
-      {/* Features */}
-      <fieldset className="landing-edit-group">
-        <legend>Bagian Fitur (split kiri/kanan)</legend>
-        <label>Judul bagian<input value={c.featuresTitle} onChange={(e) => set({ featuresTitle: e.target.value })} /></label>
-        {c.features.map((f, i) => (
-          <div className="landing-edit-item" key={f.id}>
-            <div className="landing-edit-item-head">
-              <strong>Fitur {i + 1}</strong>
-              <button type="button" className="admin-mini-btn ghost" onClick={() => set({ features: c.features.filter((x) => x.id !== f.id) })}>Hapus</button>
-            </div>
-            <LandingImageInput value={f.image} onChange={(url) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, image: url } : x) })} />
-            <label>Label kecil<input value={f.eyebrow} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, eyebrow: e.target.value } : x) })} /></label>
-            <label>Judul<input value={f.title} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, title: e.target.value } : x) })} /></label>
-            <label>Deskripsi<textarea rows={2} value={f.desc} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, desc: e.target.value } : x) })} /></label>
-            <div className="landing-edit-row">
-              <label>Teks tombol<input value={f.ctaLabel} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, ctaLabel: e.target.value } : x) })} /></label>
-              <label>Posisi gambar
-                <select value={f.imageSide} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, imageSide: e.target.value as 'left' | 'right' } : x) })}>
-                  <option value="right">Kanan</option>
-                  <option value="left">Kiri</option>
-                </select>
-              </label>
-            </div>
-          </div>
-        ))}
-        <button type="button" className="admin-mini-btn" onClick={() => set({ features: [...c.features, { id: `f${Date.now()}`, eyebrow: 'Label', title: 'Judul fitur', desc: 'Deskripsi fitur', ctaLabel: 'Pelajari', image: '', imageSide: 'right' }] })}>+ Tambah Fitur</button>
-      </fieldset>
-
-      {/* FAQ */}
-      <fieldset className="landing-edit-group">
-        <legend>FAQ</legend>
-        <label>Judul bagian<input value={c.faqTitle} onChange={(e) => set({ faqTitle: e.target.value })} /></label>
-        {c.faqs.map((q, i) => (
-          <div className="landing-edit-item" key={q.id}>
-            <div className="landing-edit-item-head">
-              <strong>FAQ {i + 1}</strong>
-              <button type="button" className="admin-mini-btn ghost" onClick={() => set({ faqs: c.faqs.filter((x) => x.id !== q.id) })}>Hapus</button>
-            </div>
-            <label>Pertanyaan<input value={q.q} onChange={(e) => set({ faqs: c.faqs.map((x) => x.id === q.id ? { ...x, q: e.target.value } : x) })} /></label>
-            <label>Jawaban<textarea rows={2} value={q.a} onChange={(e) => set({ faqs: c.faqs.map((x) => x.id === q.id ? { ...x, a: e.target.value } : x) })} /></label>
-          </div>
-        ))}
-        <button type="button" className="admin-mini-btn" onClick={() => set({ faqs: [...c.faqs, { id: `q${Date.now()}`, q: 'Pertanyaan baru?', a: 'Jawaban.' }] })}>+ Tambah FAQ</button>
-      </fieldset>
-
-      {/* Final + footer */}
-      <fieldset className="landing-edit-group">
-        <legend>Penutup &amp; Footer</legend>
-        <label>Judul ajakan akhir<input value={c.finalTitle} onChange={(e) => set({ finalTitle: e.target.value })} /></label>
-        <label>Deskripsi ajakan<textarea rows={2} value={c.finalSubtitle} onChange={(e) => set({ finalSubtitle: e.target.value })} /></label>
-        <div className="landing-edit-row">
-          <label>Teks tombol akhir<input value={c.finalCtaLabel} onChange={(e) => set({ finalCtaLabel: e.target.value })} /></label>
-          <label>Teks footer<input value={c.footerText} onChange={(e) => set({ footerText: e.target.value })} /></label>
         </div>
-        <label>Link Instagram<input value={c.instagramUrl} onChange={(e) => set({ instagramUrl: e.target.value })} /></label>
-      </fieldset>
 
-      <div className="landing-editor-foot">
-        <button type="button" className="admin-add-btn" disabled={saving} onClick={() => void save()}>
-          {saving ? 'Menyimpan…' : savedAt ? '✓ Tersimpan' : 'Simpan Perubahan'}
-        </button>
-      </div>
+        {/* Pricing */}
+        <div className={`lpb-acc${isOpen('pricing') ? ' open' : ''}`}>
+          <button className="lpb-acc-trigger" onClick={() => toggle('pricing')}>
+            <span>💰 Pricing</span><span className="lpb-chevron">{isOpen('pricing') ? '▴' : '▾'}</span>
+          </button>
+          <div className="lpb-acc-body">
+            <label className="lpb-checkbox-label">
+              <input type="checkbox" checked={c.showPricing} onChange={(e) => set({ showPricing: e.target.checked })} />
+              Tampilkan bagian pricing
+            </label>
+            <label>Judul bagian<input value={c.pricingTitle} onChange={(e) => set({ pricingTitle: e.target.value })} /></label>
+            <label>Subjudul<input value={c.pricingSubtitle} onChange={(e) => set({ pricingSubtitle: e.target.value })} /></label>
+            <p className="lpb-hint">Paket &amp; benefit diambil dari tab <strong>Ruang Coin</strong>.</p>
+          </div>
+        </div>
+
+        {/* Fitur */}
+        <div className={`lpb-acc${isOpen('features') ? ' open' : ''}`}>
+          <button className="lpb-acc-trigger" onClick={() => toggle('features')}>
+            <span>✨ Fitur</span><span className="lpb-chevron">{isOpen('features') ? '▴' : '▾'}</span>
+          </button>
+          <div className="lpb-acc-body">
+            <label>Judul bagian<input value={c.featuresTitle} onChange={(e) => set({ featuresTitle: e.target.value })} /></label>
+            {c.features.map((f, i) => (
+              <div className="lpb-sub-item" key={f.id}>
+                <div className="lpb-sub-head">
+                  <strong>Fitur {i + 1}</strong>
+                  <button type="button" className="admin-mini-btn ghost" onClick={() => set({ features: c.features.filter((x) => x.id !== f.id) })}>Hapus</button>
+                </div>
+                <LandingImageInput value={f.image} onChange={(url) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, image: url } : x) })} />
+                <label>Label kecil<input value={f.eyebrow} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, eyebrow: e.target.value } : x) })} /></label>
+                <label>Judul<input value={f.title} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, title: e.target.value } : x) })} /></label>
+                <label>Deskripsi<textarea rows={2} value={f.desc} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, desc: e.target.value } : x) })} /></label>
+                <label>Teks tombol<input value={f.ctaLabel} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, ctaLabel: e.target.value } : x) })} /></label>
+                <label>Posisi gambar
+                  <select value={f.imageSide} onChange={(e) => set({ features: c.features.map((x) => x.id === f.id ? { ...x, imageSide: e.target.value as 'left' | 'right' } : x) })}>
+                    <option value="right">Kanan</option>
+                    <option value="left">Kiri</option>
+                  </select>
+                </label>
+              </div>
+            ))}
+            <button type="button" className="admin-mini-btn" onClick={() => set({ features: [...c.features, { id: `f${Date.now()}`, eyebrow: 'Label', title: 'Judul fitur', desc: 'Deskripsi fitur', ctaLabel: 'Pelajari', image: '', imageSide: 'right' }] })}>+ Tambah Fitur</button>
+          </div>
+        </div>
+
+        {/* FAQ */}
+        <div className={`lpb-acc${isOpen('faq') ? ' open' : ''}`}>
+          <button className="lpb-acc-trigger" onClick={() => toggle('faq')}>
+            <span>❓ FAQ</span><span className="lpb-chevron">{isOpen('faq') ? '▴' : '▾'}</span>
+          </button>
+          <div className="lpb-acc-body">
+            <label>Judul bagian<input value={c.faqTitle} onChange={(e) => set({ faqTitle: e.target.value })} /></label>
+            {c.faqs.map((q, i) => (
+              <div className="lpb-sub-item" key={q.id}>
+                <div className="lpb-sub-head">
+                  <strong>FAQ {i + 1}</strong>
+                  <button type="button" className="admin-mini-btn ghost" onClick={() => set({ faqs: c.faqs.filter((x) => x.id !== q.id) })}>Hapus</button>
+                </div>
+                <label>Pertanyaan<input value={q.q} onChange={(e) => set({ faqs: c.faqs.map((x) => x.id === q.id ? { ...x, q: e.target.value } : x) })} /></label>
+                <label>Jawaban<textarea rows={2} value={q.a} onChange={(e) => set({ faqs: c.faqs.map((x) => x.id === q.id ? { ...x, a: e.target.value } : x) })} /></label>
+              </div>
+            ))}
+            <button type="button" className="admin-mini-btn" onClick={() => set({ faqs: [...c.faqs, { id: `q${Date.now()}`, q: 'Pertanyaan baru?', a: 'Jawaban.' }] })}>+ Tambah FAQ</button>
+          </div>
+        </div>
+
+        {/* Penutup & Footer */}
+        <div className={`lpb-acc${isOpen('footer') ? ' open' : ''}`}>
+          <button className="lpb-acc-trigger" onClick={() => toggle('footer')}>
+            <span>📌 Penutup &amp; Footer</span><span className="lpb-chevron">{isOpen('footer') ? '▴' : '▾'}</span>
+          </button>
+          <div className="lpb-acc-body">
+            <label>Judul ajakan akhir<input value={c.finalTitle} onChange={(e) => set({ finalTitle: e.target.value })} /></label>
+            <label>Deskripsi ajakan<textarea rows={2} value={c.finalSubtitle} onChange={(e) => set({ finalSubtitle: e.target.value })} /></label>
+            <label>Teks tombol akhir<input value={c.finalCtaLabel} onChange={(e) => set({ finalCtaLabel: e.target.value })} /></label>
+            <label>Teks footer<input value={c.footerText} onChange={(e) => set({ footerText: e.target.value })} /></label>
+            <label>Link Instagram<input value={c.instagramUrl} onChange={(e) => set({ instagramUrl: e.target.value })} /></label>
+          </div>
+        </div>
+
+      </aside>
     </div>
   );
 }
@@ -2876,34 +3641,31 @@ function LandingPage({ content, onMasuk, onPickPackage }: { content: LandingCont
   return (
     <div className="landing">
       <nav className="landing-nav">
-        <span className="landing-brand">Ruang Sosmed<span className="landing-brand-id">ID</span></span>
-        <button type="button" className="landing-login-link" onClick={onMasuk}>Masuk</button>
+        <img src={logo1} alt="Ruang Sosmed ID" className="landing-nav-logo" />
+        <div className="landing-nav-actions">
+          <button type="button" className="landing-login-link" onClick={onMasuk}>Masuk</button>
+          <button type="button" className="landing-cta small" onClick={() => { sessionStorage.setItem('landing_register', '1'); window.location.hash = '#login'; }}>Daftar</button>
+        </div>
       </nav>
 
       {/* Hero */}
       <header className="landing-hero">
-        {content.badge && <span className="landing-badge">✨ {content.badge}</span>}
         <h1 className="landing-title">{content.heroTitle}</h1>
         <p className="landing-sub">{content.heroSubtitle}</p>
-        <form className="landing-hero-form" onSubmit={(e) => { e.preventDefault(); onMasuk(); }}>
-          <input type="email" className="landing-hero-email" placeholder={content.emailPlaceholder} />
-          <button type="submit" className="landing-cta">{content.heroCtaLabel} ↗</button>
-        </form>
+        <button type="button" className="landing-cta landing-cta-hero" onClick={onMasuk}>{content.heroCtaLabel} ↗</button>
       </header>
 
       <main className="landing-main">
-        {/* How it works */}
-        <section className="landing-block" id="cara-kerja">
+        {/* Pain points */}
+        <section className="landing-block landing-pain-section" id="cara-kerja">
+          {content.painEyebrow && <p className="landing-pain-eyebrow">{content.painEyebrow}</p>}
           <h2 className="landing-h2 center">{content.howTitle}</h2>
-          <div className="landing-steps-grid">
-            {content.steps.map((s) => (
-              <article className="landing-step-card" key={s.id}>
-                <div className="landing-step-media">
-                  {s.image ? <img src={s.image} alt={s.title} /> : <div className="landing-media-empty" />}
-                </div>
-                <span className="landing-step-label">{s.label}</span>
-                <h3>{s.title}</h3>
-                <p>{s.desc}</p>
+          <div className="landing-pain-grid">
+            {content.steps.map((s, i) => (
+              <article className={`landing-pain-card${i === 1 ? ' featured' : ''}`} key={s.id}>
+                <span className="landing-pain-icon">{s.label}</span>
+                <h3 className="landing-pain-title">{s.title}</h3>
+                <p className="landing-pain-desc">{s.desc}</p>
               </article>
             ))}
           </div>
@@ -2939,6 +3701,11 @@ function LandingPage({ content, onMasuk, onPickPackage }: { content: LandingCont
                   <h3 className="landing-price-name">{p.label}</h3>
                   <div className="landing-price-coins">{p.credits.toLocaleString('id-ID')} <span>Ruang Coin</span></div>
                   <div className="landing-price-amount">{formatRupiah(p.price)}</div>
+                  {p.features && p.features.length > 0 && (
+                    <ul className="landing-price-features">
+                      {p.features.map((f, fi) => <li key={fi}>{f}</li>)}
+                    </ul>
+                  )}
                   <button type="button" className="landing-cta" onClick={() => onPickPackage(p.id)}>Ambil paket ini →</button>
                 </article>
               ))}
@@ -5839,7 +6606,7 @@ function AssessmentDrawer({
               </button>
               {cooldownMs > 0 && onSkipCooldown && (
                 <button type="button" className="button secondary cooldown-skip-alt-btn" onClick={onSkipCooldown}>
-                  ✦ Bayar 2 Coin — Coba Sekarang
+                  <CoinIcon size={13} /> Bayar 2 Coin — Coba Sekarang
                 </button>
               )}
             </>
@@ -7457,7 +8224,9 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
               <div className="aem-actions">
                 <button type="button" className="aem-btn-cancel" onClick={() => setBookOpen(false)}>Batal</button>
                 <button type="submit" className="aem-btn-submit" disabled={bookSubmitting}>
-                  {bookSubmitting ? 'Mengirim…' : `Kirim Booking${!canManage && !(userPerks.credit_exempt || userPerks.free_booking) && featureCosts.book_1on1 > 0 ? ` · ✦${featureCosts.book_1on1}` : ''}`}
+                  {bookSubmitting ? 'Mengirim…' : (
+                    <>Kirim Booking{!canManage && !(userPerks.credit_exempt || userPerks.free_booking) && featureCosts.book_1on1 > 0 && <> · <CoinIcon size={12} />{featureCosts.book_1on1}</>}</>
+                  )}
                 </button>
               </div>
             </form>
@@ -8394,7 +9163,7 @@ type PackagePromo = {
   bonus_booking?: boolean;
   end_date?: string;
 };
-type CreditPackage = { id: string; label: string; credits: number; price: number; discount?: number; promo?: PackagePromo };
+type CreditPackage = { id: string; label: string; credits: number; price: number; discount?: number; promo?: PackagePromo; features?: string[] };
 
 function isPromoActive(pkg: CreditPackage): boolean {
   if (!pkg.promo?.active) return false;
@@ -8509,9 +9278,11 @@ function promoBg(p: PromoPopup): string {
   return p.bgColor ?? '#ffffff';
 }
 
-type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number };
+type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string };
 
+let _adminSettingsCache: AdminSettings | null = null;
 async function loadAdminSettings(): Promise<AdminSettings> {
+  if (_adminSettingsCache) return _adminSettingsCache;
   const { data } = await supabase
     .from('learning_hub_content')
     .select('content')
@@ -8521,13 +9292,14 @@ async function loadAdminSettings(): Promise<AdminSettings> {
   const raw = typeof data.content === 'string'
     ? (JSON.parse(data.content) as AdminSettings)
     : (data.content as AdminSettings);
-  return {
+  _adminSettingsCache = {
     packages: raw.packages ?? defaultCreditPackages,
     payment: raw.payment ?? defaultPaymentInfo,
     referralCodes: raw.referralCodes ?? [],
     promo: raw.promo ?? defaultPromo,
     coin_rate: raw.coin_rate ?? CREDIT_RATE,
   };
+  return _adminSettingsCache;
 }
 
 async function saveAdminSettings(settings: AdminSettings) {
@@ -8536,6 +9308,7 @@ async function saveAdminSettings(settings: AdminSettings) {
     content_group: 'admin',
     content: settings,
   });
+  _adminSettingsCache = settings;
 }
 
 // ── Landing Page content (editable via admin) ───────────────
@@ -8548,6 +9321,7 @@ type LandingContent = {
   heroSubtitle: string;
   heroCtaLabel: string;
   emailPlaceholder: string;
+  painEyebrow: string;
   howTitle: string;
   steps: LandingStep[];
   featuresTitle: string;
@@ -8573,11 +9347,12 @@ const defaultLandingContent: LandingContent = {
     'Platform belajar social media specialist terlengkap. Kuasai content strategy, visual design, analytics, dan social media marketing lewat materi terstruktur, sesi 1:1 mentor, dan komunitas aktif.',
   heroCtaLabel: 'Masuk ke kelas',
   emailPlaceholder: 'Masukkan email kamu',
-  howTitle: 'Bagaimana Ruang Sosmed ID Bekerja',
+  painEyebrow: 'Kamu pernah ngerasain ini?',
+  howTitle: 'Kalau iya, kamu di tempat yang tepat.',
   steps: [
-    { id: 's1', image: '', label: 'Langkah 01', title: 'Buat Akun & Masuk', desc: 'Daftar gratis lalu masuk ke ruang belajarmu.' },
-    { id: 's2', image: '', label: 'Langkah 02', title: 'Ikuti Materi Terstruktur', desc: 'Pelajari video & modul bertahap sesuai jalurmu.' },
-    { id: 's3', image: '', label: 'Langkah 03', title: 'Praktik & Dapat Sertifikat', desc: 'Konsultasi 1:1 dengan mentor lalu raih sertifikat.' },
+    { id: 's1', image: '', label: '😤', title: 'Udah rajin posting tapi engagement tetap sepi?', desc: 'Tanpa strategi yang jelas, konten sebagus apapun gak akan menjangkau orang yang tepat.' },
+    { id: 's2', image: '', label: '😵', title: 'Tahu cara bikin konten, tapi gak paham kenapa gak convert?', desc: 'Ada gap besar antara "bisa posting" dan "ngerti social media marketing" — dan itu yang perlu diisi.' },
+    { id: 's3', image: '', label: '😓', title: 'Mau jadi social media specialist tapi gak tahu mulai dari mana?', desc: 'Banyak resource di luar sana, tapi gak ada yang terstruktur dan sesuai kebutuhan dunia kerja nyata.' },
   ],
   showPricing: true,
   pricingTitle: 'Pilih Paket Ruang Coin',
@@ -8600,7 +9375,9 @@ const defaultLandingContent: LandingContent = {
   instagramUrl: 'https://www.instagram.com/ruangsosmedid',
 };
 
+let _landingContentCache: LandingContent | null = null;
 async function loadLandingContent(): Promise<LandingContent> {
+  if (_landingContentCache) return _landingContentCache;
   const { data } = await supabase
     .from('learning_hub_content')
     .select('content')
@@ -8608,7 +9385,8 @@ async function loadLandingContent(): Promise<LandingContent> {
     .maybeSingle();
   if (!data?.content) return defaultLandingContent;
   const raw = (typeof data.content === 'string' ? JSON.parse(data.content) : data.content) as Partial<LandingContent>;
-  return { ...defaultLandingContent, ...raw };
+  _landingContentCache = { ...defaultLandingContent, ...raw };
+  return _landingContentCache;
 }
 
 async function saveLandingContent(content: LandingContent) {
@@ -8617,6 +9395,7 @@ async function saveLandingContent(content: LandingContent) {
     content_group: 'landing',
     content,
   });
+  _landingContentCache = content;
 }
 
 async function uploadLandingImage(file: File): Promise<string> {
@@ -9463,7 +10242,7 @@ function HppCalculator({ coinRate: coinRateDefault, packages }: { coinRate: numb
 // ── AdminPage ────────────────────────────────────────────────
 
 function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: AppSession; featureCosts: FeatureCosts; onFeatureCostsChange: (c: FeatureCosts) => void }) {
-  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing' | 'monitor'>('users');
   const [certCourses, setCertCourses] = useState<{ key: string; title: string }[]>([]);
   const [certSelectedKey, setCertSelectedKey] = useState<string | null>(null);
   const [promo, setPromo] = useState<PromoPopup>({ ...defaultPromo });
@@ -9482,6 +10261,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userSearch, setUserSearch] = useState('');
+  const [userPage, setUserPage] = useState(0);
+  const USERS_PER_PAGE = 20;
 
   // Credit packages & payment info (editable)
   const [packages, setPackages] = useState<CreditPackage[]>(defaultCreditPackages);
@@ -9501,6 +10283,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [draftPayment, setDraftPayment] = useState<PaymentInfo>(defaultPaymentInfo);
   const [draftReferralCodes, setDraftReferralCodes] = useState<ReferralCode[]>([]);
   const [draftCoinRate, setDraftCoinRate] = useState<number>(CREDIT_RATE);
+  const [draftStudentBotToken, setDraftStudentBotToken] = useState('');
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   // Feature costs
@@ -9543,7 +10326,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
         supabase.from('app_users').select('username, display_name, role, is_active, created_at').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('username, email, perks, avatar_path, name, referral_code'),
         supabase.from('user_credits').select('username, balance'),
-        supabase.from('credit_transactions').select('*').order('created_at', { ascending: false }).limit(200),
+        supabase.from('credit_transactions').select('*').order('created_at', { ascending: false }).limit(50),
         loadAdminSettings(),
       ]);
     setPackages(settings.packages);
@@ -9552,6 +10335,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setDraftPayment(settings.payment);
     setDraftReferralCodes(settings.referralCodes ?? []);
     setDraftCoinRate(settings.coin_rate ?? CREDIT_RATE);
+    setDraftStudentBotToken(settings.student_bot_token ?? '');
     setReferralCodes(settings.referralCodes ?? []);
     setPromo(settings.promo ?? { ...defaultPromo });
     setSelectedPackage(settings.packages[1] ?? settings.packages[0]);
@@ -9609,7 +10393,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
   const handleSaveSettings = async () => {
     setSettingsSaving(true);
-    await saveAdminSettings({ packages: draftPackages, payment: draftPayment, referralCodes: draftReferralCodes, coin_rate: draftCoinRate });
+    await saveAdminSettings({ packages: draftPackages, payment: draftPayment, referralCodes: draftReferralCodes, coin_rate: draftCoinRate, student_bot_token: draftStudentBotToken });
     setReferralCodes(draftReferralCodes);
     setPackages(draftPackages);
     setPaymentInfo(draftPayment);
@@ -9688,6 +10472,16 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     await channel.subscribe();
     await channel.send({ type: 'broadcast', event: 'show-promo', payload: { promo } });
     await supabase.removeChannel(channel);
+
+    // Blast ke semua student yang sudah link Telegram
+    const botToken = settings.student_bot_token ?? '';
+    if (botToken) {
+      const { data: linkedUsers } = await supabase.from('app_users').select('telegram_chat_id').not('telegram_chat_id', 'is', null);
+      if (linkedUsers && linkedUsers.length > 0) {
+        const broadcastText = `📢 <b>${promo.title || 'Promo Spesial!'}</b>\n\n${promo.body || ''}\n\n🔗 Buka Ruang Sosmed ID untuk info lengkap.`;
+        await Promise.all(linkedUsers.map((u: { telegram_chat_id: string }) => sendStudentBot(u.telegram_chat_id, broadcastText, botToken)));
+      }
+    }
     setPromoBroadcasting(false);
     setPromoBroadcastSent(true);
     setTimeout(() => setPromoBroadcastSent(false), 3000);
@@ -9809,6 +10603,11 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const totalRevenue = transactions.filter((t) => t.type === 'topup' && t.amount > 0).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalCreditsIssued = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const activeUsers = users.filter((u) => u.isActive).length;
+  const filteredUsers = userSearch.trim()
+    ? users.filter((u) => [u.username, u.displayName, u.email].some((v) => v?.toLowerCase().includes(userSearch.toLowerCase())))
+    : users;
+  const totalUserPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE);
+  const pagedUsers = filteredUsers.slice(userPage * USERS_PER_PAGE, (userPage + 1) * USERS_PER_PAGE);
 
   return (
     <section className="page card admin-page">
@@ -9844,9 +10643,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
       {/* Tabs */}
       <div className="admin-tabs">
-        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp', 'landing'] as const).map((tab) => (
+        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp', 'landing', 'monitor'] as const).map((tab) => (
           <button key={tab} type="button" className={`admin-tab${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
-            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : tab === 'hpp' ? 'Kalkulator HPP' : 'Landing Page'}
+            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : tab === 'hpp' ? 'Kalkulator HPP' : tab === 'landing' ? 'Landing Page' : '🔍 Monitor DB'}
           </button>
         ))}
       </div>
@@ -9858,6 +10657,16 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           {/* Users Tab */}
           {activeTab === 'users' && (
             <div className="admin-table-wrap">
+              <div className="admin-user-toolbar">
+                <input
+                  className="admin-settings-input"
+                  placeholder="Cari user (nama, username, email)…"
+                  value={userSearch}
+                  onChange={(e) => { setUserSearch(e.target.value); setUserPage(0); }}
+                  style={{ maxWidth: 320 }}
+                />
+                <span className="admin-user-count">{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</span>
+              </div>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -9872,7 +10681,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {pagedUsers.map((u) => (
                     <tr key={u.username} className={!u.isActive ? 'admin-row-inactive' : ''}>
                       <td>
                         <div className="admin-user-cell">
@@ -9932,6 +10741,13 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   ))}
                 </tbody>
               </table>
+              {totalUserPages > 1 && (
+                <div className="admin-pagination">
+                  <button className="admin-page-btn" disabled={userPage === 0} onClick={() => setUserPage((p) => p - 1)}>← Prev</button>
+                  <span className="admin-page-info">Halaman {userPage + 1} / {totalUserPages}</span>
+                  <button className="admin-page-btn" disabled={userPage >= totalUserPages - 1} onClick={() => setUserPage((p) => p + 1)}>Next →</button>
+                </div>
+              )}
             </div>
           )}
 
@@ -10291,7 +11107,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       className={`referral-type-btn${(referralDraft.type ?? 'coin') === t ? ' active' : ''}`}
                       onClick={() => setReferralDraft((p) => ({ ...p, type: t, credits: t === 'feature' ? 0 : p.credits, features: t === 'coin' ? [] : p.features }))}
                     >
-                      {t === 'coin' ? '✦ Ruang Coin' : '🎁 Akses Fitur'}
+                      {t === 'coin' ? <><CoinIcon size={13} /> Ruang Coin</> : '🎁 Akses Fitur'}
                     </button>
                   ))}
                 </div>
@@ -10613,6 +11429,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
           {activeTab === 'landing' && <LandingEditor />}
 
+          {activeTab === 'monitor' && <DbMonitor />}
+
       {/* Modal: Tambah User */}
       {showAddUser && createPortal(
         <div className="admin-modal-overlay" onClick={() => setShowAddUser(false)}>
@@ -10791,6 +11609,46 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       ✕
                     </button>
                   </div>
+                  {/* Fitur / benefit list per paket */}
+                  <div className="admin-pkg-features-section">
+                    <p className="admin-pkg-features-label">Fitur / benefit (tampil di landing page):</p>
+                    {(pkg.features ?? []).map((feat, fi) => (
+                      <div key={fi} className="admin-pkg-feature-row">
+                        <input
+                          className="admin-settings-input"
+                          value={feat}
+                          placeholder="Contoh: Akses semua video"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDraftPackages((prev) => prev.map((p, i) => {
+                              if (i !== idx) return p;
+                              const feats = [...(p.features ?? [])];
+                              feats[fi] = val;
+                              return { ...p, features: feats };
+                            }));
+                          }}
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          className="admin-mini-btn ghost"
+                          onClick={() => setDraftPackages((prev) => prev.map((p, i) => {
+                            if (i !== idx) return p;
+                            const feats = (p.features ?? []).filter((_, j) => j !== fi);
+                            return { ...p, features: feats };
+                          }))}
+                        >✕</button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="admin-mini-btn"
+                      style={{ marginTop: 4 }}
+                      onClick={() => setDraftPackages((prev) => prev.map((p, i) =>
+                        i === idx ? { ...p, features: [...(p.features ?? []), ''] } : p
+                      ))}
+                    >+ Tambah fitur</button>
+                  </div>
                   {/* Promo per paket */}
                   <div className="admin-pkg-promo-section">
                     <label className="admin-pkg-promo-toggle">
@@ -10909,6 +11767,27 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
               </div>
             </div>
 
+            {/* Student Bot Token */}
+            <div className="admin-settings-section">
+              <div className="admin-settings-section-head">
+                <p className="admin-section-label">STUDENT BOT TELEGRAM</p>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: 8 }}>
+                Token bot Telegram khusus student (<b>Ruang Admin</b>). Didapat dari @BotFather. Biarkan kosong jika belum setup.
+              </p>
+              <input
+                className="admin-settings-input"
+                type="password"
+                value={draftStudentBotToken}
+                onChange={(e) => setDraftStudentBotToken(e.target.value)}
+                placeholder="123456789:AABBcc..."
+                autoComplete="off"
+              />
+              {draftStudentBotToken && (
+                <p style={{ fontSize: '0.72rem', color: '#22c55e', marginTop: 4 }}>✓ Token tersimpan</p>
+              )}
+            </div>
+
             </div>{/* end kolom kanan */}
 
             <div className="admin-modal-actions" style={{ marginTop: 20 }}>
@@ -10998,6 +11877,13 @@ function InboxPage() {
     }
 
     await Promise.all(ops);
+
+    // Notify student via Telegram bot
+    const approveMsg = promo?.active
+      ? `🎉 <b>Topup Berhasil + Bonus Promo!</b>\n\n💰 <b>+${req.credits} Ruang Coin</b> sudah masuk ke akunmu.\n🎁 Bonus promo aktif — cek akunmu di Ruang Sosmed ID.`
+      : `✅ <b>Topup Berhasil!</b>\n\n💰 <b>+${req.credits} Ruang Coin</b> sudah masuk ke akunmu.\n\nLogin ke Ruang Sosmed ID untuk mulai belajar! 🚀`;
+    void notifyStudent(req.username, approveMsg);
+
     setTopupActionId(null);
     void loadTopupRequests();
   };
@@ -11008,6 +11894,13 @@ function InboxPage() {
       supabase.from('topup_requests').update({ status: 'rejected', processed_at: new Date().toISOString(), note: rejectNote || null }).eq('id', req.id),
       insertNotification(req.username, 'credits_added', 'Request Topup Ditolak', rejectNote ? `Topupmu ditolak: ${rejectNote}` : 'Request topup kamu tidak dapat diproses. Hubungi admin untuk info lebih lanjut.', '#profil'),
     ]);
+
+    // Notify student via Telegram bot
+    const rejectMsg = rejectNote
+      ? `❌ <b>Topup Ditolak</b>\n\nTopup kamu tidak dapat diproses.\n📝 Alasan: ${rejectNote}\n\nHubungi admin jika ada pertanyaan.`
+      : `❌ <b>Topup Ditolak</b>\n\nTopup kamu tidak dapat diproses. Hubungi admin untuk info lebih lanjut.`;
+    void notifyStudent(req.username, rejectMsg);
+
     setTopupActionId(null);
     setRejectTargetId(null);
     setRejectNote('');
@@ -11321,7 +12214,7 @@ function InboxPage() {
                       ) : (
                         <div className="admin-inbox-actions">
                           <button type="button" className="admin-inbox-approve" disabled={topupActionId === r.id} onClick={() => void handleApproveTopup(r)}>
-                            {topupActionId === r.id ? 'Memproses…' : `✓ Approve & Tambah ✦${r.credits} ke @${r.username}`}
+                            {topupActionId === r.id ? 'Memproses…' : <><span>✓ Approve & Tambah </span><CoinIcon size={12} />{r.credits} ke @{r.username}</>}
                           </button>
                           <button type="button" className="admin-inbox-reject" disabled={topupActionId === r.id} onClick={() => setRejectTargetId(r.id)}>
                             ✕ Tolak
@@ -11427,6 +12320,48 @@ function ProfilePage({
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
   const profileView = hash === '#profil-subscription' ? 'subscription' : 'settings';
+
+  // Telegram linking
+  const [tgChatId, setTgChatId] = useState<string | null>(null);
+  const [tgLinkCode, setTgLinkCode] = useState<string | null>(null);
+  const [tgLinkLoading, setTgLinkLoading] = useState(false);
+  const [tgUnlinking, setTgUnlinking] = useState(false);
+  const [studentBotName, setStudentBotName] = useState('RuangAdmin_bot');
+
+  useEffect(() => {
+    const fetchTg = async () => {
+      const { data } = await supabase.from('app_users').select('telegram_chat_id').eq('username', session.username).maybeSingle();
+      setTgChatId((data as { telegram_chat_id?: string } | null)?.telegram_chat_id ?? null);
+    };
+    void fetchTg();
+    // Also fetch bot username from token
+    const fetchBotName = async () => {
+      const token = await getStudentBotToken();
+      if (!token) return;
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+        const json = await res.json() as { ok: boolean; result: { username: string } };
+        if (json.ok) setStudentBotName(json.result.username);
+      } catch { /* silent */ }
+    };
+    void fetchBotName();
+  }, [session.username]);
+
+  const handleGenerateLinkCode = async () => {
+    setTgLinkLoading(true);
+    const code = generateLinkCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    await supabase.from('telegram_link_codes').upsert({ code, username: session.username, expires_at: expiresAt });
+    setTgLinkCode(code);
+    setTgLinkLoading(false);
+  };
+
+  const handleUnlinkTelegram = async () => {
+    setTgUnlinking(true);
+    await supabase.from('app_users').update({ telegram_chat_id: null, telegram_linked_at: null } as never).eq('username', session.username);
+    setTgChatId(null);
+    setTgUnlinking(false);
+  };
 
   // Ruang Coin & packages
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
@@ -11832,13 +12767,7 @@ function ProfilePage({
           <div className="credit-balance-card">
             <div className="credit-balance-left">
               <p className="eyebrow">saldo Ruang Coin</p>
-              <div className="credit-balance-amount">
-                <CoinIcon size={28} />
-                <span className="credit-balance-number">
-                  {creditBalance === null ? '…' : creditBalance.toLocaleString('id-ID')}
-                </span>
-                <span className="credit-balance-unit">Ruang Coin</span>
-              </div>
+              <CoinBalanceDisplay balance={creditBalance} />
               <p className="credit-balance-desc">Ruang Coin digunakan untuk mengakses fitur dan konten premium.</p>
             </div>
             <div className="credit-balance-history">
@@ -12101,6 +13030,58 @@ function ProfilePage({
                 </div>
               ) : null;
             })()}
+          </div>
+
+          {/* Telegram Linking */}
+          <div className="tg-link-card">
+            <div className="tg-link-head">
+              <div>
+                <p className="eyebrow">notifikasi telegram</p>
+                <h3 className="tg-link-title">Hubungkan ke Ruang Admin Bot</h3>
+                <p className="tg-link-desc">Terima notifikasi topup, kelas baru, event, dan pengumuman langsung di Telegram.</p>
+              </div>
+              <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" className="tg-link-icon" />
+            </div>
+
+            {tgChatId ? (
+              <div className="tg-link-connected">
+                <span className="tg-link-badge">✓ Terhubung</span>
+                <p className="tg-link-connected-sub">Akunmu sudah terhubung ke bot Telegram. Notifikasi akan dikirim otomatis.</p>
+                <button type="button" className="tg-link-unlink-btn" onClick={() => void handleUnlinkTelegram()} disabled={tgUnlinking}>
+                  {tgUnlinking ? 'Memutuskan…' : 'Putuskan Koneksi'}
+                </button>
+              </div>
+            ) : (
+              <div className="tg-link-steps">
+                <div className="tg-link-step">
+                  <span className="tg-link-step-num">1</span>
+                  <span>Buka Telegram dan cari <a href={`https://t.me/${studentBotName}`} target="_blank" rel="noreferrer" className="tg-link-bot-link">@{studentBotName}</a>, lalu klik <b>Start</b>.</span>
+                </div>
+                <div className="tg-link-step">
+                  <span className="tg-link-step-num">2</span>
+                  <span>Generate kode unikmu di bawah, lalu kirim ke bot dengan format: <code>/link KODEMU</code></span>
+                </div>
+                <div className="tg-link-step">
+                  <span className="tg-link-step-num">3</span>
+                  <span>Bot akan mengkonfirmasi koneksi berhasil.</span>
+                </div>
+                {tgLinkCode ? (
+                  <div className="tg-link-code-box">
+                    <span className="tg-link-code-label">Kode linkmu (berlaku 10 menit):</span>
+                    <div className="tg-link-code-row">
+                      <code className="tg-link-code">{tgLinkCode}</code>
+                      <button type="button" className="tg-link-copy-btn" onClick={() => { void navigator.clipboard.writeText(`/link ${tgLinkCode}`); }}>Salin Perintah</button>
+                    </div>
+                    <p className="tg-link-code-hint">Kirim pesan ini ke bot: <code>/link {tgLinkCode}</code></p>
+                    <button type="button" className="tg-link-refresh-btn" onClick={() => void handleGenerateLinkCode()}>↻ Generate ulang</button>
+                  </div>
+                ) : (
+                  <button type="button" className="tg-link-generate-btn" onClick={() => void handleGenerateLinkCode()} disabled={tgLinkLoading}>
+                    {tgLinkLoading ? 'Membuat kode…' : '🔗 Generate Kode Link'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -12427,7 +13408,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                           >
                             {ev.coinCost === 0 || userPerks.credit_exempt || userPerks.free_event
                               ? 'Ikut Gratis'
-                              : `Ikut · ✦${ev.coinCost}`}
+                              : <><span>Ikut · </span><CoinIcon size={12} />{ev.coinCost}</>}
                           </button>
                         )}
                       </div>
@@ -12780,7 +13761,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
               <div className="asset-manager-card-top">
                 <span className="asset-manager-type-icon">{typeIcon[asset.type] ?? '📎'}</span>
                 <span className="tag">{asset.category}</span>
-                {!isUnlocked(asset) && <span className="asset-coin-badge">🪙 {asset.coin_cost ?? 10}</span>}
+                {!isUnlocked(asset) && <span className="asset-coin-badge"><CoinIcon size={12} />{asset.coin_cost ?? 10}</span>}
               </div>
               <strong className="asset-manager-title">{asset.title}</strong>
               {asset.description && <p className="asset-manager-desc">{asset.description}</p>}
@@ -12880,7 +13861,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
                 </label>
               </div>
               <label>
-                <span>🪙 Ruang Coin untuk membuka <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(0 = gratis)</span></span>
+                <span><CoinIcon size={13} /> Ruang Coin untuk membuka <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(0 = gratis)</span></span>
                 <input
                   type="number"
                   min={0}

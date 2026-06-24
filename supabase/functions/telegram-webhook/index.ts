@@ -439,6 +439,25 @@ async function handleCallback(data: string, callbackId: string, chatId: number, 
 
       await Promise.all(ops);
       await tgEditButtons(chatId, messageId, '✅ Disetujui');
+
+      // Notify student via student bot
+      const [{ data: userRow }, { data: settingsRow }] = await Promise.all([
+        supabase.from('app_users').select('telegram_chat_id').eq('username', req.username).maybeSingle(),
+        supabase.from('learning_hub_content').select('content').eq('content_key', 'admin_credit_settings').maybeSingle(),
+      ]);
+      const studentChatId = (userRow as { telegram_chat_id?: string } | null)?.telegram_chat_id;
+      const settings = (settingsRow?.content ?? {}) as { student_bot_token?: string };
+      const studentToken = settings.student_bot_token ?? '';
+      if (studentChatId && studentToken) {
+        const notifText = bonusDesc
+          ? `✅ <b>Topup Disetujui!</b>\n\n📦 ${req.package_label}\n💎 +${Number(req.credits).toLocaleString('id-ID')} Ruang Coin\n🎁 Bonus: ${bonusDesc}\n\n💰 Saldo baru: <b>${newBal.toLocaleString('id-ID')} Coin</b>`
+          : `✅ <b>Topup Disetujui!</b>\n\n📦 ${req.package_label}\n💎 +${Number(req.credits).toLocaleString('id-ID')} Ruang Coin masuk ke akunmu.\n\n💰 Saldo baru: <b>${newBal.toLocaleString('id-ID')} Coin</b>`;
+        await fetch(`https://api.telegram.org/bot${studentToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: studentChatId, text: notifText, parse_mode: 'HTML' }),
+        });
+      }
       return;
     }
 
