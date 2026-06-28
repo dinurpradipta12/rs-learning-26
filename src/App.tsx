@@ -2657,7 +2657,16 @@ function App() {
               <span>{formatHeaderDate(currentDate)}</span>
               <strong>
                 {userCredits !== null
-                  ? <span className="header-credits"><CoinIcon size={14} />{userCredits.toLocaleString('id-ID')} Ruang Coin</span>
+                  ? <span className="header-credits-wrap">
+                      <span className="header-credits"><CoinIcon size={14} />{userCredits.toLocaleString('id-ID')} Ruang Coin</span>
+                      <div className="header-credits-popover">
+                        <div className="hcp-label">Saldo Ruang Coin</div>
+                        <div className="hcp-balance"><CoinIcon size={20} animate />{userCredits.toLocaleString('id-ID')}</div>
+                        <button type="button" className="hcp-topup-btn" onClick={() => setTopUpContext({ feature: 'topup', needed: 0, balance: userCredits ?? 0 })}>
+                          + Topup Ruang Coin
+                        </button>
+                      </div>
+                    </span>
                   : headerMessage}
               </strong>
             </div>

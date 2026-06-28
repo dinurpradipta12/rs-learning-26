@@ -1517,16 +1517,76 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   font-weight: 700;
 }
 
+.header-credits-wrap {
+  position: relative;
+  display: inline-flex;
+}
 .header-credits {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   color: #167f72;
+  cursor: default;
 }
 .header-credits-icon {
   font-size: 0.75rem;
   opacity: 0.8;
 }
+
+/* Coin balance popover */
+.header-credits-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity 0.18s, transform 0.18s;
+  z-index: 200;
+  white-space: nowrap;
+}
+.header-credits-wrap:hover .header-credits-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.hcp-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.hcp-balance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.hcp-topup-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  text-align: center;
+}
+.hcp-topup-btn:hover { opacity: 0.88; }
 
 .account-trigger {
   width: 56px;
