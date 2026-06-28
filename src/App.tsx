@@ -2516,8 +2516,15 @@ function App() {
   // Re-fetch perks on every page navigation so changes take effect immediately
   useEffect(() => {
     if (!session) { setUserPerks({}); return; }
-    void supabase.from('user_profiles').select('perks').eq('username', session.username).maybeSingle()
-      .then(({ data }) => setUserPerks((data?.perks ?? {}) as UserPerks));
+    void supabase.from('user_profiles').select('perks, referral_perks, referral_perks_expires_at').eq('username', session.username).maybeSingle()
+      .then(({ data }) => {
+        const permanent = (data?.perks ?? {}) as UserPerks;
+        const referral = (data?.referral_perks ?? {}) as UserPerks;
+        const expiresAt = (data as { referral_perks_expires_at?: string } | null)?.referral_perks_expires_at;
+        const referralActive = !expiresAt || new Date(expiresAt) > new Date();
+        const merged: UserPerks = { ...permanent, ...(referralActive ? referral : {}) };
+        setUserPerks(merged);
+      });
   }, [session, page]);
 
   // Realtime broadcast: terima promo dari admin secara langsung
@@ -3892,7 +3899,7 @@ function DashboardSection({ session }: { session: AppSession }) {
           supabase.from('shared_assets').select('*').order('sort_order', { ascending: true }).limit(4),
           supabase.from('user_subscriptions').select('*').eq('username', session.username).maybeSingle(),
           supabase.from('user_credits').select('balance').eq('username', session.username).maybeSingle(),
-          supabase.from('user_profiles').select('perks').eq('username', session.username).maybeSingle(),
+          supabase.from('user_profiles').select('perks, referral_perks, referral_perks_expires_at').eq('username', session.username).maybeSingle(),
           supabase.from('user_asset_unlocks').select('asset_id').eq('username', session.username),
         ]);
 
@@ -3939,7 +3946,11 @@ function DashboardSection({ session }: { session: AppSession }) {
         setRecentAssets((assetRows ?? []) as SharedAsset[]);
         setSubscription((subRow ?? null) as UserSubscriptionRow | null);
         setCredits(creditRow?.balance ?? null);
-        setDashPerks((perksRow?.perks ?? {}) as UserPerks);
+        const permDash = (perksRow?.perks ?? {}) as UserPerks;
+        const refDash = ((perksRow as { referral_perks?: UserPerks } | null)?.referral_perks ?? {}) as UserPerks;
+        const refExpDash = (perksRow as { referral_perks_expires_at?: string } | null)?.referral_perks_expires_at;
+        const refActiveDash = !refExpDash || new Date(refExpDash) > new Date();
+        setDashPerks({ ...permDash, ...(refActiveDash ? refDash : {}) });
         setDashUnlockedIds(new Set((assetUnlockRows ?? []).map((r: { asset_id: string }) => r.asset_id)));
       } catch (err) {
         console.warn('dashboard load error', err);
@@ -7091,9 +7102,13 @@ function LoginPage({
           appliedReferralCredits = matchedReferral.credits;
         } else if (codeType === 'feature' && matchedReferral.features && matchedReferral.features.length > 0) {
           appliedReferralFeatures = matchedReferral.features;
-          const perksToApply: UserPerks = {};
-          for (const f of matchedReferral.features) perksToApply[f as keyof UserPerks] = true;
-          await supabase.from('user_profiles').update({ perks: perksToApply }).eq('username', newUser);
+          const referralPerks: UserPerks = {};
+          for (const f of matchedReferral.features) referralPerks[f as keyof UserPerks] = true;
+          // Store as time-limited referral_perks (not permanent perks)
+          await supabase.from('user_profiles').update({
+            referral_perks: referralPerks,
+            referral_perks_expires_at: matchedReferral.expiresAt ?? null,
+          } as never).eq('username', newUser);
         }
         // Simpan kode referral yang digunakan ke profil user
         await supabase.from('user_profiles').update({ referral_code: usedReferralCode }).eq('username', newUser);
@@ -7320,7 +7335,7 @@ function LoginPage({
                     />
                     {referralStatus === 'valid' && referralMatched && (
                       referralMatched.type === 'feature' && referralMatched.features && referralMatched.features.length > 0
-                        ? <span className="referral-badge valid">✓ Akses gratis: {referralMatched.features.map((f) => ({ free_video: 'Video', free_booking: 'Booking', free_thread: 'Thread', free_asset: 'Asset', free_event: 'Event' }[f])).join(', ')}</span>
+                        ? <span className="referral-badge valid">✓ Akses gratis: {referralMatched.features.map((f) => ({ free_video: 'Video', free_booking: 'Booking', free_thread: 'Thread', free_asset: 'Asset', free_event: 'Event' }[f])).join(', ')}{referralMatched.expiresAt ? ` (s/d ${new Date(referralMatched.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })})` : ''}</span>
                         : <span className="referral-badge valid">✓ +{referralCredits} Ruang Coin gratis!</span>
                     )}
                   </div>
