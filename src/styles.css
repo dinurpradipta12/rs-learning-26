@@ -1563,8 +1563,6 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   font-size: 0.75rem;
   color: var(--muted);
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .hcp-balance {
   display: flex;
