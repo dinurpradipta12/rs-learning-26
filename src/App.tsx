@@ -10298,6 +10298,11 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [loading, setLoading] = useState(true);
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(0);
+  const [userReferralFilter, setUserReferralFilter] = useState('');
+  const [selectedUsernames, setSelectedUsernames] = useState<Set<string>>(new Set());
+  const [showBulkAccessModal, setShowBulkAccessModal] = useState(false);
+  const [bulkDraftPerks, setBulkDraftPerks] = useState<UserPerks>({});
+  const [bulkSaving, setBulkSaving] = useState(false);
   const USERS_PER_PAGE = 20;
 
   // Credit packages & payment info (editable)
@@ -10648,11 +10653,60 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const totalRevenue = transactions.filter((t) => t.type === 'topup' && t.amount > 0).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalCreditsIssued = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const activeUsers = users.filter((u) => u.isActive).length;
-  const filteredUsers = userSearch.trim()
-    ? users.filter((u) => [u.username, u.displayName, u.email].some((v) => v?.toLowerCase().includes(userSearch.toLowerCase())))
-    : users;
+  const filteredUsers = users.filter((u) => {
+    const matchSearch = !userSearch.trim() || [u.username, u.displayName, u.email].some((v) => v?.toLowerCase().includes(userSearch.toLowerCase()));
+    const matchReferral = !userReferralFilter || u.referralCode === userReferralFilter;
+    return matchSearch && matchReferral;
+  });
   const totalUserPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE);
   const pagedUsers = filteredUsers.slice(userPage * USERS_PER_PAGE, (userPage + 1) * USERS_PER_PAGE);
+  const allPageSelected = pagedUsers.length > 0 && pagedUsers.every((u) => selectedUsernames.has(u.username));
+  const someSelected = selectedUsernames.size > 0;
+
+  const toggleSelectUser = (username: string) => {
+    setSelectedUsernames((prev) => {
+      const next = new Set(prev);
+      next.has(username) ? next.delete(username) : next.add(username);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (allPageSelected) {
+      setSelectedUsernames((prev) => { const next = new Set(prev); pagedUsers.forEach((u) => next.delete(u.username)); return next; });
+    } else {
+      setSelectedUsernames((prev) => { const next = new Set(prev); pagedUsers.forEach((u) => next.add(u.username)); return next; });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedUsernames.has(session.username)) { window.alert('Tidak bisa menghapus akun sendiri.'); return; }
+    if (!window.confirm(`Hapus ${selectedUsernames.size} user yang dipilih? Semua data mereka akan ikut terhapus.`)) return;
+    for (const username of selectedUsernames) {
+      await supabase.rpc('delete_app_user', { p_username: username });
+    }
+    setUsers((prev) => prev.filter((u) => !selectedUsernames.has(u.username)));
+    setSelectedUsernames(new Set());
+  };
+
+  const handleBulkToggleActive = async (activate: boolean) => {
+    for (const username of selectedUsernames) {
+      await supabase.from('app_users').update({ is_active: activate }).eq('username', username);
+    }
+    setUsers((prev) => prev.map((u) => selectedUsernames.has(u.username) ? { ...u, isActive: activate } : u));
+    setSelectedUsernames(new Set());
+  };
+
+  const handleBulkSaveAccess = async () => {
+    setBulkSaving(true);
+    for (const username of selectedUsernames) {
+      const cur = users.find((u) => u.username === username)?.perks ?? {};
+      await supabase.from('user_profiles').update({ perks: { ...cur, ...bulkDraftPerks } }).eq('username', username);
+    }
+    setUsers((prev) => prev.map((u) => selectedUsernames.has(u.username) ? { ...u, perks: { ...u.perks, ...bulkDraftPerks } } : u));
+    setBulkSaving(false);
+    setShowBulkAccessModal(false);
+    setSelectedUsernames(new Set());
+  };
 
   return (
     <section className="page card admin-page">
@@ -10707,14 +10761,40 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   className="admin-settings-input"
                   placeholder="Cari user (nama, username, email)…"
                   value={userSearch}
-                  onChange={(e) => { setUserSearch(e.target.value); setUserPage(0); }}
-                  style={{ maxWidth: 320 }}
+                  onChange={(e) => { setUserSearch(e.target.value); setUserPage(0); setSelectedUsernames(new Set()); }}
+                  style={{ maxWidth: 260 }}
                 />
+                <select
+                  className="admin-settings-input"
+                  value={userReferralFilter}
+                  onChange={(e) => { setUserReferralFilter(e.target.value); setUserPage(0); setSelectedUsernames(new Set()); }}
+                  style={{ maxWidth: 180 }}
+                >
+                  <option value="">Semua Referral</option>
+                  {referralCodes.map((r) => (
+                    <option key={r.code} value={r.code}>{r.code}</option>
+                  ))}
+                </select>
                 <span className="admin-user-count">{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</span>
+                {someSelected && (
+                  <div className="admin-bulk-actions">
+                    <span className="admin-bulk-label">{selectedUsernames.size} dipilih</span>
+                    <button type="button" className="admin-action-btn perk-btn" onClick={() => { setBulkDraftPerks({}); setShowBulkAccessModal(true); }}>
+                      <CoinIcon size={12} /> Atur Akses
+                    </button>
+                    <button type="button" className="admin-action-btn" onClick={() => handleBulkToggleActive(true)}>Aktifkan</button>
+                    <button type="button" className="admin-action-btn" onClick={() => handleBulkToggleActive(false)}>Nonaktifkan</button>
+                    <button type="button" className="admin-action-btn danger" onClick={() => void handleBulkDelete()}>Hapus</button>
+                    <button type="button" className="admin-action-btn" onClick={() => setSelectedUsernames(new Set())}>✕ Batal</button>
+                  </div>
+                )}
               </div>
               <table className="admin-table">
                 <thead>
                   <tr>
+                    <th style={{ width: 36 }}>
+                      <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} title="Pilih semua di halaman ini" />
+                    </th>
                     <th>User</th>
                     <th>Role</th>
                     <th>Ruang Coin</th>
@@ -10727,7 +10807,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 </thead>
                 <tbody>
                   {pagedUsers.map((u) => (
-                    <tr key={u.username} className={!u.isActive ? 'admin-row-inactive' : ''}>
+                    <tr key={u.username} className={`${!u.isActive ? 'admin-row-inactive' : ''}${selectedUsernames.has(u.username) ? ' admin-row-selected' : ''}`}>
+                      <td>
+                        <input type="checkbox" checked={selectedUsernames.has(u.username)} onChange={() => toggleSelectUser(u.username)} />
+                      </td>
                       <td>
                         <div className="admin-user-cell">
                           {u.avatarUrl
@@ -10984,6 +11067,48 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   <button type="button" className="button secondary" onClick={() => setDraftPerks({})}>Reset semua</button>
                   <button type="button" className="button primary" disabled={perksSaving} onClick={() => { void handleSavePerks(); }}>
                     {perksSaving ? 'Menyimpan…' : 'Simpan'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+
+          {showBulkAccessModal && createPortal(
+            <div className="forum-modal-overlay" onClick={() => setShowBulkAccessModal(false)}>
+              <div className="forum-modal costs-modal" onClick={(e) => e.stopPropagation()}>
+                <button type="button" className="forum-modal-close" onClick={() => setShowBulkAccessModal(false)}>×</button>
+                <h3 className="costs-modal-title">Atur Akses — {selectedUsernames.size} User</h3>
+                <p className="costs-modal-sub">
+                  Fitur yang diaktifkan akan <strong>ditambahkan</strong> ke akses {selectedUsernames.size} user yang dipilih. Fitur yang tidak dicentang tidak mengubah akses yang sudah ada.
+                </p>
+                <div className="perks-modal-list">
+                  {([
+                    { key: 'credit_exempt' as keyof UserPerks, icon: '✦', label: 'Exempt Semua Ruang Coin', desc: 'Semua fitur gratis, tidak ada pemotongan Ruang Coin' },
+                    { key: 'free_video' as keyof UserPerks, icon: '🎬', label: 'Video Learning Gratis', desc: 'Akses semua video tanpa potong Ruang Coin' },
+                    { key: 'free_thread' as keyof UserPerks, icon: '💬', label: 'Post Thread Gratis', desc: 'Buat thread & diskusi tanpa potong Ruang Coin' },
+                    { key: 'free_booking' as keyof UserPerks, icon: '📅', label: 'Book Sesi 1:1 Gratis', desc: 'Booking sesi 1:1 tanpa potong Ruang Coin' },
+                    { key: 'free_asset' as keyof UserPerks, icon: '📁', label: 'Asset Manager Gratis', desc: 'Buka semua asset tanpa potong Ruang Coin' },
+                    { key: 'free_event' as keyof UserPerks, icon: '🎥', label: 'Join Event Gratis', desc: 'Akses semua event/kelas tanpa potong Ruang Coin' },
+                  ] as const).map(({ key, icon, label, desc }) => (
+                    <label key={key} className="perks-modal-row">
+                      <div className="perks-modal-row-left">
+                        <span className="costs-modal-icon">{icon}</span>
+                        <div className="costs-modal-info">
+                          <span className="costs-modal-label">{label}</span>
+                          <span className="costs-modal-sublabel">{desc}</span>
+                        </div>
+                      </div>
+                      <div className={`perk-toggle ${bulkDraftPerks[key] ? 'on' : ''}`} onClick={() => setBulkDraftPerks((p) => ({ ...p, [key]: !p[key] }))}>
+                        <span className="perk-toggle-knob" />
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <div className="costs-modal-footer">
+                  <button type="button" className="button secondary" onClick={() => setBulkDraftPerks({})}>Reset</button>
+                  <button type="button" className="button primary" disabled={bulkSaving} onClick={() => void handleBulkSaveAccess()}>
+                    {bulkSaving ? 'Menyimpan…' : `Terapkan ke ${selectedUsernames.size} User`}
                   </button>
                 </div>
               </div>
