@@ -10288,6 +10288,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [promoIconFile, setPromoIconFile] = useState<File | null>(null);
   const [promoIconLocalUrl, setPromoIconLocalUrl] = useState<string | null>(null);
   const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
+  const [referralUsage, setReferralUsage] = useState<Record<string, number>>({});
   const [editingReferral, setEditingReferral] = useState<(ReferralCode & { idx: number }) | null>(null);
   const [showAddReferral, setShowAddReferral] = useState(false);
   const [referralDraft, setReferralDraft] = useState<ReferralCode>({ code: '', credits: 0, description: '', expiresAt: '' });
@@ -10371,6 +10372,16 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setDraftCoinRate(settings.coin_rate ?? CREDIT_RATE);
     setDraftStudentBotToken(settings.student_bot_token ?? '');
     setReferralCodes(settings.referralCodes ?? []);
+
+    // Count usage per referral code from user_profiles
+    const { data: refUsageRows } = await supabase.from('user_profiles').select('referral_code').not('referral_code', 'is', null);
+    const usageCounts: Record<string, number> = {};
+    for (const row of refUsageRows ?? []) {
+      const code = (row as { referral_code?: string }).referral_code;
+      if (code) usageCounts[code] = (usageCounts[code] ?? 0) + 1;
+    }
+    setReferralUsage(usageCounts);
+
     setPromo(settings.promo ?? { ...defaultPromo });
     setSelectedPackage(settings.packages[1] ?? settings.packages[0]);
 
@@ -11070,13 +11081,14 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       <th>Ruang Coin</th>
                       <th>Keterangan</th>
                       <th>Berlaku Hingga</th>
+                      <th>Digunakan</th>
                       <th>Status</th>
                       <th>Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {referralCodes.length === 0 && (
-                      <tr><td colSpan={6} className="admin-empty-row">Belum ada kode referral.</td></tr>
+                      <tr><td colSpan={7} className="admin-empty-row">Belum ada kode referral.</td></tr>
                     )}
                     {referralCodes.map((r, idx) => {
                       const expired = r.expiresAt ? new Date(r.expiresAt) < new Date() : false;
@@ -11092,6 +11104,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{r.description || '—'}</td>
                           <td className="admin-date-cell">
                             {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : <span style={{ color: 'var(--text-muted)' }}>Tidak ada batas</span>}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="referral-usage-count">{referralUsage[r.code] ?? 0} user</span>
                           </td>
                           <td>
                             <span className={`admin-status-badge ${expired ? 'inactive' : 'active'}`}>

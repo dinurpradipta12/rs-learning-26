@@ -7472,6 +7472,15 @@ body.dark .forum-action-menu .forum-action-delete:hover {
   padding: 2px 8px;
   font-size: 0.85rem;
 }
+.referral-usage-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(122, 79, 214, 0.08);
+  border-radius: 20px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
 .admin-packages-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .admin-pkg-card {
   background: rgba(255,255,255,0.7);
