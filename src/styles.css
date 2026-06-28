@@ -1546,6 +1546,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   min-width: 200px;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
   opacity: 0;
   pointer-events: none;
@@ -1563,6 +1564,8 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   font-size: 0.75rem;
   color: var(--muted);
   font-weight: 500;
+  text-align: left;
+  align-self: flex-start;
 }
 .hcp-balance {
   display: flex;
@@ -1582,6 +1585,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;
+  width: 100%;
   text-align: center;
 }
 .hcp-topup-btn:hover { opacity: 0.88; }
