@@ -3850,6 +3850,10 @@ function DashboardSection({ session }: { session: AppSession }) {
   // ── credits ──
   const [credits, setCredits] = useState<number | null>(null);
 
+  // ── user perks (for asset unlock check) ──
+  const [dashPerks, setDashPerks] = useState<UserPerks>({});
+  const [dashUnlockedIds, setDashUnlockedIds] = useState<Set<string>>(new Set());
+
   // ── realtime new reply badge ──
   const [newReplyCount, setNewReplyCount] = useState(0);
 
@@ -3870,6 +3874,8 @@ function DashboardSection({ session }: { session: AppSession }) {
           { data: assetRows },
           { data: subRow },
           { data: creditRow },
+          { data: perksRow },
+          { data: assetUnlockRows },
         ] = await Promise.all([
           supabase.from('user_profiles').select('name').eq('username', session.username).maybeSingle(),
           supabase.from('lessons').select('lesson_key, title').order('sort_order', { ascending: true }),
@@ -3886,6 +3892,8 @@ function DashboardSection({ session }: { session: AppSession }) {
           supabase.from('shared_assets').select('*').order('sort_order', { ascending: true }).limit(4),
           supabase.from('user_subscriptions').select('*').eq('username', session.username).maybeSingle(),
           supabase.from('user_credits').select('balance').eq('username', session.username).maybeSingle(),
+          supabase.from('user_profiles').select('perks').eq('username', session.username).maybeSingle(),
+          supabase.from('user_asset_unlocks').select('asset_id').eq('username', session.username),
         ]);
 
         if (!active) return;
@@ -3931,6 +3939,8 @@ function DashboardSection({ session }: { session: AppSession }) {
         setRecentAssets((assetRows ?? []) as SharedAsset[]);
         setSubscription((subRow ?? null) as UserSubscriptionRow | null);
         setCredits(creditRow?.balance ?? null);
+        setDashPerks((perksRow?.perks ?? {}) as UserPerks);
+        setDashUnlockedIds(new Set((assetUnlockRows ?? []).map((r: { asset_id: string }) => r.asset_id)));
       } catch (err) {
         console.warn('dashboard load error', err);
       } finally {
@@ -4191,16 +4201,28 @@ function DashboardSection({ session }: { session: AppSession }) {
             <p className="db-empty">Belum ada asset yang dibagikan.</p>
           ) : (
             <div className="db-asset-list">
-              {recentAssets.map((a) => (
-                <a className="db-asset-row" key={a.id} href={a.url} target="_blank" rel="noopener noreferrer">
-                  <span className="db-asset-icon">{typeIcon[a.type] ?? '📎'}</span>
-                  <div className="db-asset-info">
-                    <strong>{a.title}</strong>
-                    <span>{a.category}</span>
-                  </div>
-                  <svg className="db-asset-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                </a>
-              ))}
+              {recentAssets.map((a) => {
+                const unlocked = a.coin_cost === 0 || dashPerks.credit_exempt || dashPerks.free_asset || dashUnlockedIds.has(a.id);
+                return unlocked ? (
+                  <a className="db-asset-row" key={a.id} href={a.url} target="_blank" rel="noopener noreferrer">
+                    <span className="db-asset-icon">{typeIcon[a.type] ?? '📎'}</span>
+                    <div className="db-asset-info">
+                      <strong>{a.title}</strong>
+                      <span>{a.category}</span>
+                    </div>
+                    <svg className="db-asset-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                ) : (
+                  <a className="db-asset-row db-asset-row--locked" key={a.id} href="#assets">
+                    <span className="db-asset-icon">{typeIcon[a.type] ?? '📎'}</span>
+                    <div className="db-asset-info">
+                      <strong>{a.title}</strong>
+                      <span>{a.category}</span>
+                    </div>
+                    <span className="db-asset-lock">🔒 {a.coin_cost > 0 ? `${a.coin_cost} Coin` : 'Terkunci'}</span>
+                  </a>
+                );
+              })}
             </div>
           )}
         </article>
@@ -4243,26 +4265,23 @@ function MyFilePage({ session }: { session: AppSession }) {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const [{ data: courseData }, { data: assetData }] = await Promise.all([
+      const [{ data: courseData }, { data: assetData }, { data: unlockRows }] = await Promise.all([
         supabase.from('courses').select('key, title, thumbnail_url').order('sort_order', { ascending: true }),
         supabase.from('shared_assets').select('id, title, category, thumbnail_url, url, type').order('sort_order', { ascending: true }),
+        supabase.from('user_asset_unlocks').select('asset_id').eq('username', username),
       ]);
 
       const allCourses = (courseData ?? []) as CourseRow[];
       const allAssets = (assetData ?? []) as AssetRow[];
+      const unlockedSet = new Set((unlockRows ?? []).map((r: { asset_id: string }) => r.asset_id));
 
       // Filter courses where user passed the assessment
       const passedCourses = allCourses.filter((c) =>
         localStorage.getItem(`cert_passed_${username}_${c.key}`) === '1'
       );
 
-      // Filter assets user has unlocked
-      const unlockedAssets = allAssets.filter((a) =>
-        a.type === 'free' ||
-        !!localStorage.getItem(`asset_unlocked_${username}_${a.id}`)
-      ).filter((a) =>
-        !!localStorage.getItem(`asset_unlocked_${username}_${a.id}`)
-      );
+      // Filter assets user has unlocked (DB-based)
+      const unlockedAssets = allAssets.filter((a) => unlockedSet.has(a.id));
 
       setCourses(passedCourses);
       setAssets(unlockedAssets);
@@ -13586,9 +13605,10 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
   const [unlockError, setUnlockError] = useState('');
   const [unlockLoading, setUnlockLoading] = useState(false);
 
-  const unlockedKey = (id: string) => `asset_unlocked_${session?.username ?? 'guest'}_${id}`;
+  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+
   const isUnlocked = (asset: SharedAsset) =>
-    canEdit || asset.coin_cost === 0 || userPerks?.credit_exempt || userPerks?.free_asset || !!localStorage.getItem(unlockedKey(asset.id));
+    canEdit || asset.coin_cost === 0 || userPerks?.credit_exempt || userPerks?.free_asset || unlockedIds.has(asset.id);
 
   const handleUnlock = async () => {
     if (!unlockTarget || !session) return;
@@ -13597,10 +13617,9 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
     const cost = unlockTarget.coin_cost ?? 10;
     const result = await deductCredits(session.username, cost, `Buka asset: ${unlockTarget.title}`, 'usage');
     if (result.ok) {
-      localStorage.setItem(unlockedKey(unlockTarget.id), '1');
+      await supabase.from('user_asset_unlocks').upsert({ username: session.username, asset_id: unlockTarget.id });
+      setUnlockedIds(prev => new Set([...prev, unlockTarget.id]));
       setUnlockTarget(null);
-      // force re-render so card shows unlocked state
-      setAssets(prev => [...prev]);
     } else {
       setUnlockError(`Ruang Coin tidak cukup. Kamu punya ${result.balance ?? 0} coin, butuh ${cost} coin.`);
     }
@@ -13609,16 +13628,16 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
 
   const loadAssets = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('shared_assets')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false });
+    const [{ data, error }, { data: unlockRows }] = await Promise.all([
+      supabase.from('shared_assets').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
+      session ? supabase.from('user_asset_unlocks').select('asset_id').eq('username', session.username) : Promise.resolve({ data: [] }),
+    ]);
     if (error) {
       console.error('shared_assets load error:', error);
     } else {
       setAssets((data ?? []) as SharedAsset[]);
     }
+    setUnlockedIds(new Set((unlockRows ?? []).map((r: { asset_id: string }) => r.asset_id)));
     setIsLoading(false);
   };
 
