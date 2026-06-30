@@ -1629,11 +1629,17 @@ function useCalendarEvents() {
     const loadEvents = async () => {
       setIsLoading(true);
 
-      const { data, error } = await supabase
-        .from('calendar_events')
-        .select('id, title, note, event_date, start_time, end_time, category, accent, attendee_count, is_done, sort_order')
-        .order('event_date', { ascending: true })
-        .order('start_time', { ascending: true });
+      const [{ data, error }, { data: bookingData }] = await Promise.all([
+        supabase
+          .from('calendar_events')
+          .select('id, title, note, event_date, start_time, end_time, category, accent, attendee_count, is_done, sort_order')
+          .order('event_date', { ascending: true })
+          .order('start_time', { ascending: true }),
+        supabase
+          .from('one_on_one_bookings')
+          .select('id, topic, preferred_date, preferred_time, requester_username, requester_display_name')
+          .eq('status', 'approved'),
+      ]);
 
       if (!isActive) {
         return;
@@ -1646,7 +1652,27 @@ function useCalendarEvents() {
         return;
       }
 
-      setEvents((data as CalendarEventRow[] | null)?.map(mapCalendarEventRow) ?? initialCalendarSchedule);
+      const calendarEvts = (data as CalendarEventRow[] | null)?.map(mapCalendarEventRow) ?? initialCalendarSchedule;
+
+      // Merge approved bookings as calendar events
+      const bookingEvts: CalendarEvent[] = ((bookingData ?? []) as {
+        id: string; topic: string; preferred_date: string; preferred_time: string;
+        requester_username: string; requester_display_name: string;
+      }[]).map((b) => ({
+        id: `booking-${b.id}`,
+        title: `📅 1:1 — ${b.topic}`,
+        note: `Booking dari ${b.requester_display_name ?? b.requester_username}`,
+        eventDate: b.preferred_date,
+        startTime: String(b.preferred_time ?? '').slice(0, 5),
+        endTime: '',
+        category: 'zoom' as CalendarEventRow['category'],
+        accent: '#6366f1' as CalendarEventRow['accent'],
+        attendeeCount: 1,
+        isDone: false,
+        sortOrder: 99,
+      }));
+
+      setEvents([...calendarEvts, ...bookingEvts].sort((a, b) => a.eventDate.localeCompare(b.eventDate)));
       setIsLoading(false);
     };
 
