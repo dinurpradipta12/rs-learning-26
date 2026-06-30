@@ -1080,9 +1080,10 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
 }
 
 .topbar {
-  display: grid;
-  gap: 10px;
-  align-items: end;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
   z-index: 20;
   overflow: visible;
@@ -1093,10 +1094,12 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .topbar-brand {
-  display: none;
+  display: grid;
+  gap: 12px;
 }
 
 .topbar-brand-row {
