@@ -4274,7 +4274,7 @@ function DashboardSection({ session }: { session: AppSession }) {
           supabase.from('calendar_events')
             .select('id, title, note, event_date, start_time, end_time, category, accent, attendee_count, is_done, sort_order')
             .gte('event_date', today)
-            .lte('event_date', (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().slice(0, 10); })())
+            .lte('event_date', addDaysToDate(today, 14))
             .eq('is_done', false)
             .order('event_date', { ascending: true })
             .order('start_time', { ascending: true })
@@ -4284,7 +4284,7 @@ function DashboardSection({ session }: { session: AppSession }) {
             .eq('requester_username', session.username)
             .eq('status', 'approved')
             .gte('preferred_date', today)
-            .lte('preferred_date', (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().slice(0, 10); })())
+            .lte('preferred_date', addDaysToDate(today, 14))
             .order('preferred_date', { ascending: true }),
           supabase.from('forum_threads').select('*').order('created_at', { ascending: false }).limit(4),
           supabase.from('forum_replies').select('*').order('created_at', { ascending: true }),
