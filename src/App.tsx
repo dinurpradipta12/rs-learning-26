@@ -10466,36 +10466,17 @@ async function deductCredits(
     return { ok: true };
   }
 
-  const { data: creditRow } = await supabase
-    .from('user_credits')
-    .select('balance')
-    .eq('username', username)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('spend_credits', {
+    p_username: username,
+    p_amount: amount,
+    p_type: type,
+    p_description: description,
+  });
 
-  const currentBalance = (creditRow as { balance: number } | null)?.balance ?? 0;
+  if (error) return { ok: false, error: error.message };
 
-  if (currentBalance < amount) {
-    return {
-      ok: false,
-      error: `Ruang Coin tidak cukup — butuh ${amount} Ruang Coin, saldo kamu ${currentBalance}.`,
-      needed: amount,
-      balance: currentBalance,
-    };
-  }
-
-  const newBalance = currentBalance - amount;
-
-  await Promise.all([
-    supabase.from('user_credits').upsert({ username, balance: newBalance }),
-    supabase.from('credit_transactions').insert({
-      username,
-      amount: -amount,
-      type,
-      description,
-    }),
-  ]);
-
-  return { ok: true, newBalance };
+  const result = data as { ok: boolean; newBalance?: number; error?: string; needed?: number; balance?: number };
+  return result;
 }
 
 // ── CertificateDesigner ────────────────────────────────────────────────
