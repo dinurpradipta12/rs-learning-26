@@ -9296,32 +9296,39 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
 
 /* ── Root layout ── */
 .db-root {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
 }
 
-/* ── Top row ── */
-.db-top-row {
+/* ── 2-column layout ── */
+.db-layout {
   display: flex;
   gap: 20px;
-  align-items: stretch;
+  align-items: flex-start;
 }
-.db-top-row .db-hero {
+.db-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.db-sidebar {
+  width: 270px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 80px;
 }
 
 /* ── Profile card ── */
 .db-profile-card {
-  width: 260px;
-  flex-shrink: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 24px 20px 20px;
   gap: 6px;
-  overflow-y: auto;
-  max-height: 560px;
 }
 .db-pc-avatar-wrap {
   width: 80px;
@@ -9471,9 +9478,10 @@ body.dark .db-profile-card { background: rgba(255,255,255,0.04); }
 body.dark .db-pc-cal-has-event { background: rgba(122,79,214,0.25); }
 
 /* responsive: stack on mobile */
-@media (max-width: 768px) {
-  .db-top-row { flex-direction: column; }
-  .db-profile-card { width: 100%; max-height: none; }
+@media (max-width: 900px) {
+  .db-layout { flex-direction: column; }
+  .db-sidebar { width: 100%; position: static; }
+  .db-profile-card { width: 100%; }
 }
 
 /* ── Hero ── */
