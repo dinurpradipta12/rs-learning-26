@@ -3146,6 +3146,191 @@ function formatBytes(b: number) {
 type ActivityItem = { id: string; type: 'transaksi' | 'booking' | 'topup' | 'user'; label: string; sub: string; time: string; color: string };
 type TodayStats = { newUsers: number; transactions: number; bookings: number; topups: number };
 
+// ── Asset & Spending Monitor ────────────────────────────────────
+type AssetStat = { id: string; title: string; type: string; coin_cost: number; unlock_count: number; coin_earned: number };
+type SpendUser = { username: string; display_name: string; total_coin_spent: number; total_rp_spent: number; topup_count: number };
+
+function AssetMonitor() {
+  const [assets, setAssets] = useState<AssetStat[]>([]);
+  const [spenders, setSpenders] = useState<SpendUser[]>([]);
+  const [totalCoinSpent, setTotalCoinSpent] = useState(0);
+  const [totalRpTopup, setTotalRpTopup] = useState(0);
+  const [totalTopupCount, setTotalTopupCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'assets' | 'users'>('assets');
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      const [{ data: assetRows }, { data: unlockRows }, { data: txRows }, { data: topupRows }, { data: profileRows }] = await Promise.all([
+        supabase.from('assets').select('id, title, type, coin_cost').order('title'),
+        supabase.from('user_asset_unlocks').select('asset_id, username'),
+        supabase.from('credit_transactions').select('username, amount, type'),
+        supabase.from('topup_requests').select('username, amount_rp, credits').eq('status', 'approved'),
+        supabase.from('user_profiles').select('username, display_name'),
+      ]);
+
+      // Asset stats
+      const unlockCountMap: Record<string, number> = {};
+      for (const r of (unlockRows ?? []) as { asset_id: string; username: string }[]) {
+        unlockCountMap[r.asset_id] = (unlockCountMap[r.asset_id] ?? 0) + 1;
+      }
+      const assetStats: AssetStat[] = ((assetRows ?? []) as { id: string; title: string; type: string; coin_cost: number }[]).map((a) => ({
+        ...a,
+        unlock_count: unlockCountMap[a.id] ?? 0,
+        coin_earned: (unlockCountMap[a.id] ?? 0) * a.coin_cost,
+      })).sort((a, b) => b.unlock_count - a.unlock_count);
+      setAssets(assetStats);
+
+      // User spending stats from credit_transactions (type = 'spend' or negative)
+      const spendMap: Record<string, number> = {};
+      for (const r of (txRows ?? []) as { username: string; amount: number; type: string }[]) {
+        if (r.amount < 0 || r.type === 'spend' || r.type === 'purchase') {
+          spendMap[r.username] = (spendMap[r.username] ?? 0) + Math.abs(r.amount);
+        }
+      }
+      setTotalCoinSpent(Object.values(spendMap).reduce((a, b) => a + b, 0));
+
+      // Topup stats
+      const topupRpMap: Record<string, number> = {};
+      const topupCountMap: Record<string, number> = {};
+      let totalRp = 0;
+      for (const r of (topupRows ?? []) as { username: string; amount_rp: number; credits: number }[]) {
+        topupRpMap[r.username] = (topupRpMap[r.username] ?? 0) + (r.amount_rp ?? 0);
+        topupCountMap[r.username] = (topupCountMap[r.username] ?? 0) + 1;
+        totalRp += r.amount_rp ?? 0;
+      }
+      setTotalRpTopup(totalRp);
+      setTotalTopupCount((topupRows ?? []).length);
+
+      const nameMap: Record<string, string> = {};
+      for (const p of (profileRows ?? []) as { username: string; display_name: string }[]) {
+        nameMap[p.username] = p.display_name;
+      }
+
+      const allUsernames = new Set([...Object.keys(spendMap), ...Object.keys(topupRpMap)]);
+      const spenderList: SpendUser[] = [...allUsernames].map((u) => ({
+        username: u,
+        display_name: nameMap[u] ?? u,
+        total_coin_spent: spendMap[u] ?? 0,
+        total_rp_spent: topupRpMap[u] ?? 0,
+        topup_count: topupCountMap[u] ?? 0,
+      })).sort((a, b) => b.total_rp_spent - a.total_rp_spent);
+      setSpenders(spenderList);
+      setLoading(false);
+    })();
+  }, []);
+
+  const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+
+  if (loading) return <div className="asset-monitor-loading">Memuat data…</div>;
+
+  return (
+    <div className="asset-monitor">
+      {/* Summary cards */}
+      <div className="asset-monitor-cards">
+        <div className="asset-monitor-card">
+          <span className="amc-label">Total Asset</span>
+          <span className="amc-value">{assets.length}</span>
+          <span className="amc-sub">asset tersedia</span>
+        </div>
+        <div className="asset-monitor-card">
+          <span className="amc-label">Total Unlock</span>
+          <span className="amc-value">{assets.reduce((s, a) => s + a.unlock_count, 0)}</span>
+          <span className="amc-sub">akses dibuka user</span>
+        </div>
+        <div className="asset-monitor-card accent">
+          <span className="amc-label">Ruang Coin Dipakai</span>
+          <span className="amc-value">{totalCoinSpent.toLocaleString('id-ID')}</span>
+          <span className="amc-sub">total coin di-spend</span>
+        </div>
+        <div className="asset-monitor-card green">
+          <span className="amc-label">Total Topup</span>
+          <span className="amc-value">{formatRp(totalRpTopup)}</span>
+          <span className="amc-sub">{totalTopupCount} transaksi approved</span>
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="asset-monitor-tabs">
+        <button className={`amt-tab${tab === 'assets' ? ' active' : ''}`} onClick={() => setTab('assets')}>📦 Per Asset</button>
+        <button className={`amt-tab${tab === 'users' ? ' active' : ''}`} onClick={() => setTab('users')}>👤 Per User</button>
+      </div>
+
+      {tab === 'assets' && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Judul Asset</th>
+                <th>Tipe</th>
+                <th>Harga (Coin)</th>
+                <th>Total Unlock</th>
+                <th>Coin Diperoleh</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assets.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data</td></tr>}
+              {assets.map((a, i) => (
+                <tr key={a.id}>
+                  <td style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{i + 1}</td>
+                  <td><strong>{a.title}</strong></td>
+                  <td><span className="asset-type-badge">{a.type}</span></td>
+                  <td>{a.coin_cost === 0 ? <span style={{ color: 'var(--muted)' }}>Gratis</span> : `${a.coin_cost} coin`}</td>
+                  <td>
+                    <span className={`amc-count${a.unlock_count > 0 ? ' has-data' : ''}`}>{a.unlock_count}×</span>
+                  </td>
+                  <td style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                    {a.coin_earned > 0 ? `${a.coin_earned.toLocaleString('id-ID')} coin` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === 'users' && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>User</th>
+                <th>Coin Dipakai</th>
+                <th>Total Topup (Rp)</th>
+                <th>Jml Topup</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spenders.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data</td></tr>}
+              {spenders.map((u, i) => (
+                <tr key={u.username}>
+                  <td style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{i + 1}</td>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{u.display_name}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>@{u.username}</div>
+                  </td>
+                  <td>
+                    <span className={`amc-count${u.total_coin_spent > 0 ? ' has-data' : ''}`}>
+                      {u.total_coin_spent > 0 ? `${u.total_coin_spent.toLocaleString('id-ID')} coin` : '—'}
+                    </span>
+                  </td>
+                  <td style={{ color: '#059669', fontWeight: 600 }}>
+                    {u.total_rp_spent > 0 ? formatRp(u.total_rp_spent) : '—'}
+                  </td>
+                  <td style={{ color: 'var(--muted)' }}>{u.topup_count > 0 ? `${u.topup_count}×` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DbMonitor() {
   const [tables, setTables] = useState<TableStat[]>([]);
   const [buckets, setBuckets] = useState<BucketStat[]>([]);
@@ -11454,7 +11639,7 @@ function HelpEditor() {
 // ── AdminPage ────────────────────────────────────────────────
 
 function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: AppSession; featureCosts: FeatureCosts; onFeatureCostsChange: (c: FeatureCosts) => void }) {
-  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing' | 'tema' | 'monitor'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing' | 'tema' | 'analytics' | 'monitor'>('users');
   const [certCourses, setCertCourses] = useState<{ key: string; title: string }[]>([]);
   const [certSelectedKey, setCertSelectedKey] = useState<string | null>(null);
   const [promo, setPromo] = useState<PromoPopup>({ ...defaultPromo });
@@ -11937,9 +12122,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
       {/* Tabs */}
       <div className="admin-tabs">
-        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp', 'landing', 'tema', 'monitor'] as const).map((tab) => (
+        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp', 'landing', 'tema', 'analytics', 'monitor'] as const).map((tab) => (
           <button key={tab} type="button" className={`admin-tab${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
-            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : tab === 'hpp' ? 'Kalkulator HPP' : tab === 'landing' ? 'Landing Page' : tab === 'tema' ? '🎨 Tema' : '🔍 Monitor DB'}
+            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : tab === 'hpp' ? 'Kalkulator HPP' : tab === 'landing' ? 'Landing Page' : tab === 'tema' ? '🎨 Tema' : tab === 'analytics' ? '📊 Analytics' : '🔍 Monitor DB'}
           </button>
         ))}
       </div>
@@ -12813,6 +12998,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           {activeTab === 'landing' && <LandingEditor />}
 
           {activeTab === 'tema' && <ThemeEditor />}
+
+          {activeTab === 'analytics' && <AssetMonitor />}
 
           {activeTab === 'monitor' && <DbMonitor />}
 
