@@ -7390,25 +7390,23 @@ body.dark .forum-card-last-reply { background: rgba(255,255,255,0.04); }
 }
 .forum-action-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── Reply Bar (thin pill style, fixed bottom) ─────── */
+/* ── Reply Bar (thin pill style, sticky bottom) ─────── */
 
 .forum-reply-bar {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 24px 14px;
-  background: rgba(var(--bg-rgb, 245,247,255), 0.92);
+  padding: 10px 0 14px;
+  background: rgba(245,247,255,0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
-  z-index: 200;
+  z-index: 10;
 }
 body.dark .forum-reply-bar {
-  background: rgba(14,17,36,0.92);
+  background: rgba(14,17,36,0.94);
 }
 
 .forum-reply-bar-avatar {
