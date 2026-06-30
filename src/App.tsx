@@ -4225,7 +4225,13 @@ function DashboardSection({ session }: { session: AppSession }) {
   // ── streak ──
   const [streak, setStreak] = useState(0);
 
-  // ── upcoming events ──
+  // ── profile avatar ──
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+
+  // ── mini calendar month ──
+  const [miniCalDate, setMiniCalDate] = useState(() => new Date());
+
+  // ── upcoming events (2 weeks) ──
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
 
   // ── recent threads ──
@@ -4293,7 +4299,7 @@ function DashboardSection({ session }: { session: AppSession }) {
           { data: perksRow },
           { data: assetUnlockRows },
         ] = await Promise.all([
-          supabase.from('user_profiles').select('name').eq('username', session.username).maybeSingle(),
+          supabase.from('user_profiles').select('name, avatar_path').eq('username', session.username).maybeSingle(),
           supabase.from('lessons').select('lesson_key, title').order('sort_order', { ascending: true }),
           supabase.from('lesson_progress').select('lesson_key, completed_at').eq('session_username', session.username),
           supabase.from('calendar_events')
@@ -4322,7 +4328,9 @@ function DashboardSection({ session }: { session: AppSession }) {
 
         if (!active) return;
 
-        setProfileName((profileRow as { name?: string } | null)?.name ?? session.displayName);
+        const pr = profileRow as { name?: string; avatar_path?: string | null } | null;
+        setProfileName(pr?.name ?? session.displayName);
+        if (pr?.avatar_path) setProfileAvatarUrl(profileAvatarPublicUrl(pr.avatar_path));
 
         const allLessons = (lessonRows ?? []) as { lesson_key: string; title: string }[];
         const progressData = (progressRows ?? []) as { lesson_key: string; completed_at: string }[];
@@ -4457,7 +4465,8 @@ function DashboardSection({ session }: { session: AppSession }) {
       {/* ── Promotional Banner ──────────────────────────── */}
       <DashboardBanner settings={bannerSettings} />
 
-      {/* ── Hero greeting ───────────────────────────────── */}
+      {/* ── Top row: hero + profile card ───────────────── */}
+      <div className="db-top-row">
       <section className="db-hero card">
         <div className="db-hero-left">
           <p className="eyebrow">{greeting}</p>
@@ -4551,6 +4560,86 @@ function DashboardSection({ session }: { session: AppSession }) {
           </div>
         </div>
       </section>
+
+      {/* ── Profile + mini calendar card ── */}
+      {(() => {
+        const year = miniCalDate.getFullYear();
+        const month = miniCalDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        // convert Sun=0 to Mon=0
+        const startOffset = (firstDay + 6) % 7;
+        const eventDates = new Set([
+          ...upcomingEvents.map((e) => e.eventDate),
+        ]);
+        const todayStr = toLocalDateKey(new Date());
+        const cells: (number | null)[] = [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+        const monthLabel = miniCalDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+        const dayNames = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+        const reminderItems = [
+          ...(nextLesson ? [{ label: nextLesson.title, sub: 'Lanjutkan E-Learning', color: '#7a4fd6', href: '#materi' }] : []),
+          ...upcomingEvents.slice(0, 4).map((ev) => ({
+            label: ev.title,
+            sub: ev.eventDate ? `${formatShortDate(ev.eventDate)}${ev.startTime ? `, ${ev.startTime.slice(0,5)}` : ''}` : '',
+            color: categoryColor[ev.category] ?? '#7a4fd6',
+            href: ev.category === 'booking' ? '#calendar' : ev.category === 'class' ? '#events' : '#calendar',
+          })),
+        ].slice(0, 5);
+        const fallbackAvatar = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><circle cx="40" cy="40" r="40" fill="#ede9fe"/><text x="40" y="52" text-anchor="middle" font-size="32" font-family="sans-serif" fill="#7a4fd6">${(profileName || session.displayName).charAt(0).toUpperCase()}</text></svg>`)}`;
+        return (
+          <aside className="db-profile-card card">
+            {/* avatar */}
+            <div className="db-pc-avatar-wrap">
+              <img className="db-pc-avatar" src={profileAvatarUrl ?? fallbackAvatar} alt={profileName} />
+            </div>
+            <strong className="db-pc-name">{profileName || session.displayName}</strong>
+            <span className="db-pc-role">Student</span>
+            <a className="button secondary tiny db-pc-btn" href="#profil">Profile</a>
+
+            {/* mini calendar */}
+            <div className="db-pc-cal">
+              <div className="db-pc-cal-head">
+                <button className="db-pc-cal-nav" onClick={() => setMiniCalDate(new Date(year, month - 1, 1))}>‹</button>
+                <span>{monthLabel}</span>
+                <button className="db-pc-cal-nav" onClick={() => setMiniCalDate(new Date(year, month + 1, 1))}>›</button>
+              </div>
+              <div className="db-pc-cal-grid">
+                {dayNames.map((d) => <span key={d} className="db-pc-cal-dayname">{d}</span>)}
+                {cells.map((day, i) => {
+                  if (!day) return <span key={`e-${i}`} />;
+                  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const isToday = dateStr === todayStr;
+                  const hasEvent = eventDates.has(dateStr);
+                  return (
+                    <span key={dateStr} className={`db-pc-cal-day${isToday ? ' db-pc-cal-today' : ''}${hasEvent ? ' db-pc-cal-has-event' : ''}`}>
+                      {day}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* reminders */}
+            {reminderItems.length > 0 && (
+              <div className="db-pc-reminders">
+                <p className="db-pc-rem-title">Jadwal</p>
+                {reminderItems.map((item, i) => (
+                  <a key={i} className="db-pc-rem-row" href={item.href}>
+                    <span className="db-pc-rem-icon" style={{ background: `${item.color}20`, color: item.color }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    </span>
+                    <div className="db-pc-rem-info">
+                      <strong>{item.label}</strong>
+                      <span>{item.sub}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </aside>
+        );
+      })()}
+      </div>{/* end db-top-row */}
 
       {/* ── Main grid ────────────────────────────────────── */}
       <div className="db-grid">
