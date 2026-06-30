@@ -8714,12 +8714,32 @@ function ForumThreadCard({
       {thread.imageUrl && (
         <img src={thread.imageUrl} alt="attachment" className="forum-thread-thumb" />
       )}
+      {(() => {
+        const topLevel = thread.replies.filter((r) => !r.parentReplyId);
+        const last = topLevel[topLevel.length - 1];
+        if (!last) return null;
+        const avatarSrc = last.authorUsername === currentUser.username
+          ? currentUser.avatarUrl || forumAvatarSvg(currentUser.displayName, currentUser.username)
+          : userAvatarMap[last.authorUsername] || forumAvatarSvg(last.authorDisplayName, last.authorUsername);
+        return (
+          <div className="forum-card-last-reply">
+            <img src={avatarSrc} alt={last.authorDisplayName} className="forum-avatar-xs" />
+            <div className="forum-card-last-reply-content">
+              <span className="forum-card-last-reply-author">{last.authorDisplayName}</span>
+              <span className="forum-card-last-reply-body">{last.body.slice(0, 80)}{last.body.length > 80 ? '…' : ''}</span>
+            </div>
+            <span className="forum-card-last-reply-time">{timeAgo(last.createdAt)}</span>
+          </div>
+        );
+      })()}
       <div className="forum-thread-footer">
         <div className="forum-thread-stats">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span>{thread.replies.length} balasan</span>
           <span className="forum-dot">·</span>
           <span>{thread.viewCount} views</span>
         </div>
+        <ForumAvatarStack participants={participants.slice(0, 4)} />
       </div>
     </article>
   );
@@ -8757,64 +8777,84 @@ function ForumReplyItem({
     : (userAvatarMap[reply.authorUsername] || forumAvatarSvg(reply.authorDisplayName, reply.authorUsername));
   const replyDisplayName = isMe ? currentUser.displayName : reply.authorDisplayName;
 
+  const renderBody = (text: string) => {
+    const parts = text.split(/(@\S+)/g);
+    return parts.map((part, i) =>
+      part.startsWith('@')
+        ? <span key={i} className="forum-mention">{part}</span>
+        : part
+    );
+  };
+
   return (
-    <div className={`forum-reply depth-${Math.min(depth, 3)}${reply.answered ? ' forum-reply--answered' : ''}`}>
-      <div className="forum-reply-header">
-        <img src={replyAvatarSrc} alt={replyDisplayName} className="forum-avatar-sm" />
-        <div className="forum-reply-meta">
-          <strong>{replyDisplayName}</strong>
-          <span>{timeAgo(reply.createdAt)}</span>
+    <div className={`forum-reply-item${reply.answered ? ' forum-reply-item--answered' : ''}`}>
+      <div className="forum-reply-item-left">
+        <div className="forum-reply-avatar-wrap">
+          <img src={replyAvatarSrc} alt={replyDisplayName} className="forum-avatar-sm" />
+          {children.length > 0 && <div className="forum-reply-thread-line" />}
         </div>
-        {reply.answered && (
-          <span className="forum-reply-answered-badge">✓ Terjawab</span>
-        )}
       </div>
-      <div className="forum-reply-body">
-        <p>{reply.body}</p>
+      <div className="forum-reply-item-body">
+        <div className="forum-reply-item-header">
+          <strong className="forum-reply-item-name">{replyDisplayName}</strong>
+          {reply.answered && <span className="forum-reply-answered-badge">✓ Terjawab</span>}
+        </div>
+        <div className="forum-reply-item-text">
+          {renderBody(reply.body)}
+        </div>
         {reply.imageUrl && (
           <button type="button" className="forum-img-thumb-btn" onClick={() => onImageClick(reply.imageUrl!)}>
             <img src={reply.imageUrl} alt="attachment" className="forum-img-thumb" />
             <span className="forum-img-thumb-overlay">🔍 lihat gambar</span>
           </button>
         )}
-      </div>
-      <div className="forum-reply-actions">
-        <button type="button" className="forum-action-btn" onClick={() => onUpvote(reply.id)}>
-          ▲ {reply.upvotes}
-        </button>
-        <button type="button" className="forum-action-btn" onClick={() => onReplyTo(reply.id, reply.authorDisplayName)}>
-          balas
-        </button>
-        {isQnaThread && canModerate && onMarkAnswered && (
-          <button
-            type="button"
-            className={`forum-action-btn forum-answered-btn${reply.answered ? ' forum-answered-btn--active' : ''}`}
-            onClick={() => onMarkAnswered(reply.id)}
-          >
-            {reply.answered ? '✓ Batalkan' : '✓ Tandai Terjawab'}
+        <div className="forum-reply-item-actions">
+          <button type="button" className="forum-react-btn" onClick={() => onUpvote(reply.id)} title="suka">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </button>
+          {reply.upvotes > 0 && (
+            <span className="forum-react-chip">👍 {reply.upvotes}</span>
+          )}
+          <span className="forum-reply-sep" />
+          <button type="button" className="forum-reply-inline-btn" onClick={() => onReplyTo(reply.id, reply.authorDisplayName)}>
+            Balas
+          </button>
+          <span className="forum-reply-sep" />
+          <span className="forum-reply-item-time">{timeAgo(reply.createdAt)}</span>
+          {isQnaThread && canModerate && onMarkAnswered && (
+            <>
+              <span className="forum-reply-sep" />
+              <button
+                type="button"
+                className={`forum-reply-inline-btn${reply.answered ? ' forum-reply-inline-btn--answered' : ''}`}
+                onClick={() => onMarkAnswered(reply.id)}
+              >
+                {reply.answered ? '✓ Batalkan' : '✓ Tandai Terjawab'}
+              </button>
+            </>
+          )}
+        </div>
+        {children.length > 0 && (
+          <div className="forum-reply-nested">
+            {children.map((child) => (
+              <ForumReplyItem
+                key={child.id}
+                reply={child}
+                allReplies={allReplies}
+                depth={depth + 1}
+                currentUser={currentUser}
+                userAvatarMap={userAvatarMap}
+                onReplyTo={onReplyTo}
+                onUpvote={onUpvote}
+                onImageClick={onImageClick}
+                isQnaThread={isQnaThread}
+                canModerate={canModerate}
+                onMarkAnswered={onMarkAnswered}
+              />
+            ))}
+          </div>
         )}
       </div>
-      {children.length > 0 && (
-        <div className="forum-reply-children">
-          {children.map((child) => (
-            <ForumReplyItem
-              key={child.id}
-              reply={child}
-              allReplies={allReplies}
-              depth={depth + 1}
-              currentUser={currentUser}
-              userAvatarMap={userAvatarMap}
-              onReplyTo={onReplyTo}
-              onUpvote={onUpvote}
-              onImageClick={onImageClick}
-              isQnaThread={isQnaThread}
-              canModerate={canModerate}
-              onMarkAnswered={onMarkAnswered}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -9089,7 +9129,9 @@ function ForumThreadDetail({
       </article>
 
       <div className="forum-replies-section">
-        <h4 className="forum-replies-heading">{thread.replies.length} balasan</h4>
+        {thread.replies.length > 0 && (
+          <p className="forum-replies-heading">{thread.replies.length} Balasan</p>
+        )}
         {topLevelReplies.length === 0 && (
           <p className="forum-empty-replies">belum ada balasan. jadilah yang pertama!</p>
         )}
