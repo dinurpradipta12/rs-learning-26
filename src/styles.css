@@ -7781,6 +7781,8 @@ body.dark .forum-reply-bar-inner {
   color: #fff;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.1s;
+  position: relative;
+  z-index: 1200;
 }
 .forum-reply-bar-send:hover:not(:disabled) { opacity: 0.85; transform: scale(1.06); }
 .forum-reply-bar-send:disabled { background: var(--line); color: var(--muted); cursor: default; }
