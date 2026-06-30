@@ -9215,6 +9215,76 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
   50% { box-shadow: 0 0 0 5px rgba(34,197,94,0.08); }
 }
 
+/* ── Dashboard QNA Session Card ── */
+.db-qna-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1.5px solid #f59e0b66;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  text-decoration: none;
+  margin-bottom: 10px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.db-qna-card:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 4px 16px #f59e0b22;
+}
+body.dark .db-qna-card {
+  background: linear-gradient(135deg, #78350f18 0%, #92400e22 100%);
+  border-color: #f59e0b44;
+}
+body.dark .db-qna-card:hover { border-color: #f59e0b99; }
+
+.db-qna-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.db-qna-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #92400e;
+  background: #fde68a;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+body.dark .db-qna-badge { background: #78350f; color: #fcd34d; }
+
+.db-qna-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b45309;
+}
+body.dark .db-qna-count { color: #fbbf24; }
+
+.db-qna-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #78350f;
+  line-height: 1.35;
+}
+body.dark .db-qna-title { color: #fde68a; }
+
+.db-qna-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #d97706;
+  margin-top: 2px;
+}
+body.dark .db-qna-cta { color: #fbbf24; }
+
 .db-thread-list {
   display: flex;
   flex-direction: column;

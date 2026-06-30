@@ -4243,11 +4243,30 @@ function DashboardSection({ session }: { session: AppSession }) {
             </p>
             <a className="mini-link" href="#community">lihat semua</a>
           </div>
+          {(() => {
+            const activeQna = recentThreads.find((t) => t.category === 'qna session');
+            return activeQna ? (
+              <a className="db-qna-card" href={`?thread=${activeQna.id}#community`}>
+                <div className="db-qna-card-top">
+                  <span className="db-qna-badge">🎙️ QNA Session Aktif</span>
+                  <span className="db-qna-count">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    {activeQna.replies.length} pertanyaan terkumpul
+                  </span>
+                </div>
+                <strong className="db-qna-title">{activeQna.title}</strong>
+                <span className="db-qna-cta">
+                  Tanya Sekarang
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </span>
+              </a>
+            ) : null;
+          })()}
           {recentThreads.length === 0 ? (
             <p className="db-empty">Belum ada diskusi.</p>
           ) : (
             <div className="db-thread-list">
-              {recentThreads.map((t) => (
+              {recentThreads.filter((t) => t.category !== 'qna session').map((t) => (
                 <a className="db-thread-row" key={t.id} href={`?thread=${t.id}#community`}>
                   <div className="db-thread-meta">
                     <span className="tag">{t.category}</span>
@@ -4260,6 +4279,9 @@ function DashboardSection({ session }: { session: AppSession }) {
                   </span>
                 </a>
               ))}
+              {recentThreads.filter((t) => t.category !== 'qna session').length === 0 && (
+                <p className="db-empty">Belum ada diskusi lainnya.</p>
+              )}
             </div>
           )}
         </article>
