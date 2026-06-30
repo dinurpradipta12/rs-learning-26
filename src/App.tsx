@@ -2751,7 +2751,7 @@ function App() {
                     clearStoredSession();
                     setSession(null);
                     setIsAccountMenuOpen(false);
-                    window.location.hash = '#dashboard';
+                    window.location.hash = '#login';
                   }}
                 >
                   logout app
@@ -4603,15 +4603,31 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
         pct[key] = totalByCourse[key] > 0 ? Math.round(((completedByCourse[key] ?? 0) / totalByCourse[key]) * 100) : 0;
       }
       setCourseProgress(pct);
+
+      // Sync lesson_count untuk semua course berdasarkan data aktual
+      const updates = courseList
+        .filter((c) => (totalByCourse[c.key] ?? 0) !== c.lesson_count)
+        .map((c) => supabase.from('courses').update({ lesson_count: totalByCourse[c.key] ?? 0 }).eq('key', c.key));
+      if (updates.length > 0) {
+        await Promise.all(updates);
+        // Update local state juga
+        setCourses((prev) => prev.map((c) => ({ ...c, lesson_count: totalByCourse[c.key] ?? c.lesson_count })));
+      }
     }
   };
 
   useEffect(() => { void load(); }, [sessionUsername]);
 
   const levelColor: Record<string, string> = {
+    basic: '#64748b',
+    general: '#64748b',
     fundamental: '#6c63ff',
+    intermediate: '#0891b2',
     advance: '#e05a2b',
+    expert: '#dc2626',
     masterclass: '#0a7ea4',
+    bootcamp: '#059669',
+    workshop: '#d97706',
   };
 
   const openCreate = () => {
@@ -4802,9 +4818,15 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
                 <label className="course-modal-label">
                   Level
                   <select className="course-modal-input" value={form.level} onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}>
+                    <option value="basic">Basic</option>
+                    <option value="general">General</option>
                     <option value="fundamental">Fundamental</option>
+                    <option value="intermediate">Intermediate</option>
                     <option value="advance">Advance</option>
+                    <option value="expert">Expert</option>
                     <option value="masterclass">Masterclass</option>
+                    <option value="bootcamp">Bootcamp</option>
+                    <option value="workshop">Workshop</option>
                   </select>
                 </label>
                 <label className="course-modal-label">
@@ -5472,6 +5494,9 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       const persistedLesson = result?.lesson ?? nextLesson;
 
       await loadLessonsFromDatabase();
+      // sync lesson_count di tabel courses
+      const { count } = await supabase.from('lessons').select('lesson_key', { count: 'exact', head: true }).eq('course_key', courseKey);
+      await supabase.from('courses').update({ lesson_count: count ?? 0 }).eq('key', courseKey);
       setSelectedLessonId(persistedLesson.id);
       setPendingAssetFiles([]);
       setLessonEditorOpen(false);
@@ -5528,6 +5553,9 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
         window.alert(`materi terhapus, tetapi daftar terbaru gagal dimuat: ${refreshResult.error.message}`);
         return;
       }
+      // sync lesson_count di tabel courses
+      const { count } = await supabase.from('lessons').select('lesson_key', { count: 'exact', head: true }).eq('course_key', courseKey);
+      await supabase.from('courses').update({ lesson_count: count ?? 0 }).eq('key', courseKey);
 
       if (selectedLessonId === lessonId) {
         const remainingLessons = materialLessons.filter((lesson) => lesson.id !== lessonId);
