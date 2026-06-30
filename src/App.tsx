@@ -4249,6 +4249,31 @@ function DashboardSection({ session }: { session: AppSession }) {
 
   const [isLoading, setIsLoading] = useState(true);
 
+  // ── joined class events (calendar) ──
+  const eventJoinedKey = (id: string) => `event_joined_${session.username}_${id}`;
+  const [joinedCalEventIds, setJoinedCalEventIds] = useState<Set<string>>(() => new Set());
+  const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
+
+  const isCalEventJoined = (ev: CalendarEvent) =>
+    dashPerks.credit_exempt || dashPerks.free_event || joinedCalEventIds.has(ev.id) || !!localStorage.getItem(eventJoinedKey(ev.id));
+
+  const handleJoinCalEvent = async (ev: CalendarEvent) => {
+    if (isCalEventJoined(ev)) return;
+    setJoiningEventId(ev.id);
+    const cost = 5;
+    const res = await deductCredits(session.username, cost, `Join kelas: ${ev.title}`, 'join_event');
+    if (res.ok) {
+      localStorage.setItem(eventJoinedKey(ev.id), '1');
+      setJoinedCalEventIds((prev) => new Set([...prev, ev.id]));
+    }
+    setJoiningEventId(null);
+  };
+
+  const copyZoomLink = (ev: CalendarEvent) => {
+    const url = (ev.note ?? '').match(/https?:\/\/\S+/)?.[0] ?? '';
+    if (url) { void navigator.clipboard.writeText(url); }
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -4275,7 +4300,7 @@ function DashboardSection({ session }: { session: AppSession }) {
             .select('id, title, note, event_date, start_time, end_time, category, accent, attendee_count, is_done, sort_order')
             .gte('event_date', today)
             .lte('event_date', addDaysToDate(today, 14))
-            .eq('is_done', false)
+            .or('is_done.eq.false,is_done.is.null')
             .order('event_date', { ascending: true })
             .order('start_time', { ascending: true })
             .limit(20),
@@ -4580,16 +4605,36 @@ function DashboardSection({ session }: { session: AppSession }) {
                   </div>
                 </a>
               )}
-              {upcomingEvents.map((ev) => (
-                <div className="db-event-row" key={ev.id}>
-                  <div className="db-event-dot" style={{ background: categoryColor[ev.category] ?? '#7a4fd6' }} />
-                  <div className="db-event-info">
-                    <strong>{ev.title}</strong>
-                    <span>{ev.eventDate ? `${formatShortDate(ev.eventDate)} · ${formatClockRange(ev.startTime, ev.endTime)}` : ''}</span>
-                    <span className="db-event-cat">{categoryLabel[ev.category] ?? ev.category}</span>
+              {upcomingEvents.map((ev) => {
+                const isClass = ev.category === 'class';
+                const joined = isClass && isCalEventJoined(ev);
+                const hasZoom = isClass && !!(ev.note ?? '').match(/https?:\/\/\S+/);
+                return (
+                  <div className="db-event-row" key={ev.id}>
+                    <div className="db-event-dot" style={{ background: categoryColor[ev.category] ?? '#7a4fd6' }} />
+                    <div className="db-event-info">
+                      <strong>{ev.title}</strong>
+                      <span>{ev.eventDate ? `${formatShortDate(ev.eventDate)} · ${formatClockRange(ev.startTime, ev.endTime)}` : ''}</span>
+                      <span className="db-event-cat">{categoryLabel[ev.category] ?? ev.category}</span>
+                    </div>
+                    {isClass && (
+                      joined && hasZoom ? (
+                        <button className="db-event-btn db-event-btn--zoom" onClick={() => copyZoomLink(ev)}>
+                          📋 Copy Link Zoom
+                        </button>
+                      ) : !joined ? (
+                        <button
+                          className="db-event-btn db-event-btn--join"
+                          disabled={joiningEventId === ev.id}
+                          onClick={() => void handleJoinCalEvent(ev)}
+                        >
+                          {joiningEventId === ev.id ? '...' : 'Ikut Kelas Ini'}
+                        </button>
+                      ) : null
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </article>
