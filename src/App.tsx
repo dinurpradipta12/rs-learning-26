@@ -2933,7 +2933,7 @@ const CHART_TABLES = [
   { key: 'app_users',           label: 'Users',          color: '#6366f1', limitAt: 1000  },
   { key: 'credit_transactions', label: 'Transaksi Coin', color: '#f59e0b', limitAt: 20000 },
   { key: 'one_on_one_bookings', label: 'Booking 1:1',    color: '#22c55e', limitAt: 5000  },
-  { key: 'forum_posts',         label: 'Forum Posts',    color: '#ec4899', limitAt: 10000 },
+  { key: 'forum_threads',         label: 'Forum Posts',    color: '#ec4899', limitAt: 10000 },
 ];
 type ChartPoint = { time: Date; counts: Record<string, number> };
 
@@ -3405,7 +3405,7 @@ function DbMonitor() {
     { name: 'lesson_notes',         label: 'Catatan',            warnAt: 2000,  limitAt: 10000 },
     { name: 'one_on_one_bookings',  label: 'Booking 1:1',        warnAt: 1000,  limitAt: 5000  },
     { name: 'topup_requests',       label: 'Request Topup',      warnAt: 1000,  limitAt: 5000  },
-    { name: 'forum_posts',          label: 'Forum Posts',        warnAt: 2000,  limitAt: 10000 },
+    { name: 'forum_threads',          label: 'Forum Posts',        warnAt: 2000,  limitAt: 10000 },
     { name: 'notifications',        label: 'Notifikasi',         warnAt: 5000,  limitAt: 20000 },
     { name: 'learning_hub_content', label: 'Konten & Settings',  warnAt: 50,    limitAt: 200   },
     { name: 'shared_assets',        label: 'Shared Assets',      warnAt: 500,   limitAt: 2000  },
@@ -3428,7 +3428,7 @@ function DbMonitor() {
     const [txData, bookData, forumData, userNewData] = await Promise.all([
       supabase.from('credit_transactions').select('created_at').gte('created_at', since.toISOString()),
       supabase.from('one_on_one_bookings').select('created_at').gte('created_at', since.toISOString()),
-      supabase.from('forum_posts').select('created_at').gte('created_at', since.toISOString()),
+      supabase.from('forum_threads').select('created_at').gte('created_at', since.toISOString()),
       supabase.from('app_users').select('created_at').gte('created_at', since.toISOString()),
     ]);
 
@@ -3445,7 +3445,7 @@ function DbMonitor() {
           app_users:           countInHour(userNewData.data, bucketStart, bucketEnd),
           credit_transactions: countInHour(txData.data,     bucketStart, bucketEnd),
           one_on_one_bookings: countInHour(bookData.data,   bucketStart, bucketEnd),
-          forum_posts:         countInHour(forumData.data,  bucketStart, bucketEnd),
+          forum_threads:         countInHour(forumData.data,  bucketStart, bucketEnd),
         },
       });
     }
@@ -3462,8 +3462,8 @@ function DbMonitor() {
       supabase.from('topup_requests').select('*', { count: 'exact', head: true }).gte('created_at', iso),
       supabase.from('app_users').select('*', { count: 'exact', head: true }).gte('created_at', iso),
       supabase.from('credit_transactions').select('id,type,amount,created_at,username').order('created_at', { ascending: false }).limit(5),
-      supabase.from('one_on_one_bookings').select('id,status,created_at,student_username').order('created_at', { ascending: false }).limit(5),
-      supabase.from('topup_requests').select('id,status,amount,created_at,username').order('created_at', { ascending: false }).limit(4),
+      supabase.from('one_on_one_bookings').select('id,status,created_at,requester_username').order('created_at', { ascending: false }).limit(5),
+      supabase.from('topup_requests').select('id,status,amount_rp,created_at,username').order('created_at', { ascending: false }).limit(4),
       supabase.from('app_users').select('id,username,created_at').order('created_at', { ascending: false }).limit(4),
     ]);
 
@@ -3485,13 +3485,13 @@ function DbMonitor() {
       ...(recentBook.data ?? []).map((r: Record<string,unknown>) => ({
         id: `bk-${r.id}`, type: 'booking' as const,
         label: `Booking 1:1`,
-        sub: `${String(r.student_username ?? '—')} · ${String(r.status ?? '')}`,
+        sub: `${String(r.requester_username ?? '—')} · ${String(r.status ?? '')}`,
         time: fmt(String(r.created_at)), color: '#22c55e',
       })),
       ...(recentTopup.data ?? []).map((r: Record<string,unknown>) => ({
         id: `tp-${r.id}`, type: 'topup' as const,
         label: `Topup ${String(r.status ?? '')}`,
-        sub: `${String(r.username ?? '—')} · Rp${Number(r.amount ?? 0).toLocaleString('id-ID')}`,
+        sub: `${String(r.username ?? '—')} · Rp${Number(r.amount_rp ?? 0).toLocaleString('id-ID')}`,
         time: fmt(String(r.created_at)), color: '#6366f1',
       })),
       ...(recentUser.data ?? []).map((r: Record<string,unknown>) => ({
