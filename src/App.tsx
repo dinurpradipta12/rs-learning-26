@@ -11082,7 +11082,7 @@ function HelpFab({ settings }: { settings: HelpSettings }) {
                     } else {
                       videoId = parsed.searchParams.get('v') ?? '';
                     }
-                    if (videoId) return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+                    if (videoId) return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&mute=0`;
                   } catch { /* fall through */ }
                   return url;
                 })()}
@@ -14692,7 +14692,7 @@ function resolveLessonMedia(rawUrl: string): { kind: 'youtube'; embedUrl: string
 
   const youtubeId = extractYoutubeId(trimmed);
   if (youtubeId) {
-    return { kind: 'youtube', embedUrl: `https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1`, videoId: youtubeId };
+    return { kind: 'youtube', embedUrl: `https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1&mute=0`, videoId: youtubeId };
   }
 
   if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(trimmed) || /^https?:\/\//i.test(trimmed)) {
