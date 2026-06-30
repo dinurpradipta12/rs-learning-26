@@ -2331,6 +2331,10 @@ function App() {
   const [pendingTopupPkgId, setPendingTopupPkgId] = useState<string | null>(null);
 
   useEffect(() => {
+    void loadAppTheme().then(applyAppTheme);
+  }, []);
+
+  useEffect(() => {
     if (session) return;
     void loadLandingContent().then(setLandingContent);
   }, [session]);
@@ -4295,9 +4299,11 @@ function MyFilePage({ session }: { session: AppSession }) {
       const allAssets = (assetData ?? []) as AssetRow[];
       const unlockedSet = new Set((unlockRows ?? []).map((r: { asset_id: string }) => r.asset_id));
 
-      // Filter courses where user passed the assessment
+      // Filter courses where user passed the assessment AND module is complete
+      const releaseSettingsAll = await loadCourseReleaseSettings();
       const passedCourses = allCourses.filter((c) =>
-        localStorage.getItem(`cert_passed_${username}_${c.key}`) === '1'
+        localStorage.getItem(`cert_passed_${username}_${c.key}`) === '1' &&
+        (releaseSettingsAll[c.key]?.moduleComplete ?? false)
       );
 
       // Filter assets user has unlocked (DB-based)
@@ -4403,19 +4409,23 @@ function MyFilePage({ session }: { session: AppSession }) {
               <a href="#assets" className="button primary" style={{ marginTop: 16, display: 'inline-block' }}>Lihat Assets</a>
             </div>
           ) : (
-            <div className="myfile-asset-list">
+            <div className="myfile-asset-gallery">
               {assets.map((a) => (
-                <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" className="myfile-asset-item">
-                  {a.thumbnail_url
-                    ? <img src={a.thumbnail_url} alt={a.title} className="myfile-asset-thumb" />
-                    : <div className="myfile-asset-thumb myfile-asset-thumb-empty">📄</div>
-                  }
-                  <div className="myfile-asset-info">
-                    <span className="myfile-asset-category">{a.category}</span>
-                    <p className="myfile-asset-name">{a.title}</p>
+                <div key={a.id} className="myfile-asset-gallery-card">
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="myfile-asset-gallery-thumb">
+                    {a.thumbnail_url
+                      ? <img src={a.thumbnail_url} alt={a.title} className="myfile-asset-gallery-img" />
+                      : <div className="myfile-asset-gallery-placeholder">📄</div>
+                    }
+                  </a>
+                  <div className="myfile-asset-gallery-info">
+                    <span className="myfile-asset-category">{a.category.toUpperCase()}</span>
+                    <p className="myfile-asset-gallery-name">{a.title}</p>
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="myfile-asset-gallery-btn">
+                      Buka / Download ↗
+                    </a>
                   </div>
-                  <span className="myfile-asset-arrow">↗</span>
-                </a>
+                </div>
               ))}
             </div>
           )}
@@ -4434,6 +4444,113 @@ function MyFilePage({ session }: { session: AppSession }) {
   );
 }
 
+// ── Course Release Settings ────────────────────────────────────────────────────
+type CourseReleaseSettings = { releaseDays: string[]; lastLessonUploadedAt?: string; moduleComplete?: boolean };
+type AllCourseReleaseSettings = Record<string, CourseReleaseSettings>;
+// ── App Theme ────────────────────────────────────────────────
+type AppTheme = {
+  id: string;
+  name: string;
+  accent: string;
+  accentRgb: string;
+  accentLightRgb: string;
+  accentSoft: string;
+  bg: string;
+  bgStrong: string;
+};
+
+const APP_THEMES: AppTheme[] = [
+  { id: 'purple', name: 'Ungu (Default)', accent: '#7a4fd6', accentRgb: '122, 79, 214', accentLightRgb: '187, 157, 255', accentSoft: '#ece1ff', bg: '#f6f1ff', bgStrong: '#efe2ff' },
+  { id: 'blue', name: 'Biru', accent: '#2563eb', accentRgb: '37, 99, 235', accentLightRgb: '147, 183, 255', accentSoft: '#dbeafe', bg: '#eff6ff', bgStrong: '#dbeafe' },
+  { id: 'teal', name: 'Teal', accent: '#0891b2', accentRgb: '8, 145, 178', accentLightRgb: '103, 210, 232', accentSoft: '#cffafe', bg: '#f0fdff', bgStrong: '#cffafe' },
+  { id: 'green', name: 'Hijau', accent: '#059669', accentRgb: '5, 150, 105', accentLightRgb: '110, 205, 172', accentSoft: '#d1fae5', bg: '#ecfdf5', bgStrong: '#d1fae5' },
+  { id: 'rose', name: 'Rose', accent: '#e11d48', accentRgb: '225, 29, 72', accentLightRgb: '255, 147, 167', accentSoft: '#ffe4e6', bg: '#fff1f2', bgStrong: '#ffe4e6' },
+  { id: 'orange', name: 'Orange', accent: '#ea580c', accentRgb: '234, 88, 12', accentLightRgb: '255, 178, 128', accentSoft: '#ffedd5', bg: '#fff7ed', bgStrong: '#ffedd5' },
+  { id: 'indigo', name: 'Indigo', accent: '#4338ca', accentRgb: '67, 56, 202', accentLightRgb: '165, 168, 255', accentSoft: '#e0e7ff', bg: '#eef2ff', bgStrong: '#e0e7ff' },
+  // ── Palette 01 ──
+  { id: 'lavender', name: 'Lavender Blue', accent: '#88A2FF', accentRgb: '136, 162, 255', accentLightRgb: '196, 210, 255', accentSoft: '#e4eaff', bg: '#f2f4ff', bgStrong: '#e0e6ff' },
+  { id: 'violet-soft', name: 'Violet Soft', accent: '#AB9DFF', accentRgb: '171, 157, 255', accentLightRgb: '215, 208, 255', accentSoft: '#eceaff', bg: '#f4f2ff', bgStrong: '#e9e5ff' },
+  { id: 'pink-candy', name: 'Pink Candy', accent: '#d946c4', accentRgb: '217, 70, 196', accentLightRgb: '255, 178, 247', accentSoft: '#fce8fc', bg: '#fdf0fd', bgStrong: '#fad8fa' },
+  // ── Palette 11 ──
+  { id: 'royal-blue', name: 'Biru Royal', accent: '#203F9A', accentRgb: '32, 63, 154', accentLightRgb: '148, 194, 218', accentSoft: '#dce8ff', bg: '#eff4ff', bgStrong: '#dce8ff' },
+  { id: 'fuchsia', name: 'Fuchsia Pink', accent: '#E84797', accentRgb: '232, 71, 151', accentLightRgb: '231, 160, 204', accentSoft: '#ffd6ec', bg: '#fff0f7', bgStrong: '#ffd6ec' },
+  { id: 'steel-blue', name: 'Biru Baja', accent: '#4E7CB2', accentRgb: '78, 124, 178', accentLightRgb: '148, 194, 218', accentSoft: '#ddeaf6', bg: '#f0f5fb', bgStrong: '#ddeaf6' },
+];
+
+const appThemeKey = 'app_theme';
+
+async function loadAppTheme(): Promise<string> {
+  const { data } = await supabase.from('learning_hub_content').select('content').eq('content_key', appThemeKey).maybeSingle();
+  if (!data?.content) return 'purple';
+  const raw = typeof data.content === 'string' ? JSON.parse(data.content) : data.content;
+  return (raw?.themeId as string) ?? 'purple';
+}
+
+async function saveAppTheme(themeId: string): Promise<void> {
+  await supabase.from('learning_hub_content').upsert({ content_key: appThemeKey, content_group: 'admin', content: { themeId }, updated_at: new Date().toISOString() });
+}
+
+function applyAppTheme(themeId: string): void {
+  const theme = APP_THEMES.find((t) => t.id === themeId) ?? APP_THEMES[0];
+  let styleEl = document.getElementById('app-theme-override') as HTMLStyleElement | null;
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'app-theme-override';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent = `:root {
+    --accent: ${theme.accent};
+    --accent-soft: ${theme.accentSoft};
+    --accent-rgb: ${theme.accentRgb};
+    --accent-light-rgb: ${theme.accentLightRgb};
+    --bg: ${theme.bg};
+    --bg-strong: ${theme.bgStrong};
+  }`;
+}
+
+const courseReleaseSettingsKey = 'course_release_settings';
+
+async function loadCourseReleaseSettings(): Promise<AllCourseReleaseSettings> {
+  const { data } = await supabase.from('learning_hub_content').select('content').eq('content_key', courseReleaseSettingsKey).maybeSingle();
+  if (!data?.content) return {};
+  const raw = typeof data.content === 'string' ? JSON.parse(data.content) : data.content;
+  return (raw ?? {}) as AllCourseReleaseSettings;
+}
+async function saveCourseReleaseSettings(settings: AllCourseReleaseSettings): Promise<void> {
+  await supabase.from('learning_hub_content').upsert({ content_key: courseReleaseSettingsKey, content_group: 'admin', content: settings, updated_at: new Date().toISOString() });
+}
+async function updateLastLessonUploadedAt(courseKey: string): Promise<void> {
+  const all = await loadCourseReleaseSettings();
+  all[courseKey] = { ...(all[courseKey] ?? { releaseDays: [] }), lastLessonUploadedAt: new Date().toISOString() };
+  await saveCourseReleaseSettings(all);
+}
+
+const DAYS_ID = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
+function getCourseBadge(courseKey: string, releaseSettings: AllCourseReleaseSettings): { type: 'new' | 'next' | 'complete'; label: string } | null {
+  const settings = releaseSettings[courseKey];
+  if (!settings) return null;
+  const { lastLessonUploadedAt, releaseDays, moduleComplete } = settings;
+  if (moduleComplete) return { type: 'complete', label: 'Modul Sudah Lengkap' };
+  if (lastLessonUploadedAt) {
+    const daysSince = (Date.now() - new Date(lastLessonUploadedAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince < 7) return { type: 'new', label: 'Video Baru · Tonton Sekarang' };
+  }
+  if (releaseDays && releaseDays.length > 0) {
+    const dayNamesJS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const today = new Date().getDay();
+    let minDiff = 8; let nextDay = '';
+    for (const dayName of releaseDays) {
+      const dayIdx = dayNamesJS.indexOf(dayName);
+      if (dayIdx === -1) continue;
+      let diff = dayIdx - today; if (diff <= 0) diff += 7;
+      if (diff < minDiff) { minDiff = diff; nextDay = dayName; }
+    }
+    if (nextDay) return { type: 'next', label: `Video Berikutnya · ${nextDay}` };
+  }
+  return null;
+}
+
 const emptyCourseForm = (): Omit<CourseCard, 'lesson_count'> => ({
   key: '', title: '', subtitle: '', description: '', level: 'fundamental', thumbnail_url: null, sort_order: 0, status: 'open',
 });
@@ -4443,6 +4560,9 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
   const [loading, setLoading] = useState(true);
   // progress per course_key -> pct (0-100)
   const [courseProgress, setCourseProgress] = useState<Record<string, number>>({});
+  const [releaseSettings, setReleaseSettings] = useState<AllCourseReleaseSettings>({});
+  const [formReleaseDays, setFormReleaseDays] = useState<string[]>([]);
+  const [formModuleComplete, setFormModuleComplete] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [form, setForm] = useState(emptyCourseForm());
@@ -4455,12 +4575,13 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('courses')
-      .select('key, title, subtitle, description, level, thumbnail_url, lesson_count, sort_order, status')
-      .order('sort_order', { ascending: true });
+    const [{ data }, allRelSettings] = await Promise.all([
+      supabase.from('courses').select('key, title, subtitle, description, level, thumbnail_url, lesson_count, sort_order, status').order('sort_order', { ascending: true }),
+      loadCourseReleaseSettings(),
+    ]);
     const courseList = ((data ?? []) as CourseCard[]).map((c) => ({ ...c, status: c.status ?? 'open' }));
     setCourses(courseList);
+    setReleaseSettings(allRelSettings);
     setLoading(false);
 
     // Load progress per kelas untuk user ini
@@ -4495,6 +4616,8 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
 
   const openCreate = () => {
     setForm({ ...emptyCourseForm(), sort_order: courses.length + 1 });
+    setFormReleaseDays([]);
+    setFormModuleComplete(false);
     setFormError('');
     setThumbFile(null);
     setThumbPreview(null);
@@ -4505,6 +4628,8 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
   const openEdit = (c: CourseCard, e: React.MouseEvent) => {
     e.stopPropagation();
     setForm({ key: c.key, title: c.title, subtitle: c.subtitle, description: c.description, level: c.level, thumbnail_url: c.thumbnail_url, sort_order: c.sort_order, status: c.status ?? 'open' });
+    setFormReleaseDays(releaseSettings[c.key]?.releaseDays ?? []);
+    setFormModuleComplete(releaseSettings[c.key]?.moduleComplete ?? false);
     setFormError('');
     setThumbFile(null);
     setThumbPreview(c.thumbnail_url);
@@ -4541,9 +4666,17 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
       const { error } = await supabase.from('courses').update({ title: payload.title, subtitle: payload.subtitle, description: payload.description, level: payload.level, thumbnail_url: payload.thumbnail_url, sort_order: payload.sort_order, status: payload.status, updated_at: new Date().toISOString() }).eq('key', payload.key);
       if (error) { setFormError(error.message); setSaving(false); return; }
     }
+    // Save release schedule settings
+    const updatedRelSettings = {
+      ...releaseSettings,
+      [payload.key]: { ...(releaseSettings[payload.key] ?? {}), releaseDays: formReleaseDays, moduleComplete: formModuleComplete },
+    };
+    await saveCourseReleaseSettings(updatedRelSettings);
     setSaving(false);
     setModalOpen(false);
-    void load();
+    // Reload courses then apply release settings after so load() doesn't overwrite
+    await load();
+    setReleaseSettings(updatedRelSettings);
   };
 
   const handleDelete = async () => {
@@ -4576,6 +4709,7 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
             const pct = courseProgress[c.key] ?? 0;
             const started = pct > 0;
             const finished = pct === 100;
+            const badge = !isLocked ? getCourseBadge(c.key, releaseSettings) : null;
             return (
               <div key={c.key} className={`course-card-wrap${isLocked ? ' course-card-locked' : ''}`}>
                 <button
@@ -4603,6 +4737,14 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
                     )}
                   </div>
                   <div className="course-card-body">
+                    {badge && !finished && (
+                      badge.type === 'complete'
+                        ? <div className="course-card-badge-capsule"><span className="ccbc-label ccbc-complete">✓ Modul Sudah Lengkap</span></div>
+                        : <div className="course-card-badge-capsule">
+                            <span className={`ccbc-label ${badge.type === 'new' ? 'ccbc-new' : 'ccbc-next'}`}>{badge.type === 'new' ? 'Video Baru' : 'Video Berikutnya'}</span>
+                            <span className="ccbc-action">{badge.type === 'new' ? 'Tonton Sekarang' : badge.label.split('· ')[1]}</span>
+                          </div>
+                    )}
                     <p className="course-card-subtitle">{c.subtitle}</p>
                     <h3 className="course-card-title">{c.title}</h3>
                     <p className="course-card-desc">{isLocked && !canEdit ? 'Kelas ini belum dibuka. Nantikan peluncurannya!' : c.description}</p>
@@ -4652,7 +4794,7 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
                 Subtitle / Label Series
                 <input className="course-modal-input" value={form.subtitle} onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))} placeholder="Series Fundamental" />
               </label>
-              <label className="course-modal-label">
+              <label className="course-modal-label full">
                 Deskripsi
                 <textarea className="course-modal-input course-modal-textarea" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Deskripsi singkat kelas..." rows={3} />
               </label>
@@ -4690,6 +4832,34 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
                 </div>
               </label>
               <div className="course-modal-label">
+                Jadwal Rilis Video <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '0.78rem' }}>(opsional — untuk indikator "Episode Berikutnya")</span>
+                <div className="course-release-days">
+                  {DAYS_ID.map((day) => (
+                    <label key={day} className={`course-release-day-btn${formReleaseDays.includes(day) ? ' selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        style={{ display: 'none' }}
+                        checked={formReleaseDays.includes(day)}
+                        onChange={(e) => setFormReleaseDays((prev) => e.target.checked ? [...prev, day] : prev.filter((d) => d !== day))}
+                      />
+                      {day}
+                    </label>
+                  ))}
+                </div>
+                {formReleaseDays.length > 0 && (
+                  <p className="course-release-days-preview">Video baru akan tampil badge "Video Berikutnya · [Hari]" berdasarkan hari yang dipilih</p>
+                )}
+              </div>
+              <label className="course-modal-label full course-module-complete-row">
+                <input
+                  type="checkbox"
+                  checked={formModuleComplete}
+                  onChange={(e) => setFormModuleComplete(e.target.checked)}
+                  style={{ accentColor: 'var(--accent)', width: 15, height: 15, flexShrink: 0 }}
+                />
+                <span>Modul sudah lengkap <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '0.78rem' }}>(indikator berubah jadi "Modul Sudah Lengkap")</span></span>
+              </label>
+              <div className="course-modal-label full">
                 Thumbnail
                 <div className="course-thumb-upload" onClick={() => thumbInputRef.current?.click()}>
                   {thumbPreview
@@ -4731,9 +4901,22 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [materialLessons, setMaterialLessons] = useState<Lesson[]>([]);
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [isLessonsLoading, setIsLessonsLoading] = useState(true);
-  const chargedVideos = useRef<Set<string>>(new Set());
+  const paidVideosKey = `paid_videos_${sessionUsername}`;
+  const chargedVideos = useRef<Set<string>>(new Set(
+    (() => { try { return JSON.parse(localStorage.getItem(paidVideosKey) ?? '[]') as string[]; } catch { return []; } })()
+  ));
+  const markVideoPaid = (lessonId: string) => {
+    chargedVideos.current.add(lessonId);
+    try {
+      const existing = JSON.parse(localStorage.getItem(paidVideosKey) ?? '[]') as string[];
+      if (!existing.includes(lessonId)) localStorage.setItem(paidVideosKey, JSON.stringify([...existing, lessonId]));
+    } catch { /* ignore */ }
+  };
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [youtubeUnlocked, setYoutubeUnlocked] = useState(false);
+  const [youtubeUnlocked, setYoutubeUnlocked] = useState(() => {
+    // if selected lesson was already paid, unlock YouTube immediately
+    return false;
+  });
   const [activeTab, setActiveTab] = useState<'overview' | 'reviews' | 'notes'>('overview');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [notesSaving, setNotesSaving] = useState(false);
@@ -4764,6 +4947,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [pendingAssetFiles, setPendingAssetFiles] = useState<File[]>([]);
   const [lessonDeleteTarget, setLessonDeleteTarget] = useState<Lesson | null>(null);
   const [assessmentOpen, setAssessmentOpen] = useState(false);
+  const [moduleComplete, setModuleComplete] = useState<boolean | null>(null);
   const [assessmentQuestions, setAssessmentQuestions, persistAssessmentQuestions] = useSupabaseJsonState<AssessmentQuestion[]>(
     'lms_assessment_questions',
     initialAssessmentQuestions,
@@ -4817,7 +5001,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
     : materialLessons.length === 0
       ? 0
       : Math.round((completedLessons.size / materialLessons.length) * 100);
-  const quizUnlocked = allLessonsCompleted;
+  const quizUnlocked = allLessonsCompleted && moduleComplete === true;
   const selectedLessonReviews = selectedLesson ? reviewsByLesson[selectedLesson.id] ?? [] : [];
   const selectedLessonMedia = selectedLesson ? resolveLessonMedia(selectedLesson.videoUrl) : null;
 
@@ -4877,6 +5061,12 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       isActive = false;
     };
   }, []);
+
+  useEffect(() => {
+    void loadCourseReleaseSettings().then((all) => {
+      setModuleComplete(all[courseKey]?.moduleComplete ?? false);
+    });
+  }, [courseKey]);
 
   useEffect(() => {
     void (async () => {
@@ -5010,7 +5200,9 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
 
   useEffect(() => {
     setIsEmbedLoaded(false);
-    setYoutubeUnlocked(false);
+    // if this lesson was already paid (persisted in localStorage), unlock immediately
+    const alreadyPaid = selectedLesson ? chargedVideos.current.has(selectedLesson.id) : false;
+    setYoutubeUnlocked(alreadyPaid);
   }, [selectedLesson?.id, selectedLesson?.videoUrl, selectedLessonMedia?.kind]);
 
   const handleReviewSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -5135,7 +5327,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const persistLessonToDatabase = async (lesson: Lesson, assetFiles: File[]) => {
     const { error: lessonError } = await supabase.from('lessons').upsert({
       lesson_key: lesson.id,
-      course_key: 'lms',
+      course_key: courseKey,
       sort_order: lesson.sortOrder ?? 0,
       title: lesson.title,
       duration: lesson.duration,
@@ -5147,6 +5339,9 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
     if (lessonError) {
       return { lesson, error: lessonError };
     }
+
+    // Auto-update last lesson uploaded timestamp for Netflix badge
+    void updateLastLessonUploadedAt(courseKey);
 
     const { error: deleteAssetError } = await supabase.from('lesson_assets').delete().eq('lesson_key', lesson.id);
 
@@ -5370,7 +5565,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       const { error } = await supabase.from('lessons').upsert(
         reorderedLessons.map((lesson) => ({
           lesson_key: lesson.id,
-          course_key: 'lms',
+          course_key: courseKey,
           sort_order: lesson.sortOrder ?? 0,
           title: lesson.title,
           duration: lesson.duration,
@@ -5637,7 +5832,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                                 feature: 'Video Learning',
                                 cost: featureCosts.video_learning,
                                 onConfirm: () => {
-                                  chargedVideos.current.add(lessonId);
+                                  markVideoPaid(lessonId);
                                   void deductCredits(sessionUsername, featureCosts.video_learning, `Akses video: ${selectedLesson.title}`, 'video_learning')
                                     .then((res) => {
                                       if (!res.ok) {
@@ -5700,7 +5895,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                               feature: 'Video Learning',
                               cost: featureCosts.video_learning,
                               onConfirm: () => {
-                                chargedVideos.current.add(lessonId);
+                                markVideoPaid(lessonId);
                                 void deductCredits(sessionUsername, featureCosts.video_learning, `Akses video: ${selectedLesson.title}`, 'video_learning')
                                   .then((res) => {
                                     if (!res.ok) {
@@ -5973,6 +6168,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           onDownloadCert={certTemplate ? () => setShowCertPreview(true) : undefined}
           bookmarks={bookmarks}
           onToggleBookmark={toggleBookmark}
+          moduleComplete={moduleComplete}
         />
       </div>
       {lessonEditorOpen && (
@@ -6085,6 +6281,7 @@ function LmsSidebar({
   onDownloadCert,
   bookmarks,
   onToggleBookmark,
+  moduleComplete,
 }: {
   learningProgress: number;
   materialLessons: Lesson[];
@@ -6104,6 +6301,7 @@ function LmsSidebar({
   onDownloadCert?: () => void;
   bookmarks?: Set<string>;
   onToggleBookmark?: (lessonId: string) => void;
+  moduleComplete?: boolean;
 }) {
   const isLessonUnlocked = (lessonIndex: number) =>
     lessonIndex === 0 || completedLessons.has(materialLessons[lessonIndex - 1].id);
@@ -6190,7 +6388,15 @@ function LmsSidebar({
         <div className="lms-sidebar-section-head">
           <div>
             <strong>Post Test</strong>
-            <span>{quizUnlocked ? 'Quiz tersedia' : `Selesaikan semua lesson dulu`}</span>
+            <span>
+              {canManageAssessment
+                ? 'edit soal & nilai passing'
+                : !moduleComplete
+                  ? 'Menunggu modul selesai'
+                  : quizUnlocked
+                    ? 'Quiz tersedia'
+                    : 'Selesaikan semua lesson dulu'}
+            </span>
           </div>
           {canManageAssessment && (
             <button type="button" className="lms-add-lesson-btn" onClick={onOpenAssessment} title="edit asesmen">✏</button>
@@ -6209,14 +6415,28 @@ function LmsSidebar({
             </span>
             <div className="lms-lesson-info">
               <strong>Final Assessment</strong>
-              <span>{canManageAssessment ? 'edit soal & nilai passing' : quizUnlocked ? 'Siap dikerjakan' : 'Terkunci'}</span>
+              <span>
+                {canManageAssessment
+                  ? 'edit soal & nilai passing'
+                  : !moduleComplete
+                    ? '🔒 Modul belum selesai'
+                    : quizUnlocked
+                      ? 'Siap dikerjakan'
+                      : 'Terkunci'}
+              </span>
             </div>
             <span className="lms-quiz-arrow">{quizUnlocked || canManageAssessment ? '→' : ''}</span>
           </button>
         </div>
+
+        {!moduleComplete && !canManageAssessment && (
+          <p className="lms-module-incomplete-note">
+            Final Assessment & sertifikat akan terbuka setelah admin menandai modul ini selesai.
+          </p>
+        )}
       </section>
 
-      {assessmentPassed && onDownloadCert && (
+      {assessmentPassed && onDownloadCert && moduleComplete && (
         <div className="lms-cert-section">
           <div className="lms-cert-badge">🎓</div>
           <strong>Kelas Selesai!</strong>
@@ -8585,9 +8805,18 @@ function ForumThreadDetail({
     };
 
     onUpdate(updated);
+
     // Notifikasi ke pemilik thread jika bukan diri sendiri
     if (thread.authorUsername !== session.username) {
       void insertNotification(thread.authorUsername, 'thread_reply', 'Ada Balasan di Thread Kamu', `${displayName} membalas thread "${thread.title}"`, `#community`);
+    }
+
+    // Notifikasi ke pemilik reply yang dibalas (jika berbeda dari pemilik thread dan bukan diri sendiri)
+    if (replyingToId) {
+      const parentReply = thread.replies.find((r) => r.id === replyingToId);
+      if (parentReply && parentReply.authorUsername !== session.username && parentReply.authorUsername !== thread.authorUsername) {
+        void insertNotification(parentReply.authorUsername, 'thread_reply', 'Komentar Kamu Dibalas', `${displayName} membalas komentarmu di "${thread.title}"`, `#community`);
+      }
     }
     void sendTelegram(
       `↩️ <b>Balasan Thread Baru</b>\n\n` +
@@ -10282,10 +10511,217 @@ function HppCalculator({ coinRate: coinRateDefault, packages }: { coinRate: numb
   );
 }
 
+// ── Theme color helpers ──────────────────────────────────────
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '');
+  const n = parseInt(clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function blendWithWhite(r: number, g: number, b: number, alpha: number): string {
+  const rr = Math.round(r * alpha + 255 * (1 - alpha));
+  const gg = Math.round(g * alpha + 255 * (1 - alpha));
+  const bb = Math.round(b * alpha + 255 * (1 - alpha));
+  return `#${rr.toString(16).padStart(2, '0')}${gg.toString(16).padStart(2, '0')}${bb.toString(16).padStart(2, '0')}`;
+}
+
+function deriveThemeFromAccent(accent: string): Omit<AppTheme, 'id' | 'name'> {
+  const [r, g, b] = hexToRgb(accent);
+  const lr = Math.round(r * 0.4 + 255 * 0.6);
+  const lg = Math.round(g * 0.4 + 255 * 0.6);
+  const lb = Math.round(b * 0.4 + 255 * 0.6);
+  return {
+    accent,
+    accentRgb: `${r}, ${g}, ${b}`,
+    accentLightRgb: `${lr}, ${lg}, ${lb}`,
+    accentSoft: blendWithWhite(r, g, b, 0.15),
+    bg: blendWithWhite(r, g, b, 0.06),
+    bgStrong: blendWithWhite(r, g, b, 0.14),
+  };
+}
+
+// ── ThemeEditor ────────────────────────────────────────────────
+
+function ThemeEditor() {
+  const [activeThemeId, setActiveThemeId] = useState<string>('purple');
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customColor, setCustomColor] = useState('#7a4fd6');
+  const [customSaving, setCustomSaving] = useState(false);
+
+  useEffect(() => {
+    void loadAppTheme().then((id) => { setActiveThemeId(id); applyAppTheme(id); });
+  }, []);
+
+  useEffect(() => {
+    if (!showCustomModal || customColor.length < 4) return;
+    const derived = deriveThemeFromAccent(customColor);
+    let styleEl = document.getElementById('app-theme-override') as HTMLStyleElement | null;
+    if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'app-theme-override'; document.head.appendChild(styleEl); }
+    styleEl.textContent = `:root { --accent: ${derived.accent}; --accent-soft: ${derived.accentSoft}; --accent-rgb: ${derived.accentRgb}; --accent-light-rgb: ${derived.accentLightRgb}; --bg: ${derived.bg}; --bg-strong: ${derived.bgStrong}; }`;
+  }, [customColor, showCustomModal]);
+
+  async function handleApply(id: string) {
+    setSavingId(id);
+    applyAppTheme(id);
+    await saveAppTheme(id);
+    setActiveThemeId(id);
+    setSavingId(null);
+    setSavedId(id);
+    setTimeout(() => setSavedId(null), 2000);
+  }
+
+  async function handleApplyCustom() {
+    setCustomSaving(true);
+    const derived = deriveThemeFromAccent(customColor);
+    const customThemeId = `custom_${customColor.replace('#', '')}`;
+    // inject style directly
+    let styleEl = document.getElementById('app-theme-override') as HTMLStyleElement | null;
+    if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'app-theme-override'; document.head.appendChild(styleEl); }
+    styleEl.textContent = `:root { --accent: ${derived.accent}; --accent-soft: ${derived.accentSoft}; --accent-rgb: ${derived.accentRgb}; --accent-light-rgb: ${derived.accentLightRgb}; --bg: ${derived.bg}; --bg-strong: ${derived.bgStrong}; }`;
+    await supabase.from('learning_hub_content').upsert({ content_key: appThemeKey, content_group: 'admin', content: { themeId: customThemeId, customColor }, updated_at: new Date().toISOString() });
+    setActiveThemeId(customThemeId);
+    setCustomSaving(false);
+    setShowCustomModal(false);
+  }
+
+  function closeCustomModal() {
+    setShowCustomModal(false);
+    // restore previous theme
+    applyAppTheme(activeThemeId);
+  }
+
+  const isCustomActive = activeThemeId.startsWith('custom_');
+  const customPreview = deriveThemeFromAccent(customColor);
+
+  return (
+    <div className="theme-editor">
+      <div className="theme-editor-header">
+        <h3 className="theme-editor-title">Tema Aplikasi</h3>
+        <p className="theme-editor-desc">Pilih warna tema untuk seluruh tampilan aplikasi (berlaku untuk semua pengguna).</p>
+      </div>
+
+      <div className="theme-palette-grid">
+        {APP_THEMES.map((t) => {
+          const isActive = activeThemeId === t.id;
+          const isSaving = savingId === t.id;
+          const isSaved = savedId === t.id;
+          return (
+            <div key={t.id} className={`theme-palette-card${isActive ? ' selected' : ''}`}>
+              <div className="theme-palette-preview" style={{ background: `linear-gradient(135deg, ${t.bg} 0%, ${t.bgStrong} 100%)` }}>
+                <div className="theme-palette-dot" style={{ background: t.accent }} />
+                <div className="theme-palette-bar" style={{ background: t.accentSoft }} />
+                <div className="theme-palette-bar theme-palette-bar--short" style={{ background: t.accentSoft }} />
+              </div>
+              <div className="theme-palette-info">
+                <span className="theme-palette-swatch" style={{ background: t.accent }} />
+                <span className="theme-palette-name">{t.name}</span>
+              </div>
+              <div className="theme-palette-action">
+                {isActive ? (
+                  <span className="theme-palette-active-badge">✓ Aktif</span>
+                ) : (
+                  <button type="button" className="theme-palette-apply-btn" style={{ background: t.accent }} onClick={() => void handleApply(t.id)} disabled={isSaving}>
+                    {isSaving ? 'Menerapkan…' : isSaved ? '✓ Diterapkan' : 'Terapkan'}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Custom color card */}
+        <div className={`theme-palette-card${isCustomActive ? ' selected' : ''}`}>
+          <div className="theme-palette-preview theme-palette-preview--custom">
+            <div className="theme-custom-rainbow" />
+            <span className="theme-custom-icon">🎨</span>
+          </div>
+          <div className="theme-palette-info">
+            <span className="theme-palette-swatch" style={{ background: isCustomActive ? `#${activeThemeId.replace('custom_', '')}` : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} />
+            <span className="theme-palette-name">Warna Kustom</span>
+          </div>
+          <div className="theme-palette-action">
+            {isCustomActive ? (
+              <button type="button" className="theme-palette-apply-btn" style={{ background: `#${activeThemeId.replace('custom_', '')}` }} onClick={() => setShowCustomModal(true)}>
+                ✓ Aktif · Ubah
+              </button>
+            ) : (
+              <button type="button" className="theme-palette-apply-btn theme-palette-apply-btn--custom" onClick={() => setShowCustomModal(true)}>
+                Pilih Warna
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Custom color modal */}
+      {showCustomModal && createPortal(
+        <div className="admin-modal-overlay" onClick={closeCustomModal}>
+          <div className="theme-custom-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="theme-custom-modal-header">
+              <h3>Pilih Warna Kustom</h3>
+              <button type="button" className="admin-modal-close" onClick={closeCustomModal}>✕</button>
+            </div>
+
+            <div className="theme-custom-modal-body">
+              {/* Color picker */}
+              <div className="theme-custom-picker-wrap">
+                <input type="color" value={customColor} onChange={(e) => setCustomColor(e.target.value)} className="theme-custom-color-input" />
+                <div className="theme-custom-hex-wrap">
+                  <span className="theme-custom-hex-label">HEX</span>
+                  <input
+                    type="text"
+                    value={customColor}
+                    onChange={(e) => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setCustomColor(e.target.value); }}
+                    className="theme-custom-hex-input"
+                    maxLength={7}
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+
+              {/* Live preview */}
+              <div className="theme-custom-preview-box" style={{ background: `linear-gradient(135deg, ${customPreview.bg} 0%, ${customPreview.bgStrong} 100%)` }}>
+                <div className="theme-custom-preview-topbar" style={{ background: customPreview.accentSoft }}>
+                  <div className="theme-custom-preview-dot" style={{ background: customPreview.accent }} />
+                  <div className="theme-custom-preview-line" style={{ background: customPreview.accent, opacity: 0.3 }} />
+                  <div className="theme-custom-preview-line theme-custom-preview-line--short" style={{ background: customPreview.accent, opacity: 0.2 }} />
+                </div>
+                <div className="theme-custom-preview-content">
+                  <div className="theme-custom-preview-card" style={{ background: 'rgba(255,255,255,0.8)', border: `1px solid ${customPreview.accentSoft}` }}>
+                    <div className="theme-custom-preview-card-dot" style={{ background: customPreview.accent }} />
+                    <div className="theme-custom-preview-card-line" style={{ background: customPreview.accentSoft }} />
+                    <div className="theme-custom-preview-card-btn" style={{ background: customPreview.accent }} />
+                  </div>
+                  <div className="theme-custom-preview-card" style={{ background: 'rgba(255,255,255,0.8)', border: `1px solid ${customPreview.accentSoft}` }}>
+                    <div className="theme-custom-preview-card-dot" style={{ background: customPreview.accentSoft }} />
+                    <div className="theme-custom-preview-card-line" style={{ background: customPreview.accentSoft }} />
+                    <div className="theme-custom-preview-card-btn" style={{ background: customPreview.accent }} />
+                  </div>
+                </div>
+                <p className="theme-custom-preview-label">Preview Tema</p>
+              </div>
+            </div>
+
+            <div className="theme-custom-modal-footer">
+              <button type="button" className="admin-btn" onClick={closeCustomModal}>Batal</button>
+              <button type="button" className="admin-btn admin-btn--primary" style={{ background: customColor }} onClick={() => void handleApplyCustom()} disabled={customSaving || customColor.length < 4}>
+                {customSaving ? 'Menerapkan…' : 'Terapkan Warna Ini'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 // ── AdminPage ────────────────────────────────────────────────
 
 function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: AppSession; featureCosts: FeatureCosts; onFeatureCostsChange: (c: FeatureCosts) => void }) {
-  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing' | 'monitor'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing' | 'tema' | 'monitor'>('users');
   const [certCourses, setCertCourses] = useState<{ key: string; title: string }[]>([]);
   const [certSelectedKey, setCertSelectedKey] = useState<string | null>(null);
   const [promo, setPromo] = useState<PromoPopup>({ ...defaultPromo });
@@ -10659,7 +11095,13 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   };
 
   // Stats
-  const totalRevenue = transactions.filter((t) => t.type === 'topup' && t.amount > 0).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
+  const isReferralTx = (t: { description: string }) =>
+    t.description?.startsWith('Bonus kode referral:') || t.description === 'Ruang Coin awal pendaftaran';
+  const paidTopups = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && !isReferralTx(t));
+  const referralTxs = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && isReferralTx(t));
+  const totalRevenue = paidTopups.reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
+  const totalReferralCoins = referralTxs.reduce((s, t) => s + t.amount, 0);
+  const totalRevenueAll = transactions.filter((t) => t.type === 'topup' && t.amount > 0).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalCreditsIssued = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const activeUsers = users.filter((u) => u.isActive).length;
   const filteredUsers = users.filter((u) => {
@@ -10740,20 +11182,31 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           <span className="admin-stat-value">{activeUsers}</span>
         </div>
         <div className="admin-stat-card">
-          <span className="admin-stat-label">Ruang Coin Tersalurkan</span>
+          <span className="admin-stat-label">Coin Tersalurkan</span>
           <span className="admin-stat-value">{totalCreditsIssued.toLocaleString('id-ID')}</span>
         </div>
-        <div className="admin-stat-card">
-          <span className="admin-stat-label">Est. Pendapatan</span>
+        <div className="admin-stat-card admin-stat-card--referral">
+          <span className="admin-stat-label">Coin via Referral</span>
+          <span className="admin-stat-value">{totalReferralCoins.toLocaleString('id-ID')}</span>
+          <span className="admin-stat-sub">tidak dihitung pendapatan</span>
+        </div>
+        <div className="admin-stat-card admin-stat-card--revenue">
+          <span className="admin-stat-label">Est. Pendapatan Asli</span>
           <span className="admin-stat-value">{formatRupiah(totalRevenue)}</span>
+          <span className="admin-stat-sub">topup berbayar saja</span>
+        </div>
+        <div className="admin-stat-card admin-stat-card--total-rev">
+          <span className="admin-stat-label">Est. Pendapatan Total</span>
+          <span className="admin-stat-value">{formatRupiah(totalRevenueAll)}</span>
+          <span className="admin-stat-sub">termasuk coin referral</span>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="admin-tabs">
-        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp', 'landing', 'monitor'] as const).map((tab) => (
+        {(['users', 'credits', 'revenue', 'referral', 'promo', 'sertifikat', 'hpp', 'landing', 'tema', 'monitor'] as const).map((tab) => (
           <button key={tab} type="button" className={`admin-tab${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
-            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : tab === 'hpp' ? 'Kalkulator HPP' : tab === 'landing' ? 'Landing Page' : '🔍 Monitor DB'}
+            {tab === 'users' ? 'Manajemen User' : tab === 'credits' ? 'Ruang Coin' : tab === 'revenue' ? 'Pendapatan' : tab === 'referral' ? 'Kode Referral' : tab === 'promo' ? 'Promo & Broadcast' : tab === 'sertifikat' ? 'Sertifikat' : tab === 'hpp' ? 'Kalkulator HPP' : tab === 'landing' ? 'Landing Page' : tab === 'tema' ? '🎨 Tema' : '🔍 Monitor DB'}
           </button>
         ))}
       </div>
@@ -11161,8 +11614,22 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   </div>
                 </div>
               )}
+              <div className="admin-revenue-breakdown">
+                <div className="admin-revenue-breakdown-row">
+                  <span>Total Coin Masuk (semua)</span>
+                  <span>{totalCreditsIssued.toLocaleString('id-ID')} Coin</span>
+                </div>
+                <div className="admin-revenue-breakdown-row referral">
+                  <span>⎿ Coin via Referral / Bonus</span>
+                  <span>− {totalReferralCoins.toLocaleString('id-ID')} Coin</span>
+                </div>
+                <div className="admin-revenue-breakdown-row paid">
+                  <span>Coin Berbayar (topup asli)</span>
+                  <span>{paidTopups.reduce((s, t) => s + t.amount, 0).toLocaleString('id-ID')} Coin</span>
+                </div>
+              </div>
               <div className="admin-revenue-total">
-                <span>Total Estimasi Pendapatan</span>
+                <span>Est. Pendapatan Asli <span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--muted)' }}>(coin referral tidak dihitung)</span></span>
                 <strong>{formatRupiah(totalRevenue)}</strong>
               </div>
               <div className="admin-table-wrap" style={{ marginTop: 24 }}>
@@ -11178,9 +11645,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   <thead><tr><th>User</th><th>Paket</th><th>Ruang Coin</th><th>Waktu</th></tr></thead>
                   <tbody>
                     {transactions.filter((t) => t.type === 'topup').slice(0, 20).map((t) => (
-                      <tr key={t.id}>
+                      <tr key={t.id} className={isReferralTx(t) ? 'admin-row-referral' : ''}>
                         <td className="admin-user-username">@{t.username}</td>
-                        <td>{t.description}</td>
+                        <td>{t.description}{isReferralTx(t) && <span className="admin-referral-tag">referral</span>}</td>
                         <td className="admin-tx-amount positive">+{t.amount.toLocaleString('id-ID')}</td>
                         <td className="admin-date-cell">{new Date(t.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                       </tr>
@@ -11611,6 +12078,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           {activeTab === 'hpp' && <HppCalculator coinRate={draftCoinRate} packages={packages} />}
 
           {activeTab === 'landing' && <LandingEditor />}
+
+          {activeTab === 'tema' && <ThemeEditor />}
 
           {activeTab === 'monitor' && <DbMonitor />}
 
@@ -13400,6 +13869,8 @@ function createEmptyAssetDraft(): SharedAssetDraft {
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
+type HubEventRecurrence = 'none' | 'weekly' | 'monthly_date' | 'monthly_weekday';
+
 type HubEvent = {
   id: string;
   title: string;
@@ -13411,6 +13882,8 @@ type HubEvent = {
   coinCost: number;
   isActive?: boolean;
   coverUrl?: string;
+  recurrence?: HubEventRecurrence;
+  recurrenceGroupId?: string;
 };
 
 const hubEventsKey = 'hub_events';
@@ -13443,7 +13916,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState('');
 
-  const emptyDraft = (): Omit<HubEvent, 'id'> => ({ title: '', description: '', date: '', time: '', type: 'zoom', link: '', coinCost: featureCosts.join_event, isActive: true, coverUrl: '' });
+  const emptyDraft = (): Omit<HubEvent, 'id'> => ({ title: '', description: '', date: '', time: '', type: 'zoom', link: '', coinCost: featureCosts.join_event, isActive: true, coverUrl: '', recurrence: 'none', recurrenceGroupId: undefined });
   const [draft, setDraft] = useState<Omit<HubEvent, 'id'>>(emptyDraft());
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string>('');
@@ -13459,6 +13932,34 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const openAdd = () => { setDraft(emptyDraft()); setEditingIdx(null); setCoverFile(null); setCoverPreview(''); setShowForm(true); };
   const openEdit = (idx: number) => { const { id: _id, ...rest } = events[idx]; setDraft(rest); setEditingIdx(idx); setCoverFile(null); setCoverPreview(rest.coverUrl ?? ''); setShowForm(true); };
 
+  const generateRecurringDates = (baseDate: string, recurrence: HubEventRecurrence, count = 12): string[] => {
+    const dates: string[] = [];
+    const base = new Date(`${baseDate}T12:00:00`);
+    if (recurrence === 'none') return [baseDate];
+    for (let i = 0; i < count; i++) {
+      const d = new Date(base);
+      if (recurrence === 'weekly') {
+        d.setDate(base.getDate() + i * 7);
+      } else if (recurrence === 'monthly_date') {
+        d.setMonth(base.getMonth() + i);
+      } else if (recurrence === 'monthly_weekday') {
+        // same weekday of the same week-of-month, each month
+        const weekOfMonth = Math.floor((base.getDate() - 1) / 7);
+        const targetDay = base.getDay();
+        d.setMonth(base.getMonth() + i);
+        d.setDate(1);
+        const firstDay = d.getDay();
+        let offset = targetDay - firstDay;
+        if (offset < 0) offset += 7;
+        d.setDate(1 + offset + weekOfMonth * 7);
+        // if overflows month, go back a week
+        if (d.getMonth() !== (base.getMonth() + i) % 12) d.setDate(d.getDate() - 7);
+      }
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    return dates;
+  };
+
   const handleSave = async () => {
     if (!draft.title.trim() || !draft.date) return;
     setSaving(true);
@@ -13473,7 +13974,20 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     if (editingIdx !== null) {
       updated = events.map((e, i) => i === editingIdx ? { ...e, ...finalDraft } : e);
     } else {
-      updated = [...events, { ...finalDraft, id: `evt_${Date.now()}` }];
+      const recurrence = finalDraft.recurrence ?? 'none';
+      if (recurrence === 'none') {
+        updated = [...events, { ...finalDraft, id: `evt_${Date.now()}` }];
+      } else {
+        const groupId = `grp_${Date.now()}`;
+        const dates = generateRecurringDates(finalDraft.date, recurrence);
+        const newEvents: HubEvent[] = dates.map((d, i) => ({
+          ...finalDraft,
+          id: `evt_${Date.now()}_${i}`,
+          date: d,
+          recurrenceGroupId: groupId,
+        }));
+        updated = [...events, ...newEvents];
+      }
     }
     await saveHubEvents(updated);
     setEvents(updated);
@@ -13484,6 +13998,12 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
 
   const handleDelete = async (idx: number) => {
     const updated = events.filter((_, i) => i !== idx);
+    await saveHubEvents(updated);
+    setEvents(updated);
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    const updated = events.filter((e) => e.recurrenceGroupId !== groupId);
     await saveHubEvents(updated);
     setEvents(updated);
   };
@@ -13542,7 +14062,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                 <tbody>
                   {events.map((ev, idx) => (
                     <tr key={ev.id} className={ev.isActive === false ? 'admin-row-inactive' : ''}>
-                      <td><strong>{ev.title}</strong>{ev.description && <div className="events-admin-desc">{ev.description}</div>}</td>
+                      <td><strong>{ev.title}</strong>{ev.recurrenceGroupId && <span className="event-recurrence-badge">🔁 berulang</span>}{ev.description && <div className="events-admin-desc">{ev.description}</div>}</td>
                       <td>{typeIcon[ev.type]} {typeLabel[ev.type]}</td>
                       <td className="admin-date-cell">{new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</td>
                       <td>{ev.coinCost === 0 ? <span className="events-free-badge">Gratis</span> : <span className="admin-credits-cell"><CoinIcon size={12} /> {ev.coinCost}</span>}</td>
@@ -13551,6 +14071,9 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                         <div className="admin-actions">
                           <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
                           <button type="button" className="admin-action-btn danger" onClick={() => void handleDelete(idx)}>hapus</button>
+                          {ev.recurrenceGroupId && (
+                            <button type="button" className="admin-action-btn danger" onClick={() => { if (window.confirm(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`)) void handleDeleteGroup(ev.recurrenceGroupId!); }} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -13693,6 +14216,46 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                     <input className="admin-modal-input" type="time" value={draft.time ?? ''} onChange={(e) => setDraft((p) => ({ ...p, time: e.target.value }))} />
                   </label>
                 </div>
+                {editingIdx === null && (
+                  <div className="event-recurrence-wrap">
+                    <label className="event-recurrence-toggle">
+                      <input
+                        type="checkbox"
+                        checked={(draft.recurrence ?? 'none') !== 'none'}
+                        onChange={(e) => setDraft((p) => ({ ...p, recurrence: e.target.checked ? 'weekly' : 'none' }))}
+                      />
+                      <span>Jadwal Berulang</span>
+                    </label>
+                    {(draft.recurrence ?? 'none') !== 'none' && (
+                      <div className="event-recurrence-options">
+                        <label className="event-recurrence-radio">
+                          <input type="radio" name="recurrence" value="weekly" checked={draft.recurrence === 'weekly'} onChange={() => setDraft((p) => ({ ...p, recurrence: 'weekly' }))} />
+                          <span>Setiap minggu (hari yang sama)</span>
+                        </label>
+                        <label className="event-recurrence-radio">
+                          <input type="radio" name="recurrence" value="monthly_date" checked={draft.recurrence === 'monthly_date'} onChange={() => setDraft((p) => ({ ...p, recurrence: 'monthly_date' }))} />
+                          <span>Setiap bulan (tanggal yang sama)</span>
+                        </label>
+                        <label className="event-recurrence-radio">
+                          <input type="radio" name="recurrence" value="monthly_weekday" checked={draft.recurrence === 'monthly_weekday'} onChange={() => setDraft((p) => ({ ...p, recurrence: 'monthly_weekday' }))} />
+                          <span>Setiap bulan (hari yang sama di minggu yang sama)</span>
+                        </label>
+                        {draft.date && (
+                          <p className="event-recurrence-preview">
+                            {draft.recurrence === 'weekly' && `Akan dibuat 12 event, setiap hari ${new Date(`${draft.date}T12:00:00`).toLocaleDateString('id-ID', { weekday: 'long' })}`}
+                            {draft.recurrence === 'monthly_date' && `Akan dibuat 12 event, setiap tanggal ${new Date(`${draft.date}T12:00:00`).getDate()} tiap bulan`}
+                            {draft.recurrence === 'monthly_weekday' && (() => {
+                              const d = new Date(`${draft.date}T12:00:00`);
+                              const weekNum = Math.floor((d.getDate() - 1) / 7) + 1;
+                              const dayName = d.toLocaleDateString('id-ID', { weekday: 'long' });
+                              return `Akan dibuat 12 event, setiap ${dayName} minggu ke-${weekNum} tiap bulan`;
+                            })()}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <label>Tipe Event
                   <select className="admin-modal-input" value={draft.type} onChange={(e) => setDraft((p) => ({ ...p, type: e.target.value as HubEvent['type'] }))}>
                     <option value="zoom">📹 Zoom / Live Session</option>
