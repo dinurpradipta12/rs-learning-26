@@ -827,7 +827,7 @@ async function upsertForumThread(thread: ForumThread): Promise<void> {
 }
 
 async function upsertForumReply(reply: ForumReply, threadId: string): Promise<void> {
-  await supabase.from('forum_replies').upsert({
+  const { error } = await supabase.from('forum_replies').upsert({
     id: reply.id,
     thread_id: threadId,
     author_username: reply.authorUsername,
@@ -839,6 +839,7 @@ async function upsertForumReply(reply: ForumReply, threadId: string): Promise<vo
     created_at: reply.createdAt,
     answered: reply.answered ?? false,
   });
+  if (error) throw new Error(error.message);
 }
 
 async function deleteForumThreadFromDb(threadId: string): Promise<void> {
@@ -9775,7 +9776,10 @@ function ForumThreadDetail({
               <>
                 <img src={src} alt={name} className="forum-avatar-md" />
                 <div>
-                  <strong className="forum-op-author">{name}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <BadgeIcon tier={badgeMap[thread.authorUsername] ?? null} size={16} />
+                    <strong className="forum-op-author">{name}</strong>
+                  </div>
                   <div className="forum-op-meta">
                     <span className="forum-category-tag">{thread.category}</span>
                     <span>{timeAgo(thread.createdAt)}</span>
@@ -9958,6 +9962,7 @@ function ForumComposer({
 }) {
   const isAdmin = session.role === 'admin' || session.role === 'developer';
   const availableCategories = forumAllCategories(isAdmin);
+  const composerBadge = useBadgeTier(session.username);
   const [body, setBody] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(forumCategories[0]);
@@ -10061,7 +10066,10 @@ function ForumComposer({
           className="forum-avatar-md"
         />
         <div className="forum-composer-identity">
-          <strong className="forum-composer-name">{displayName}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <BadgeIcon tier={composerBadge} size={15} />
+            <strong className="forum-composer-name">{displayName}</strong>
+          </div>
           <span className="forum-composer-role">@{displayName.toLowerCase().replace(/\s+/g, '')} · {jobTitle}</span>
           <div className="forum-composer-category-row">
             <select
@@ -10251,7 +10259,9 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
     setSelectedThreadId(updated.id);
     // Sync ke Supabase: update thread + upsert semua reply baru
     void upsertForumThread(updated);
-    void Promise.all(updated.replies.map((r) => upsertForumReply(r, updated.id)));
+    void Promise.all(updated.replies.map((r) => upsertForumReply(r, updated.id))).catch((err: unknown) => {
+      alert(`Gagal menyimpan balasan: ${err instanceof Error ? err.message : String(err)}`);
+    });
   };
 
   const openThread = (threadId: string) => {
@@ -14358,6 +14368,7 @@ function ProfilePage({
   const [profile, setProfile] = useState<UserProfile>(() => readUserProfile(session));
   const [draftProfile, setDraftProfile] = useState<UserProfile>(() => readUserProfile(session));
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const profileBadge = useBadgeTier(session.username);
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
   const profileView = hash === '#profil-subscription' ? 'subscription' : 'settings';
 
@@ -14697,7 +14708,10 @@ function ProfilePage({
               <div className="section-head">
                 <div>
                   <p className="eyebrow">data user</p>
-                  <h3>{activeProfile.name}</h3>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BadgeIcon tier={profileBadge} size={20} />
+                    {activeProfile.name}
+                  </h3>
                 </div>
                 {!isEditingProfile ? (
                   <button type="button" className="button primary" onClick={() => setIsEditingProfile(true)}>
