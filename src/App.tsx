@@ -8720,7 +8720,7 @@ function ForumThreadCard({
       { username: thread.authorUsername, displayName: thread.authorDisplayName },
       ...thread.replies.map((r) => ({ username: r.authorUsername, displayName: r.authorDisplayName })),
     ].find((p) => p.username === username);
-    return { username, displayName: match?.displayName ?? username };
+    return { username, displayName: match?.displayName ?? username, avatarUrl: userAvatarMap[username] };
   });
 
   const lastReplyAt = thread.replies.length > 0
