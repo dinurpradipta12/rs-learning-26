@@ -3844,6 +3844,10 @@ function UpdateToast() {
 function DashboardSection({ session }: { session: AppSession }) {
   const today = todayDateString();
 
+  // ── banner ──
+  const [bannerSettings, setBannerSettings] = useState<BannerSettings>(defaultBannerSettings);
+  useEffect(() => { void loadBannerSettings().then(setBannerSettings); }, []);
+
   // ── profile name ──
   const [profileName, setProfileName] = useState('');
 
@@ -4030,6 +4034,9 @@ function DashboardSection({ session }: { session: AppSession }) {
 
   return (
     <div className="db-root">
+
+      {/* ── Promotional Banner ──────────────────────────── */}
+      <DashboardBanner settings={bannerSettings} />
 
       {/* ── Hero greeting ───────────────────────────────── */}
       <section className="db-hero card">
@@ -10539,6 +10546,74 @@ function HppCalculator({ coinRate: coinRateDefault, packages }: { coinRate: numb
   );
 }
 
+// ── Dashboard Banner ─────────────────────────────────────────
+type BannerSlide = { id: string; imageUrl: string; linkUrl?: string; title?: string };
+type BannerSettings = { enabled: boolean; autoPlay: boolean; intervalSec: number; slides: BannerSlide[] };
+
+const bannerKey = 'dashboard_banner_settings';
+const defaultBannerSettings: BannerSettings = { enabled: false, autoPlay: true, intervalSec: 4, slides: [] };
+
+async function loadBannerSettings(): Promise<BannerSettings> {
+  const { data } = await supabase.from('learning_hub_content').select('content').eq('content_key', bannerKey).maybeSingle();
+  if (!data?.content) return { ...defaultBannerSettings };
+  const raw = typeof data.content === 'string' ? JSON.parse(data.content) : data.content;
+  return { ...defaultBannerSettings, ...(raw as BannerSettings) };
+}
+
+async function saveBannerSettings(s: BannerSettings): Promise<void> {
+  await supabase.from('learning_hub_content').upsert({ content_key: bannerKey, content_group: 'admin', content: s, updated_at: new Date().toISOString() });
+}
+
+async function uploadBannerImage(file: File, slideId: string): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const path = `banners/${slideId}.${ext}`;
+  await supabase.storage.from('lesson-assets').remove([`banners/${slideId}.jpg`, `banners/${slideId}.png`, `banners/${slideId}.webp`]);
+  await supabase.storage.from('lesson-assets').upload(path, file, { upsert: true, contentType: file.type });
+  return supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
+}
+
+function DashboardBanner({ settings }: { settings: BannerSettings }) {
+  const [current, setCurrent] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const { slides, autoPlay, intervalSec } = settings;
+
+  useEffect(() => {
+    if (!autoPlay || paused || slides.length <= 1) return;
+    const t = setInterval(() => setCurrent((c) => (c + 1) % slides.length), intervalSec * 1000);
+    return () => clearInterval(t);
+  }, [autoPlay, paused, slides.length, intervalSec]);
+
+  useEffect(() => { setCurrent(0); }, [slides.length]);
+
+  if (!settings.enabled || slides.length === 0) return null;
+
+  const slide = slides[current];
+  const content = (
+    <div className="db-banner-slide" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <img src={slide.imageUrl} alt={slide.title ?? 'Banner'} className="db-banner-img" />
+      {slides.length > 1 && (
+        <>
+          <button type="button" className="db-banner-arrow db-banner-arrow--left" onClick={(e) => { e.preventDefault(); setCurrent((c) => (c - 1 + slides.length) % slides.length); }}>‹</button>
+          <button type="button" className="db-banner-arrow db-banner-arrow--right" onClick={(e) => { e.preventDefault(); setCurrent((c) => (c + 1) % slides.length); }}>›</button>
+          <div className="db-banner-dots">
+            {slides.map((_, i) => (
+              <button key={i} type="button" className={`db-banner-dot${i === current ? ' active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrent(i); }} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="db-banner-wrap">
+      {slide.linkUrl
+        ? <a href={slide.linkUrl} target={slide.linkUrl.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer">{content}</a>
+        : content}
+    </div>
+  );
+}
+
 // ── Theme color helpers ──────────────────────────────────────
 function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace('#', '');
@@ -10742,6 +10817,166 @@ function ThemeEditor() {
         </div>,
         document.body
       )}
+
+      {/* ── Banner Slider Editor ──────────────────────────────── */}
+      <BannerEditor />
+    </div>
+  );
+}
+
+// ── BannerEditor ──────────────────────────────────────────────
+function BannerEditor() {
+  const [settings, setSettings] = useState<BannerSettings>(defaultBannerSettings);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newTitle, setNewTitle] = useState('');
+  const [newFile, setNewFile] = useState<File | null>(null);
+  const [newPreview, setNewPreview] = useState<string | null>(null);
+
+  useEffect(() => { void loadBannerSettings().then(setSettings); }, []);
+
+  const save = async (next: BannerSettings) => {
+    setSaving(true);
+    await saveBannerSettings(next);
+    setSettings(next);
+    setSaving(false);
+  };
+
+  const toggleEnabled = () => void save({ ...settings, enabled: !settings.enabled });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setNewFile(f);
+    if (f) setNewPreview(URL.createObjectURL(f));
+  };
+
+  const addSlide = async () => {
+    if (!newFile) return;
+    setUploading(true);
+    try {
+      const id = `slide_${Date.now()}`;
+      const imageUrl = await uploadBannerImage(newFile, id);
+      const slide: BannerSlide = { id, imageUrl, linkUrl: newLinkUrl || undefined, title: newTitle || undefined };
+      const next = { ...settings, slides: [...settings.slides, slide] };
+      await save(next);
+      setNewFile(null);
+      setNewPreview(null);
+      setNewLinkUrl('');
+      setNewTitle('');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeSlide = async (id: string) => {
+    const slide = settings.slides.find((s) => s.id === id);
+    if (!slide) return;
+    const ext = slide.imageUrl.split('.').pop()?.split('?')[0] ?? 'jpg';
+    await supabase.storage.from('lesson-assets').remove([`banners/${id}.${ext}`]);
+    await save({ ...settings, slides: settings.slides.filter((s) => s.id !== id) });
+  };
+
+  const moveSlide = async (idx: number, dir: -1 | 1) => {
+    const arr = [...settings.slides];
+    const target = idx + dir;
+    if (target < 0 || target >= arr.length) return;
+    [arr[idx], arr[target]] = [arr[target], arr[idx]];
+    await save({ ...settings, slides: arr });
+  };
+
+  return (
+    <div className="banner-editor">
+      {/* ── Header ── */}
+      <div className="banner-editor-header">
+        <div className="banner-editor-header-left">
+          <div className="banner-editor-icon">🖼️</div>
+          <div>
+            <h3 className="banner-editor-title">Banner Slider Dashboard</h3>
+            <p className="banner-editor-hint">Tampil di atas halaman dashboard · Ukuran disarankan <strong>1200 × 360 px</strong> (rasio 5:1.5)</p>
+          </div>
+        </div>
+        <div className="banner-editor-toggle-wrap">
+          <span className={`banner-toggle-status${settings.enabled ? ' on' : ''}`}>{settings.enabled ? '● Aktif' : '○ Nonaktif'}</span>
+          <div className={`banner-toggle${settings.enabled ? ' on' : ''}`} onClick={toggleEnabled} role="switch" aria-checked={settings.enabled} />
+        </div>
+      </div>
+
+      {/* ── Settings bar ── */}
+      <div className="banner-settings-bar">
+        <div className="banner-settings-item">
+          <span className="banner-settings-label">⏱ Auto-slide tiap</span>
+          <select className="banner-settings-select" value={settings.intervalSec}
+            onChange={(e) => void save({ ...settings, intervalSec: Number(e.target.value) })}>
+            {[2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={n}>{n} detik</option>)}
+          </select>
+        </div>
+        <div className="banner-settings-item">
+          <span className="banner-settings-label">🖼 Total Slide</span>
+          <span className="banner-settings-value">{settings.slides.length} slide{settings.slides.length !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+
+      {/* ── Slide list ── */}
+      {settings.slides.length > 0 && (
+        <div className="banner-slide-list">
+          <p className="banner-slide-list-label">Daftar Slide</p>
+          {settings.slides.map((s, i) => (
+            <div key={s.id} className="banner-slide-item">
+              <div className="banner-slide-num">{i + 1}</div>
+              <img src={s.imageUrl} alt={s.title ?? 'Banner'} className="banner-slide-thumb" />
+              <div className="banner-slide-meta">
+                <span className="banner-slide-name">{s.title || `Slide ${i + 1}`}</span>
+                {s.linkUrl
+                  ? <span className="banner-slide-link">🔗 {s.linkUrl}</span>
+                  : <span className="banner-slide-link banner-slide-link--empty">Tanpa link</span>}
+              </div>
+              <div className="banner-slide-actions">
+                <button type="button" className="banner-act-btn" onClick={() => void moveSlide(i, -1)} disabled={i === 0} title="Naik">↑</button>
+                <button type="button" className="banner-act-btn" onClick={() => void moveSlide(i, 1)} disabled={i === settings.slides.length - 1} title="Turun">↓</button>
+                <button type="button" className="banner-act-btn banner-act-btn--danger" onClick={() => void removeSlide(s.id)} title="Hapus">✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Add slide ── */}
+      <div className="banner-add-form">
+        <div className="banner-add-form-header">
+          <span className="banner-add-form-icon">＋</span>
+          <h4 className="banner-add-title">Tambah Slide Baru</h4>
+        </div>
+
+        <label className="banner-upload-zone">
+          <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+          {newPreview
+            ? <img src={newPreview} alt="Preview" className="banner-add-preview" />
+            : (
+              <div className="banner-upload-placeholder">
+                <span className="banner-upload-icon">📁</span>
+                <span className="banner-upload-text">Klik untuk pilih gambar banner</span>
+                <span className="banner-upload-sub">PNG, JPG, WebP · Maks. 5 MB</span>
+              </div>
+            )}
+          {newPreview && <div className="banner-upload-change-badge">Ganti Gambar</div>}
+        </label>
+
+        <div className="banner-add-fields">
+          <div className="banner-add-field">
+            <label className="banner-add-field-label">Judul Slide <span>(opsional)</span></label>
+            <input type="text" className="admin-input" placeholder="mis. Promo Akhir Tahun" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+          </div>
+          <div className="banner-add-field">
+            <label className="banner-add-field-label">URL Tujuan Klik <span>(opsional)</span></label>
+            <input type="text" className="admin-input" placeholder="mis. #catalog atau https://..." value={newLinkUrl} onChange={(e) => setNewLinkUrl(e.target.value)} />
+          </div>
+        </div>
+
+        <button type="button" className="banner-add-btn" disabled={!newFile || uploading || saving} onClick={() => void addSlide()}>
+          {uploading ? <><span className="banner-add-btn-spinner" /> Mengunggah…</> : '＋ Tambah Slide'}
+        </button>
+      </div>
     </div>
   );
 }
