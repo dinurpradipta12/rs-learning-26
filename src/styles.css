@@ -7786,6 +7786,7 @@ body.dark .forum-reply-bar-inner {
 }
 .forum-reply-bar-send:hover:not(:disabled) { opacity: 0.85; transform: scale(1.06); }
 .forum-reply-bar-send:disabled { background: var(--line); color: var(--muted); cursor: default; }
+.forum-reply-bar-hint { font-size: 0.7rem; color: var(--muted); margin: 4px 2px 0; opacity: 0.7; }
 
 /* ── Reply Form (legacy, kept for reference) ─── */
 .forum-reply-form-actions {

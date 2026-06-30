@@ -9928,6 +9928,7 @@ function ForumThreadDetail({
               </button>
             </div>
           </div>
+          <p className="forum-reply-bar-hint">Enter untuk mengirim · Shift+Enter untuk baris baru</p>
         </div>
       </form>
 
