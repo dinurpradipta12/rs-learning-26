@@ -11914,8 +11914,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
   const handleDeleteUser = async (username: string) => {
     if (!window.confirm(`Hapus user "${username}"? Semua data user akan ikut terhapus.`)) return;
-    const { error } = await supabase.rpc('delete_app_user', { p_username: username });
+    const { data: delResult, error } = await supabase.rpc('delete_app_user_as_admin', { p_target_username: username, p_admin_username: session.username });
     if (error) { window.alert(`Gagal menghapus user: ${error.message}`); return; }
+    if ((delResult as { success?: boolean })?.success === false) { window.alert(`Gagal menghapus user: ${(delResult as { error?: string })?.error}`); return; }
     setUsers((prev) => prev.filter((u) => u.username !== username));
   };
 
@@ -12040,7 +12041,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     if (selectedUsernames.has(session.username)) { window.alert('Tidak bisa menghapus akun sendiri.'); return; }
     if (!window.confirm(`Hapus ${selectedUsernames.size} user yang dipilih? Semua data mereka akan ikut terhapus.`)) return;
     for (const username of selectedUsernames) {
-      await supabase.rpc('delete_app_user', { p_username: username });
+      await supabase.rpc('delete_app_user_as_admin', { p_target_username: username, p_admin_username: session.username });
     }
     setUsers((prev) => prev.filter((u) => !selectedUsernames.has(u.username)));
     setSelectedUsernames(new Set());
