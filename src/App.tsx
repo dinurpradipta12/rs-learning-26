@@ -2371,6 +2371,10 @@ function App() {
     return null;
   });
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('rs-dark-mode') === '1');
+  type NavPosition = 'left' | 'right' | 'top' | 'bottom';
+  const [navPosition, setNavPosition] = useState<NavPosition>(() => (localStorage.getItem('rs-nav-pos') as NavPosition) || 'left');
+  const [navPosOpen, setNavPosOpen] = useState(false);
+  const changeNavPos = (pos: NavPosition) => { setNavPosition(pos); localStorage.setItem('rs-nav-pos', pos); setNavPosOpen(false); };
   const [landingContent, setLandingContent] = useState<LandingContent>(defaultLandingContent);
   const [pendingTopupPkgId, setPendingTopupPkgId] = useState<string | null>(null);
 
@@ -2508,6 +2512,7 @@ function App() {
 
     const handleWindowClick = () => {
       setIsAccountMenuOpen(false);
+      setNavPosOpen(false);
     };
 
     window.addEventListener('click', handleWindowClick);
@@ -2774,7 +2779,39 @@ function App() {
 
       </header>
 
-      <aside className="sidebar-nav" aria-label="menu utama">
+      <aside className={`sidebar-nav sidebar-nav--${navPosition}`} aria-label="menu utama">
+        <div className="sidebar-nav-pos-wrap">
+          <button
+            type="button"
+            className="sidebar-nav-pos-btn"
+            title="Ubah posisi menu"
+            onClick={(e) => { e.stopPropagation(); setNavPosOpen((o) => !o); }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+            </svg>
+          </button>
+          {navPosOpen && (
+            <div className="sidebar-nav-pos-menu" onClick={(e) => e.stopPropagation()}>
+              {([
+                { pos: 'top', icon: '↑', label: 'Atas' },
+                { pos: 'bottom', icon: '↓', label: 'Bawah' },
+                { pos: 'left', icon: '←', label: 'Kiri' },
+                { pos: 'right', icon: '→', label: 'Kanan' },
+              ] as { pos: NavPosition; icon: string; label: string }[]).map(({ pos, icon, label }) => (
+                <button
+                  key={pos}
+                  type="button"
+                  className={`sidebar-nav-pos-opt${navPosition === pos ? ' active' : ''}`}
+                  onClick={() => changeNavPos(pos)}
+                >
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <nav>
           {menu.map((item) => (
             <a
