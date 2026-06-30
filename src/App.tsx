@@ -7235,7 +7235,7 @@ function LoginPage({
   const [referralMatched, setReferralMatched] = useState<ReferralCode | null>(null);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; displayName?: string; password?: string; confirmPassword?: string }>({});
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
