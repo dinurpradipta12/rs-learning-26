@@ -1080,13 +1080,23 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
-  z-index: 20;
+  z-index: 50;
   overflow: visible;
+  background: rgba(245,247,255,0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 10px 0;
+  margin-top: -10px;
+}
+body.dark .topbar {
+  background: rgba(14,17,36,0.88);
 }
 
 .topbar-nav-row {
