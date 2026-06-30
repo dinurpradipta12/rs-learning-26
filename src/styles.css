@@ -8924,6 +8924,35 @@ body.dark .admin-row-selected { background: rgba(var(--accent-rgb), 0.1) !import
   margin-top: 4px;
 }
 
+.asset-manager-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+.asset-manager-section-head:first-child { margin-top: 8px; }
+.asset-manager-section-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+.asset-manager-section-label--unlocked {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+.asset-manager-section-label--locked {
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent);
+}
+body.dark .asset-manager-section-label--unlocked { background: rgba(16,185,129,0.18); color: #34d399; }
+body.dark .asset-manager-section-label--locked { background: rgba(var(--accent-rgb),0.18); color: var(--accent); }
+.asset-manager-section-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .asset-manager-empty {
   color: var(--muted);
   font-size: 0.9rem;

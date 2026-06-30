@@ -15215,46 +15215,91 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
       ) : filtered.length === 0 ? (
         <p className="asset-manager-empty">{assets.length === 0 ? 'belum ada asset yang ditambahkan.' : 'tidak ada asset yang cocok.'}</p>
       ) : (
-        <div className="asset-manager-grid">
-          {filtered.map((asset) => (
-            <div className="asset-manager-card" key={asset.id}>
-              {asset.thumbnail_url && (
-                <div className="asset-manager-thumb">
-                  <img src={asset.thumbnail_url} alt={asset.title} />
-                  {!isUnlocked(asset) && (
-                    <div className="asset-lock-overlay">
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="asset-manager-card-top">
-                <span className="asset-manager-type-icon">{typeIcon[asset.type] ?? '📎'}</span>
-                <span className="tag">{asset.category}</span>
-                {!isUnlocked(asset) && <span className="asset-coin-badge"><CoinIcon size={12} />{asset.coin_cost ?? 10}</span>}
-              </div>
-              <strong className="asset-manager-title">{asset.title}</strong>
-              {asset.description && <p className="asset-manager-desc">{asset.description}</p>}
-              <div className="asset-manager-actions">
-                {isUnlocked(asset) ? (
-                  <a href={asset.url} target="_blank" rel="noopener noreferrer" className="button primary tiny">
-                    buka / download
-                  </a>
-                ) : (
-                  <button type="button" className="button primary tiny" onClick={() => { setUnlockTarget(asset); setUnlockError(''); }}>
-                    🔒 buka ({asset.coin_cost ?? 10} coin)
-                  </button>
-                )}
-                {canEdit && (
+        <>
+          {(() => {
+            const unlockedFiltered = filtered.filter((a) => isUnlocked(a));
+            const lockedFiltered = filtered.filter((a) => !isUnlocked(a));
+            return (
+              <>
+                {unlockedFiltered.length > 0 && (
                   <>
-                    <button type="button" className="button secondary tiny" onClick={() => openEdit(asset)}>edit</button>
-                    <button type="button" className="button danger tiny" onClick={() => setDeleteTarget(asset)}>hapus</button>
+                    <div className="asset-manager-section-head">
+                      <span className="asset-manager-section-label asset-manager-section-label--unlocked">✓ Sudah Dibuka</span>
+                      <span className="asset-manager-section-count">{unlockedFiltered.length} asset</span>
+                    </div>
+                    <div className="asset-manager-grid">
+                      {unlockedFiltered.map((asset) => (
+                        <div className="asset-manager-card" key={asset.id}>
+                          {asset.thumbnail_url && (
+                            <div className="asset-manager-thumb">
+                              <img src={asset.thumbnail_url} alt={asset.title} />
+                            </div>
+                          )}
+                          <div className="asset-manager-card-top">
+                            <span className="asset-manager-type-icon">{typeIcon[asset.type] ?? '📎'}</span>
+                            <span className="tag">{asset.category}</span>
+                          </div>
+                          <strong className="asset-manager-title">{asset.title}</strong>
+                          {asset.description && <p className="asset-manager-desc">{asset.description}</p>}
+                          <div className="asset-manager-actions">
+                            <a href={asset.url} target="_blank" rel="noopener noreferrer" className="button primary tiny">
+                              buka / download
+                            </a>
+                            {canEdit && (
+                              <>
+                                <button type="button" className="button danger tiny" onClick={() => setDeleteTarget(asset)}>hapus</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </>
                 )}
-              </div>
-            </div>
-          ))}
-        </div>
+                {lockedFiltered.length > 0 && (
+                  <>
+                    <div className="asset-manager-section-head">
+                      <span className="asset-manager-section-label asset-manager-section-label--locked">🔒 Belum Dibuka</span>
+                      <span className="asset-manager-section-count">{lockedFiltered.length} asset</span>
+                    </div>
+                    <div className="asset-manager-grid">
+                      {lockedFiltered.map((asset) => (
+                        <div className="asset-manager-card" key={asset.id}>
+                          {asset.thumbnail_url && (
+                            <div className="asset-manager-thumb">
+                              <img src={asset.thumbnail_url} alt={asset.title} />
+                              <div className="asset-lock-overlay">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                              </div>
+                            </div>
+                          )}
+                          <div className="asset-manager-card-top">
+                            <span className="asset-manager-type-icon">{typeIcon[asset.type] ?? '📎'}</span>
+                            <span className="tag">{asset.category}</span>
+                            <span className="asset-coin-badge"><CoinIcon size={12} />{asset.coin_cost ?? 10}</span>
+                          </div>
+                          <strong className="asset-manager-title">{asset.title}</strong>
+                          {asset.description && <p className="asset-manager-desc">{asset.description}</p>}
+                          <div className="asset-manager-actions">
+                            <button type="button" className="button primary tiny" onClick={() => { setUnlockTarget(asset); setUnlockError(''); }}>
+                              🔒 buka ({asset.coin_cost ?? 10} coin)
+                            </button>
+                            {canEdit && (
+                              <>
+                                <button type="button" className="button secondary tiny" onClick={() => openEdit(asset)}>edit</button>
+                                <button type="button" className="button danger tiny" onClick={() => setDeleteTarget(asset)}>hapus</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </>
       )}
 
       {modalOpen && createPortal(
