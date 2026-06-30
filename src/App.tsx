@@ -4259,6 +4259,7 @@ function DashboardSection({ session }: { session: AppSession }) {
           { data: lessonRows },
           { data: progressRows },
           { data: eventRows },
+          { data: bookingRows },
           { data: threadRows },
           { data: replyRows },
           { data: assetRows },
@@ -4273,10 +4274,18 @@ function DashboardSection({ session }: { session: AppSession }) {
           supabase.from('calendar_events')
             .select('id, title, note, event_date, start_time, end_time, category, accent, attendee_count, is_done, sort_order')
             .gte('event_date', today)
+            .lte('event_date', (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().slice(0, 10); })())
             .eq('is_done', false)
             .order('event_date', { ascending: true })
             .order('start_time', { ascending: true })
-            .limit(3),
+            .limit(20),
+          supabase.from('one_on_one_bookings')
+            .select('id, topic, preferred_date, preferred_time')
+            .eq('requester_username', session.username)
+            .eq('status', 'approved')
+            .gte('preferred_date', today)
+            .lte('preferred_date', (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().slice(0, 10); })())
+            .order('preferred_date', { ascending: true }),
           supabase.from('forum_threads').select('*').order('created_at', { ascending: false }).limit(4),
           supabase.from('forum_replies').select('*').order('created_at', { ascending: true }),
           supabase.from('shared_assets').select('*').order('sort_order', { ascending: true }).limit(4),
@@ -4324,7 +4333,26 @@ function DashboardSection({ session }: { session: AppSession }) {
         setTotalLessons(allLessons.length);
         setCompletedCount(completedKeys.size);
         setNextLesson(firstIncomplete);
-        setUpcomingEvents((eventRows ?? []).map(mapCalendarEventRow));
+        const calItems: CalendarEvent[] = (eventRows ?? []).map(mapCalendarEventRow);
+        const bookingItems: CalendarEvent[] = (bookingRows ?? []).map((b: { id: string; topic: string; preferred_date: string; preferred_time: string }) => ({
+          id: `booking-${b.id}`,
+          title: `📅 Sesi 1:1 — ${b.topic}`,
+          note: '',
+          eventDate: b.preferred_date,
+          startTime: String(b.preferred_time ?? '').slice(0, 5),
+          endTime: '',
+          category: 'booking',
+          accent: '#22c55e',
+          attendeeCount: 0,
+          isDone: false,
+          sortOrder: 0,
+        }));
+        const merged = [...calItems, ...bookingItems].sort((a, b) => {
+          const da = `${a.eventDate}T${a.startTime || '23:59'}`;
+          const db = `${b.eventDate}T${b.startTime || '23:59'}`;
+          return da.localeCompare(db);
+        });
+        setUpcomingEvents(merged);
         setRecentThreads(mappedThreads);
         setRecentAssets((assetRows ?? []) as SharedAsset[]);
         setSubscription((subRow ?? null) as UserSubscriptionRow | null);
@@ -4370,10 +4398,10 @@ function DashboardSection({ session }: { session: AppSession }) {
   const isSubActive = subStatus === 'aktif';
 
   const categoryColor: Record<string, string> = {
-    class: '#7a4fd6', review: '#a78bfa', qna: '#34d399', reminder: '#f59e0b',
+    class: '#7a4fd6', review: '#a78bfa', qna: '#34d399', reminder: '#f59e0b', booking: '#22c55e',
   };
   const categoryLabel: Record<string, string> = {
-    class: 'Kelas', review: 'Review', qna: 'QnA', reminder: 'Reminder',
+    class: 'E-Learning', review: 'Review', qna: 'QnA', reminder: 'Reminder', booking: 'Sesi 1:1',
   };
 
   const typeIcon: Record<string, string> = {
@@ -4616,34 +4644,32 @@ function DashboardSection({ session }: { session: AppSession }) {
             <p className="eyebrow">File &amp; Asset</p>
             <a className="mini-link" href="#assets">lihat semua</a>
           </div>
-          {recentAssets.length === 0 ? (
-            <p className="db-empty">Belum ada asset yang dibagikan.</p>
-          ) : (
-            <div className="db-asset-list">
-              {recentAssets.map((a) => {
-                const unlocked = a.coin_cost === 0 || dashPerks.credit_exempt || dashPerks.free_asset || dashUnlockedIds.has(a.id);
-                return unlocked ? (
+          {(() => {
+            const unlockedAssets = recentAssets.filter((a) =>
+              a.coin_cost === 0 || dashPerks.credit_exempt || dashPerks.free_asset || dashUnlockedIds.has(a.id)
+            );
+            return unlockedAssets.length === 0 ? (
+              <p className="db-empty">Belum ada asset yang kamu miliki. <a href="#assets" style={{ color: 'var(--accent)' }}>Lihat semua asset →</a></p>
+            ) : (
+              <div className="db-asset-list">
+                {unlockedAssets.map((a) => (
                   <a className="db-asset-row" key={a.id} href={a.url} target="_blank" rel="noopener noreferrer">
-                    <span className="db-asset-icon">{typeIcon[a.type] ?? '📎'}</span>
+                    <span className="db-asset-thumb">
+                      {a.thumbnail_url
+                        ? <img src={a.thumbnail_url} alt={a.title} className="db-asset-thumb-img" />
+                        : <span className="db-asset-thumb-fallback">{typeIcon[a.type] ?? '📄'}</span>
+                      }
+                    </span>
                     <div className="db-asset-info">
                       <strong>{a.title}</strong>
                       <span>{a.category}</span>
                     </div>
                     <svg className="db-asset-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                   </a>
-                ) : (
-                  <a className="db-asset-row db-asset-row--locked" key={a.id} href="#assets">
-                    <span className="db-asset-icon">{typeIcon[a.type] ?? '📎'}</span>
-                    <div className="db-asset-info">
-                      <strong>{a.title}</strong>
-                      <span>{a.category}</span>
-                    </div>
-                    <span className="db-asset-lock">🔒 {a.coin_cost > 0 ? `${a.coin_cost} Coin` : 'Terkunci'}</span>
-                  </a>
-                );
-              })}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </article>
 
       </div>
