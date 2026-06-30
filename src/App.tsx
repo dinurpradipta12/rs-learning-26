@@ -3144,7 +3144,7 @@ type ActivityItem = { id: string; type: 'transaksi' | 'booking' | 'topup' | 'use
 type TodayStats = { newUsers: number; transactions: number; bookings: number; topups: number };
 
 // ── Asset & Spending Monitor ────────────────────────────────────
-type AssetStat = { id: string; title: string; type: string; unlock_count: number };
+type AssetStat = { asset_key: string; title: string; type: string; unlock_count: number };
 type SpendUser = { username: string; display_name: string; total_coin_spent: number; total_rp_spent: number; topup_count: number };
 
 function AssetMonitor() {
@@ -3160,7 +3160,7 @@ function AssetMonitor() {
     void (async () => {
       setLoading(true);
       const [{ data: assetRows }, { data: unlockRows }, { data: txRows }, { data: topupRows }, { data: profileRows }] = await Promise.all([
-        supabase.from('lesson_assets').select('id, title, type').order('title'),
+        supabase.from('lesson_assets').select('asset_key, title, type').order('title'),
         supabase.from('user_asset_unlocks').select('asset_id, username'),
         supabase.from('credit_transactions').select('username, amount, type'),
         supabase.from('topup_requests').select('username, amount_rp, credits').eq('status', 'approved'),
@@ -3172,9 +3172,9 @@ function AssetMonitor() {
       for (const r of (unlockRows ?? []) as { asset_id: string; username: string }[]) {
         unlockCountMap[r.asset_id] = (unlockCountMap[r.asset_id] ?? 0) + 1;
       }
-      const assetStats: AssetStat[] = ((assetRows ?? []) as { id: string; title: string; type: string }[]).map((a) => ({
+      const assetStats: AssetStat[] = ((assetRows ?? []) as { asset_key: string; title: string; type: string }[]).map((a) => ({
         ...a,
-        unlock_count: unlockCountMap[a.id] ?? 0,
+        unlock_count: unlockCountMap[a.asset_key] ?? 0,
       })).sort((a, b) => b.unlock_count - a.unlock_count);
       setAssets(assetStats);
 
@@ -3267,7 +3267,7 @@ function AssetMonitor() {
             <tbody>
               {assets.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data</td></tr>}
               {assets.map((a, i) => (
-                <tr key={a.id}>
+                <tr key={a.asset_key}>
                   <td style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{i + 1}</td>
                   <td><strong>{a.title}</strong></td>
                   <td><span className="asset-type-badge">{a.type}</span></td>
