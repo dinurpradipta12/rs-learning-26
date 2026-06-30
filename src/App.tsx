@@ -10873,10 +10873,24 @@ function HelpFab({ settings }: { settings: HelpSettings }) {
             </div>
             <div className="help-video-body">
               <iframe
-                src={settings.videoUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube.com/embed/')}
+                src={(() => {
+                  const url = settings.videoUrl.trim();
+                  try {
+                    const parsed = new URL(url);
+                    let videoId = '';
+                    if (parsed.hostname === 'youtu.be') {
+                      videoId = parsed.pathname.slice(1);
+                    } else {
+                      videoId = parsed.searchParams.get('v') ?? '';
+                    }
+                    if (videoId) return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+                  } catch { /* fall through */ }
+                  return url;
+                })()}
                 title="Video Tutorial"
                 className="help-video-iframe"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
               />
             </div>
