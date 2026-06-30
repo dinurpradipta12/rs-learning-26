@@ -3164,7 +3164,7 @@ function AssetMonitor() {
         supabase.from('user_asset_unlocks').select('asset_id, username'),
         supabase.from('credit_transactions').select('username, amount, type'),
         supabase.from('topup_requests').select('username, amount_rp, credits').eq('status', 'approved'),
-        supabase.from('user_profiles').select('username, display_name'),
+        supabase.from('user_profiles').select('username, name'),
       ]);
 
       // Asset stats
@@ -3201,8 +3201,8 @@ function AssetMonitor() {
       setTotalTopupCount((topupRows ?? []).length);
 
       const nameMap: Record<string, string> = {};
-      for (const p of (profileRows ?? []) as { username: string; display_name: string }[]) {
-        nameMap[p.username] = p.display_name;
+      for (const p of (profileRows ?? []) as { username: string; name: string }[]) {
+        nameMap[p.username] = p.name;
       }
 
       const allUsernames = new Set([...Object.keys(spendMap), ...Object.keys(topupRpMap)]);
