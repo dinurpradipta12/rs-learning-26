@@ -1336,17 +1336,14 @@ async function ensureSupabaseUserProfile(session: AppSession) {
       },
       { onConflict: 'username', ignoreDuplicates: true },
     ),
-    supabase.from('user_subscriptions').upsert(
-      {
-        username: session.username,
-        status: fallback.subscriptionStatus,
-        started_at: fallback.subscriptionStart,
-        due_at: fallback.subscriptionDue,
-        payment_method: fallback.paymentMethod,
-        renewal_status: fallback.renewalStatus,
-      },
-      { onConflict: 'username', ignoreDuplicates: true },
-    ),
+    supabase.rpc('upsert_user_subscription', {
+      p_username: session.username,
+      p_status: fallback.subscriptionStatus,
+      p_started_at: fallback.subscriptionStart ?? null,
+      p_due_at: fallback.subscriptionDue ?? null,
+      p_payment_method: fallback.paymentMethod ?? null,
+      p_renewal_status: fallback.renewalStatus ?? null,
+    }),
   ]);
 }
 
