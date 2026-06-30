@@ -9709,7 +9709,7 @@ function ForumThreadDetail({
     if (!trimmedBody) return;
 
     const newReply: ForumReply = {
-      id: `reply-${Date.now()}`,
+      id: crypto.randomUUID(),
       authorUsername: session.username,
       authorDisplayName: displayName,
       body: trimmedBody,
