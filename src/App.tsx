@@ -10893,7 +10893,7 @@ function BannerEditor() {
           <div className="banner-editor-icon">🖼️</div>
           <div>
             <h3 className="banner-editor-title">Banner Slider Dashboard</h3>
-            <p className="banner-editor-hint">Tampil di atas halaman dashboard · Ukuran disarankan <strong>1200 × 360 px</strong> (rasio 5:1.5)</p>
+            <p className="banner-editor-hint">Tampil di atas halaman dashboard · Ukuran disarankan <strong>1200 × 260 px</strong> (rasio 1200:260)</p>
           </div>
         </div>
         <div className="banner-editor-toggle-wrap">

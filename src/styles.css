@@ -12696,7 +12696,7 @@ body.dark .tg-link-code-box { background: rgba(255,255,255,0.04); }
 /* ── Dashboard Banner Slider ─────────────────────────────────────────────────── */
 .db-banner-wrap { width: 100%; margin-bottom: 20px; border-radius: 16px; overflow: hidden; }
 .db-banner-wrap > a { display: block; }
-.db-banner-slide { position: relative; width: 100%; aspect-ratio: 5 / 1.5; overflow: hidden; border-radius: 16px; cursor: default; }
+.db-banner-slide { position: relative; width: 100%; aspect-ratio: 1200 / 260; overflow: hidden; border-radius: 16px; cursor: default; }
 .db-banner-wrap > a .db-banner-slide { cursor: pointer; }
 .db-banner-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.3s ease; }
 .db-banner-wrap > a .db-banner-slide:hover .db-banner-img { transform: scale(1.02); }
