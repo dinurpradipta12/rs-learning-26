@@ -741,7 +741,7 @@ p {
   position: relative;
   overflow: hidden;
   min-height: 100vh;
-  padding: 28px clamp(18px, 2vw, 32px) 28px 80px;
+  padding: 88px clamp(18px, 2vw, 32px) 28px 80px;
 }
 
 .auth-shell {
@@ -1080,23 +1080,19 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
 }
 
 .topbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 80px;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
   z-index: 50;
   overflow: visible;
-  background: rgba(245,247,255,0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  padding: 10px 0;
-  margin-top: -10px;
-}
-body.dark .topbar {
-  background: rgba(14,17,36,0.88);
+  background: var(--bg);
+  padding: 16px clamp(18px, 2vw, 32px);
+  margin: 0;
 }
 
 .topbar-nav-row {
