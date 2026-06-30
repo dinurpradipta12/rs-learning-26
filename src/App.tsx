@@ -8,6 +8,46 @@ import ruangCoinImg from './ruang-coin.png';
 const TG_TOKEN = '8366984234:AAHjA8l7QqvVNtc7kajGwaTwkzAy4t52Sko';
 const TG_CHAT  = '8830130248';
 
+async function scheduleEventReminders(username: string, ev: { id: string; title: string; date: string; time?: string; link?: string }): Promise<void> {
+  // Get user's telegram chat id
+  const { data: userRow } = await supabase.from('app_users').select('telegram_chat_id').eq('username', username).maybeSingle();
+  const chatId = (userRow as { telegram_chat_id?: string } | null)?.telegram_chat_id;
+  if (!chatId) return; // user hasn't linked Telegram — skip
+
+  // Build event datetime (combine date + time, treat as WIB = UTC+7)
+  const [year, month, day] = ev.date.split('-').map(Number);
+  const [hour = 0, minute = 0] = (ev.time ?? '00:00').split(':').map(Number);
+  // Event local time in WIB (UTC+7): subtract 7h to get UTC
+  const eventUtc = new Date(Date.UTC(year, month - 1, day, hour - 7, minute));
+
+  const reminders = [
+    { type: 'h1',  scheduled_at: new Date(eventUtc.getTime() - 24 * 60 * 60 * 1000).toISOString() },
+    { type: 'h3',  scheduled_at: new Date(eventUtc.getTime() -  3 * 60 * 60 * 1000).toISOString() },
+    { type: 'h30', scheduled_at: new Date(eventUtc.getTime() - 30 * 60 * 1000).toISOString() },
+  ];
+
+  // Only schedule reminders that are still in the future
+  const now = new Date().toISOString();
+  const rows = reminders
+    .filter((r) => r.scheduled_at > now)
+    .map((r) => ({
+      event_id: ev.id,
+      username,
+      telegram_chat_id: chatId,
+      event_title: ev.title,
+      event_date: ev.date,
+      event_time: ev.time ?? null,
+      event_link: ev.link ?? null,
+      reminder_type: r.type,
+      scheduled_at: r.scheduled_at,
+    }));
+
+  if (rows.length > 0) {
+    // Upsert — prevent duplicate rows if user re-joins
+    await supabase.from('event_reminders').upsert(rows, { onConflict: 'event_id,username,reminder_type' });
+  }
+}
+
 async function sendTelegram(text: string, buttons?: Array<Array<{ text: string; callback_data: string }>>): Promise<void> {
   try {
     const body: Record<string, unknown> = { chat_id: TG_CHAT, text, parse_mode: 'HTML' };
@@ -14481,6 +14521,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     localStorage.setItem(joinedKey(joinTarget.id), '1');
     setJoinedIds((prev) => new Set([...prev, joinTarget.id]));
     void sendTelegram(`🎫 <b>User Baru Join Event</b>\n\n👤 @${session.username}\n🎯 Event: ${joinTarget.title}\n🗓 Tanggal: ${joinTarget.date}${joinTarget.time ? ` pukul ${joinTarget.time.slice(0, 5)}` : ''}\n💰 Biaya: ${joinTarget.coinCost === 0 ? 'Gratis' : `${joinTarget.coinCost} Ruang Coin`}`);
+    // Schedule Telegram reminders for user (H-1, H-3 jam, H-30 menit)
+    void scheduleEventReminders(session.username, joinTarget);
     setJoinTarget(null);
     setJoinLoading(false);
   };
