@@ -9654,7 +9654,9 @@ function ForumThreadDetail({
 
   const handleEditSave = () => {
     if (!editTitle.trim()) return;
-    onUpdate({ ...thread, title: editTitle.trim(), body: editBody.trim() });
+    const updated = { ...thread, title: editTitle.trim(), body: editBody.trim() };
+    onUpdate(updated);
+    void upsertForumThread(updated);
     setIsEditing(false);
   };
   const isQnaThread = thread.category === 'qna session';
@@ -10254,11 +10256,11 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
     return matchCat && matchSearch;
   });
 
-  const updateThread = (updated: ForumThread) => {
+  const updateThread = (updated: ForumThread, updateThreadFields = false) => {
     setForumThreads((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     setSelectedThreadId(updated.id);
-    // Sync ke Supabase: update thread + upsert semua reply baru
-    void upsertForumThread(updated);
+    // Only upsert thread row when thread fields changed (edit), not on reply/upvote
+    if (updateThreadFields) void upsertForumThread(updated);
     void Promise.all(updated.replies.map((r) => upsertForumReply(r, updated.id))).catch((err: unknown) => {
       alert(`Gagal menyimpan balasan: ${err instanceof Error ? err.message : String(err)}`);
     });
