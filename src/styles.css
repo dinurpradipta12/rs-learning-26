@@ -1097,7 +1097,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
     radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.2), transparent 30%),
     radial-gradient(circle at top right, rgba(var(--accent-light-rgb), 0.22), transparent 28%),
     linear-gradient(180deg, #fcfaff 0%, #fcfaff 100%);
-  padding: 16px clamp(18px, 2vw, 32px);
+  padding: 16px clamp(18px, 2vw, 32px) 16px 84px;
   margin: 0;
 }
 
