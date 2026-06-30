@@ -8634,9 +8634,11 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                 <span>{popupEvent.event.note}</span>
               </div>
             )}
-            {canManage && !popupEvent.event.id.startsWith('booking-') && (
+            {canManage && (!popupEvent.event.id.startsWith('booking-') || canManage) && (
               <div className="calendar-event-popup-actions">
-                <button type="button" className="popup-action-edit" onClick={() => openEditEvent(popupEvent.event)}>edit</button>
+                {!popupEvent.event.id.startsWith('booking-') && (
+                  <button type="button" className="popup-action-edit" onClick={() => openEditEvent(popupEvent.event)}>edit</button>
+                )}
                 <button type="button" className="popup-action-delete" onClick={() => openDeleteConfirm(popupEvent.event)}>hapus</button>
               </div>
             )}
