@@ -188,11 +188,6 @@ function useTelegramPolling(active: boolean) {
       try {
         const url = `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${offsetRef.current}&timeout=0`;
         const res = await fetch(url);
-        if (res.status === 409) {
-          // Another instance is polling; back off and retry
-          if (!cancelled) setTimeout(poll, 8000);
-          return;
-        }
         type TgUpdate = {
           update_id: number;
           message?: { text?: string; chat?: { id: number } };
@@ -222,7 +217,11 @@ function useTelegramPolling(active: boolean) {
       } catch { /* silent */ }
       if (!cancelled) setTimeout(poll, 4000);
     };
-    void poll();
+    // Delete any active webhook first, then start polling
+    void (async () => {
+      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_updates=true`, { method: 'POST' });
+      if (!cancelled) void poll();
+    })();
     return () => { cancelled = true; tgPollingActive = false; };
   }, [active]);
 }
