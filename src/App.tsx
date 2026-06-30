@@ -9708,7 +9708,8 @@ function ForumThreadDetail({
   const submitReply = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedBody = replyBody.trim();
-    if (!trimmedBody) return;
+    if (!trimmedBody) { alert('DEBUG: replyBody kosong'); return; }
+    alert(`DEBUG: submit dipanggil, user=${session.username}, body=${trimmedBody.slice(0,30)}`);
 
     const newReply: ForumReply = {
       id: crypto.randomUUID(),
