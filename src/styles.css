@@ -3895,8 +3895,8 @@ textarea.aem-input {
   padding: 10px 24px;
   border: 0;
   border-radius: 10px;
-  background: #3d1a8a;
-  color: #ede5ff;
+  background: var(--accent);
+  color: #fff;
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
@@ -3904,7 +3904,7 @@ textarea.aem-input {
   transition: background 0.15s;
 }
 
-.aem-btn-submit:hover:not(:disabled) { background: #4e22a0; }
+.aem-btn-submit:hover:not(:disabled) { filter: brightness(1.1); }
 .aem-btn-submit:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* legacy classes kept for delete modal */
@@ -3946,7 +3946,7 @@ textarea.aem-input {
 .mini-month-card,
 .calendar-check-card {
   border-radius: 28px;
-  background: linear-gradient(145deg, rgba(238, 228, 255, 0.92), rgba(202, 178, 255, 0.78));
+  background: linear-gradient(145deg, rgba(var(--accent-light-rgb), 0.55), rgba(var(--accent-rgb), 0.28));
   color: #ffffff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.44), 0 18px 42px rgba(var(--accent-rgb), 0.12);
 }
@@ -3967,7 +3967,7 @@ textarea.aem-input {
 
 .mini-month-head strong,
 .calendar-board-head strong {
-  color: #4d3673;
+  color: var(--accent);
   font-size: 1.3rem;
   letter-spacing: -0.035em;
 }
@@ -3979,7 +3979,7 @@ textarea.aem-input {
   border: 0;
   border-radius: 999px;
   background: rgba(var(--accent-rgb), 0.12);
-  color: #6e4ab8;
+  color: var(--accent);
   font-weight: 800;
 }
 
@@ -3992,7 +3992,7 @@ textarea.aem-input {
 }
 
 .mini-month-day {
-  color: #6c5a8d;
+  color: rgba(var(--accent-rgb), 0.7);
   font-size: 0.76rem;
   font-weight: 700;
 }
@@ -4003,7 +4003,7 @@ textarea.aem-input {
   height: 28px;
   place-items: center;
   border-radius: 999px;
-  color: #6c5a8d;
+  color: rgba(var(--accent-rgb), 0.8);
   font-size: 0.8rem;
   justify-self: center;
 }
@@ -4097,7 +4097,7 @@ textarea.aem-input {
 }
 
 .calendar-checklist-input:focus {
-  border-color: #7a4fd6;
+  border-color: var(--accent);
 }
 
 .calendar-checklist-add-btn {
@@ -4105,7 +4105,7 @@ textarea.aem-input {
   height: 32px;
   border-radius: 8px;
   border: none;
-  background: #7a4fd6;
+  background: var(--accent);
   color: #fff;
   font-size: 1.2rem;
   cursor: pointer;
@@ -4115,7 +4115,7 @@ textarea.aem-input {
 }
 
 .calendar-checklist-add-btn:hover {
-  background: #6b3ec7;
+  filter: brightness(1.1);
 }
 
 .calendar-checklist-empty {
@@ -4156,8 +4156,8 @@ textarea.aem-input {
 }
 
 .calendar-check-tick.checked {
-  background: #7a4fd6;
-  border-color: #7a4fd6;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .calendar-check-list {
@@ -4194,8 +4194,8 @@ textarea.aem-input {
 }
 
 .calendar-check-item > span.checked {
-  background: #7a4fd6;
-  border-color: #7a4fd6;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .calendar-check-item-meta {
@@ -4277,7 +4277,7 @@ textarea.aem-input {
 }
 
 .calendar-event-popup-dot.lime { background: #f5d000; }
-.calendar-event-popup-dot.purple { background: #7a4fd6; }
+.calendar-event-popup-dot.purple { background: var(--accent); }
 
 .calendar-event-popup-actions {
   display: flex;
@@ -4301,13 +4301,13 @@ textarea.aem-input {
 }
 
 .popup-action-edit {
-  background: #f3eeff;
-  border-color: #e0d4ff;
-  color: #5a2fc2;
+  background: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.2);
+  color: var(--accent);
 }
 
 .popup-action-edit:hover {
-  background: #e9e0ff;
+  background: rgba(var(--accent-rgb), 0.15);
 }
 
 .popup-action-delete {
@@ -4397,7 +4397,7 @@ textarea.aem-input {
 
 .calendar-board-head {
   padding: 24px 28px;
-  background: linear-gradient(135deg, rgba(232, 220, 255, 0.96), rgba(196, 174, 245, 0.82));
+  background: linear-gradient(135deg, rgba(var(--accent-light-rgb), 0.45), rgba(var(--accent-rgb), 0.18));
 }
 
 .calendar-board-head div {
@@ -4410,7 +4410,7 @@ textarea.aem-input {
   width: auto;
   padding: 0 16px;
   height: 32px;
-  color: #6e4ab8;
+  color: var(--accent);
   background: rgba(var(--accent-rgb), 0.12);
   font-size: 0.85rem;
   font-weight: 700;
