@@ -6612,6 +6612,44 @@ body.dark .cooldown-note { color: #f4a462; background: rgba(200,100,40,0.12); }
   letter-spacing: 0.01em;
 }
 
+/* QNA Session thread card */
+.forum-thread-card--qna {
+  border-color: #f59e0b55;
+  background: #f59e0b08;
+}
+.forum-thread-card--qna:hover {
+  background: #f59e0b12;
+  border-color: #f59e0b88;
+}
+body.dark .forum-thread-card--qna {
+  border-color: #f59e0b44;
+  background: #f59e0b0a;
+}
+.forum-qna-banner {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  border-radius: 6px;
+  padding: 5px 10px;
+  margin-bottom: 10px;
+  letter-spacing: 0.01em;
+}
+body.dark .forum-qna-banner {
+  background: #78350f33;
+  color: #fbbf24;
+}
+.forum-filter-btn--qna {
+  border-color: #f59e0b55 !important;
+  color: #b45309;
+}
+.forum-filter-btn--qna.active {
+  background: #f59e0b !important;
+  color: #fff !important;
+  border-color: #f59e0b !important;
+}
+body.dark .forum-filter-btn--qna { color: #fbbf24; }
+
 .forum-thread-title {
   font-size: 1rem;
   font-weight: 700;

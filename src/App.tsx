@@ -8603,6 +8603,13 @@ const forumCategories = [
   'mindset & growth',
   'lainnya',
 ];
+const forumAdminCategories = ['qna session'];
+const forumAllCategories = (isAdmin: boolean) =>
+  isAdmin ? [...forumCategories, ...forumAdminCategories] : forumCategories;
+
+const threadCategoryMeta: Record<string, { label: string; color: string; emoji: string }> = {
+  'qna session': { label: 'QNA Session', color: '#f59e0b', emoji: '🎙️' },
+};
 
 type ForumParticipant = { username: string; displayName: string; avatarUrl?: string };
 
@@ -8657,14 +8664,25 @@ function ForumThreadCard({
     ? (currentUser.avatarUrl || forumAvatarSvg(currentUser.displayName, currentUser.username))
     : (userAvatarMap[thread.authorUsername] || forumAvatarSvg(thread.authorDisplayName, thread.authorUsername));
 
+  const isQnaSession = thread.category === 'qna session';
+  const catMeta = threadCategoryMeta[thread.category];
+
   return (
-    <article className="forum-thread-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+    <article className={`forum-thread-card${isQnaSession ? ' forum-thread-card--qna' : ''}`} onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+      {isQnaSession && (
+        <div className="forum-qna-banner">🎙️ QNA Session — tanya jawab langsung dengan admin</div>
+      )}
       <div className="forum-thread-card-author">
         <img src={authorAvatar} alt={thread.authorDisplayName} className="forum-avatar-xs" />
         <span className="forum-thread-author-name">{thread.authorDisplayName}</span>
         <span className="forum-dot">·</span>
         <span className="forum-thread-card-time">{timeAgo(thread.createdAt)}</span>
-        <span className="forum-category-tag" style={{ marginLeft: 'auto' }}>{thread.category}</span>
+        <span
+          className="forum-category-tag"
+          style={{ marginLeft: 'auto', ...(catMeta ? { background: catMeta.color + '22', color: catMeta.color, borderColor: catMeta.color + '55' } : {}) }}
+        >
+          {catMeta ? `${catMeta.emoji} ${catMeta.label}` : thread.category}
+        </span>
       </div>
       <h3 className="forum-thread-title">{thread.title}</h3>
       <p className="forum-thread-excerpt">{thread.body.slice(0, 120)}{thread.body.length > 120 ? '…' : ''}</p>
@@ -9101,6 +9119,8 @@ function ForumComposer({
   onInsufficientCredits?: (feature: string, needed: number, balance: number) => void;
   onRequestConfirm?: (ctx: CreditConfirmContext) => void;
 }) {
+  const isAdmin = session.role === 'admin' || session.role === 'developer';
+  const availableCategories = forumAllCategories(isAdmin);
   const [body, setBody] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(forumCategories[0]);
@@ -9119,7 +9139,8 @@ function ForumComposer({
 
   const doPost = async () => {
     setIsPosting(true);
-    const cost = featureCosts.post_thread;
+    const isQnaSession = category === 'qna session';
+    const cost = isQnaSession ? 0 : featureCosts.post_thread;
     if (cost > 0) {
       const result = await deductCredits(session.username, cost, `Post thread: ${title.trim()}`, 'post_thread');
       if (!result.ok) {
@@ -9142,13 +9163,33 @@ function ForumComposer({
       replies: [],
     };
     onPost(newThread);
-    void sendTelegram(
-      `💬 <b>Thread Baru di Forum</b>\n\n` +
-      `👤 ${displayName} (@${session.username})\n` +
-      `📂 Kategori: ${category}\n` +
-      `📌 Judul: <b>${title.trim()}</b>\n` +
-      (body.trim() ? `\n${body.trim().slice(0, 200)}${body.trim().length > 200 ? '…' : ''}` : '')
-    );
+    if (isQnaSession) {
+      // Silent broadcast to all members with linked Telegram
+      void (async () => {
+        const [{ data: users }, token] = await Promise.all([
+          supabase.from('app_users').select('telegram_chat_id').not('telegram_chat_id', 'is', null).neq('telegram_chat_id', ''),
+          getStudentBotToken(),
+        ]);
+        if (!token || !users) return;
+        const broadcastMsg =
+          `🎙️ <b>QNA Session Baru!</b>\n\n` +
+          `📌 <b>${title.trim()}</b>\n\n` +
+          (body.trim() ? `${body.trim().slice(0, 300)}${body.trim().length > 300 ? '…' : ''}\n\n` : '') +
+          `💬 Buka aplikasi untuk ikut tanya jawab!`;
+        for (const u of users) {
+          const chatId = (u as { telegram_chat_id: string }).telegram_chat_id;
+          if (chatId) await sendStudentBot(chatId, broadcastMsg, token);
+        }
+      })();
+    } else {
+      void sendTelegram(
+        `💬 <b>Thread Baru di Forum</b>\n\n` +
+        `👤 ${displayName} (@${session.username})\n` +
+        `📂 Kategori: ${category}\n` +
+        `📌 Judul: <b>${title.trim()}</b>\n` +
+        (body.trim() ? `\n${body.trim().slice(0, 200)}${body.trim().length > 200 ? '…' : ''}` : '')
+      );
+    }
     setTitle('');
     setBody('');
     setImageUrl('');
@@ -9160,8 +9201,9 @@ function ForumComposer({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!title.trim() || !body.trim()) return;
-    const cost = featureCosts.post_thread;
-    const threadFree = userPerks.credit_exempt || userPerks.free_thread;
+    const isQnaSession = category === 'qna session';
+    const cost = isQnaSession ? 0 : featureCosts.post_thread;
+    const threadFree = isQnaSession || userPerks.credit_exempt || userPerks.free_thread;
     if (cost > 0 && !threadFree && onRequestConfirm) {
       onRequestConfirm({
         feature: 'Post Thread / Diskusi',
@@ -9190,8 +9232,8 @@ function ForumComposer({
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              {forumCategories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+              {availableCategories.map((cat) => (
+                <option key={cat} value={cat}>{cat === 'qna session' ? '🎙️ QNA Session' : cat}</option>
               ))}
             </select>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="forum-composer-chevron">
@@ -9254,7 +9296,7 @@ function ForumComposer({
           </span>
         </div>
         <div className="forum-composer-post-row">
-          {featureCosts.post_thread > 0 && !userPerks.credit_exempt && !userPerks.free_thread && (
+          {featureCosts.post_thread > 0 && !userPerks.credit_exempt && !userPerks.free_thread && category !== 'qna session' && (
             <span className="forum-composer-credit-cost">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               {featureCosts.post_thread} Ruang Coin
@@ -9440,14 +9482,14 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
       <ForumComposer session={session} avatarUrl={composerAvatarUrl} displayName={composerDisplayName} jobTitle={composerJobTitle} onPost={handlePost} featureCosts={featureCosts} userPerks={userPerks} onCreditChange={onCreditChange} onInsufficientCredits={onInsufficientCredits} onRequestConfirm={onRequestConfirm} />
 
       <div className="forum-category-filters">
-        {['semua', ...forumCategories].map((cat) => (
+        {['semua', ...forumCategories, ...forumAdminCategories].map((cat) => (
           <button
             key={cat}
             type="button"
-            className={`forum-filter-btn${filterCategory === cat ? ' active' : ''}`}
+            className={`forum-filter-btn${filterCategory === cat ? ' active' : ''}${cat === 'qna session' ? ' forum-filter-btn--qna' : ''}`}
             onClick={() => setFilterCategory(cat)}
           >
-            {cat}
+            {cat === 'qna session' ? '🎙️ QNA Session' : cat}
           </button>
         ))}
       </div>
