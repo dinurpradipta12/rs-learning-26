@@ -9305,7 +9305,7 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
 .db-layout {
   display: flex;
   gap: 20px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 .db-main {
   flex: 1;
@@ -9317,13 +9317,14 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
 .db-sidebar {
   width: 270px;
   flex-shrink: 0;
-  position: sticky;
-  top: 80px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Profile card ── */
 .db-profile-card {
   width: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
