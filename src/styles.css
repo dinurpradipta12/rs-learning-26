@@ -1090,7 +1090,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   gap: 16px;
   z-index: 50;
   overflow: visible;
-  background: var(--bg);
+  background: transparent;
   padding: 16px clamp(18px, 2vw, 32px);
   margin: 0;
 }
