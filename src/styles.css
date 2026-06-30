@@ -744,7 +744,7 @@ p {
   position: relative;
   overflow: hidden;
   min-height: 100vh;
-  padding: 100px clamp(18px, 2vw, 32px) 28px 84px;
+  padding: 100px clamp(18px, 2vw, 32px) 28px clamp(18px, 2vw, 32px);
 }
 
 .auth-shell {
@@ -1097,7 +1097,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
     radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.2), transparent 30%),
     radial-gradient(circle at top right, rgba(var(--accent-light-rgb), 0.22), transparent 28%),
     linear-gradient(180deg, #fcfaff 0%, #fcfaff 100%);
-  padding: 16px clamp(18px, 2vw, 32px) 16px 84px;
+  padding: 16px clamp(18px, 2vw, 32px);
   margin: 0;
 }
 
