@@ -3144,7 +3144,7 @@ type ActivityItem = { id: string; type: 'transaksi' | 'booking' | 'topup' | 'use
 type TodayStats = { newUsers: number; transactions: number; bookings: number; topups: number };
 
 // ── Asset & Spending Monitor ────────────────────────────────────
-type AssetStat = { id: string; title: string; type: string; coin_cost: number; unlock_count: number; coin_earned: number };
+type AssetStat = { id: string; title: string; type: string; unlock_count: number };
 type SpendUser = { username: string; display_name: string; total_coin_spent: number; total_rp_spent: number; topup_count: number };
 
 function AssetMonitor() {
@@ -3160,7 +3160,7 @@ function AssetMonitor() {
     void (async () => {
       setLoading(true);
       const [{ data: assetRows }, { data: unlockRows }, { data: txRows }, { data: topupRows }, { data: profileRows }] = await Promise.all([
-        supabase.from('assets').select('id, title, type, coin_cost').order('title'),
+        supabase.from('lesson_assets').select('id, title, type').order('title'),
         supabase.from('user_asset_unlocks').select('asset_id, username'),
         supabase.from('credit_transactions').select('username, amount, type'),
         supabase.from('topup_requests').select('username, amount_rp, credits').eq('status', 'approved'),
@@ -3172,10 +3172,9 @@ function AssetMonitor() {
       for (const r of (unlockRows ?? []) as { asset_id: string; username: string }[]) {
         unlockCountMap[r.asset_id] = (unlockCountMap[r.asset_id] ?? 0) + 1;
       }
-      const assetStats: AssetStat[] = ((assetRows ?? []) as { id: string; title: string; type: string; coin_cost: number }[]).map((a) => ({
+      const assetStats: AssetStat[] = ((assetRows ?? []) as { id: string; title: string; type: string }[]).map((a) => ({
         ...a,
         unlock_count: unlockCountMap[a.id] ?? 0,
-        coin_earned: (unlockCountMap[a.id] ?? 0) * a.coin_cost,
       })).sort((a, b) => b.unlock_count - a.unlock_count);
       setAssets(assetStats);
 
@@ -3262,24 +3261,18 @@ function AssetMonitor() {
                 <th>#</th>
                 <th>Judul Asset</th>
                 <th>Tipe</th>
-                <th>Harga (Coin)</th>
                 <th>Total Unlock</th>
-                <th>Coin Diperoleh</th>
               </tr>
             </thead>
             <tbody>
-              {assets.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data</td></tr>}
+              {assets.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data</td></tr>}
               {assets.map((a, i) => (
                 <tr key={a.id}>
                   <td style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{i + 1}</td>
                   <td><strong>{a.title}</strong></td>
                   <td><span className="asset-type-badge">{a.type}</span></td>
-                  <td>{a.coin_cost === 0 ? <span style={{ color: 'var(--muted)' }}>Gratis</span> : `${a.coin_cost} coin`}</td>
                   <td>
                     <span className={`amc-count${a.unlock_count > 0 ? ' has-data' : ''}`}>{a.unlock_count}×</span>
-                  </td>
-                  <td style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                    {a.coin_earned > 0 ? `${a.coin_earned.toLocaleString('id-ID')} coin` : '—'}
                   </td>
                 </tr>
               ))}
