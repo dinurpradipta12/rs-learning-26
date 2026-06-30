@@ -1087,6 +1087,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   top: 0;
   left: 0;
   right: 0;
+  max-width: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
