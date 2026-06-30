@@ -15247,6 +15247,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
                             </a>
                             {canEdit && (
                               <>
+                                <button type="button" className="button secondary tiny" onClick={() => openEdit(asset)}>edit</button>
                                 <button type="button" className="button danger tiny" onClick={() => setDeleteTarget(asset)}>hapus</button>
                               </>
                             )}
