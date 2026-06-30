@@ -782,6 +782,7 @@ async function fetchForumThreads(): Promise<ForumThread[]> {
       createdAt: r.created_at,
       upvotes: r.upvotes,
       parentReplyId: r.parent_reply_id ?? undefined,
+      answered: r.answered ?? false,
     };
     if (!replyMap[r.thread_id]) replyMap[r.thread_id] = [];
     replyMap[r.thread_id].push(reply);
@@ -826,6 +827,7 @@ async function upsertForumReply(reply: ForumReply, threadId: string): Promise<vo
     upvotes: reply.upvotes,
     parent_reply_id: reply.parentReplyId ?? null,
     created_at: reply.createdAt,
+    answered: reply.answered ?? false,
   });
 }
 
@@ -3989,7 +3991,7 @@ function DashboardSection({ session }: { session: AppSession }) {
         // build threads with replies
         const replyMap: Record<string, ForumReply[]> = {};
         for (const r of (replyRows ?? [])) {
-          const fr: ForumReply = { id: r.id, authorUsername: r.author_username, authorDisplayName: r.author_display_name, body: r.body, imageUrl: r.image_url ?? undefined, createdAt: r.created_at, upvotes: r.upvotes, parentReplyId: r.parent_reply_id ?? undefined };
+          const fr: ForumReply = { id: r.id, authorUsername: r.author_username, authorDisplayName: r.author_display_name, body: r.body, imageUrl: r.image_url ?? undefined, createdAt: r.created_at, upvotes: r.upvotes, parentReplyId: r.parent_reply_id ?? undefined, answered: r.answered ?? false };
           if (!replyMap[r.thread_id]) replyMap[r.thread_id] = [];
           replyMap[r.thread_id].push(fr);
         }
@@ -8788,9 +8790,8 @@ function ForumReplyItem({
             type="button"
             className={`forum-action-btn forum-answered-btn${reply.answered ? ' forum-answered-btn--active' : ''}`}
             onClick={() => onMarkAnswered(reply.id)}
-            title={reply.answered ? 'Batalkan terjawab' : 'Tandai sebagai terjawab'}
           >
-            {reply.answered ? '✓ Terjawab' : '✓ Tandai Terjawab'}
+            {reply.answered ? '✓ Batalkan' : '✓ Tandai Terjawab'}
           </button>
         )}
       </div>
