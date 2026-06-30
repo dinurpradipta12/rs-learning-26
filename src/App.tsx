@@ -1032,42 +1032,21 @@ function useBadgeTier(username: string): BadgeTier {
   const [tier, setTier] = useState<BadgeTier>(null);
   useEffect(() => {
     if (!username) return;
-    const now = new Date();
-    const weekAgo  = new Date(now.getTime() - 7  * 86400_000).toISOString();
-    const monthAgo = new Date(now.getTime() - 30 * 86400_000).toISOString();
-    void Promise.all([
-      supabase.from('topup_requests').select('amount_rp').eq('username', username).eq('status', 'approved').gte('created_at', weekAgo),
-      supabase.from('topup_requests').select('amount_rp').eq('username', username).eq('status', 'approved').gte('created_at', monthAgo),
-    ]).then(([{ data: wRows }, { data: mRows }]) => {
-      const weeklyRp  = (wRows ?? []).reduce((s: number, r: { amount_rp: number }) => s + (r.amount_rp ?? 0), 0);
-      const monthlyRp = (mRows ?? []).reduce((s: number, r: { amount_rp: number }) => s + (r.amount_rp ?? 0), 0);
-      setTier(calcBadgeTier(weeklyRp, monthlyRp));
+    void supabase.rpc('get_user_badge_tiers').then(({ data }) => {
+      const rows = (data ?? []) as { username: string; tier: BadgeTier }[];
+      const found = rows.find((r) => r.username === username);
+      setTier(found?.tier ?? null);
     });
   }, [username]);
   return tier;
 }
 
 // ── Global badge map (admin/forum views) ─────────────────────
+// Uses RPC to avoid exposing raw topup amounts through RLS
 async function fetchAllBadgeTiers(): Promise<Record<string, BadgeTier>> {
-  const now = new Date();
-  const weekAgo  = new Date(now.getTime() - 7  * 86400_000).toISOString();
-  const monthAgo = new Date(now.getTime() - 30 * 86400_000).toISOString();
-  const { data } = await supabase
-    .from('topup_requests')
-    .select('username, amount_rp, created_at')
-    .eq('status', 'approved')
-    .gte('created_at', monthAgo);
-  const weeklyMap:  Record<string, number> = {};
-  const monthlyMap: Record<string, number> = {};
-  for (const r of (data ?? []) as { username: string; amount_rp: number; created_at: string }[]) {
-    const u = r.username;
-    const amt = r.amount_rp ?? 0;
-    monthlyMap[u] = (monthlyMap[u] ?? 0) + amt;
-    if (r.created_at >= weekAgo) weeklyMap[u] = (weeklyMap[u] ?? 0) + amt;
-  }
+  const { data } = await supabase.rpc('get_user_badge_tiers') as { data: { username: string; tier: BadgeTier }[] | null };
   const result: Record<string, BadgeTier> = {};
-  const allUsers = new Set([...Object.keys(weeklyMap), ...Object.keys(monthlyMap)]);
-  for (const u of allUsers) result[u] = calcBadgeTier(weeklyMap[u] ?? 0, monthlyMap[u] ?? 0);
+  for (const row of (data ?? [])) result[row.username] = row.tier;
   return result;
 }
 
@@ -4690,7 +4669,7 @@ function DashboardSection({ session }: { session: AppSession }) {
       <section className="db-hero card">
         <div className="db-hero-left">
           <p className="eyebrow">{greeting}</p>
-          <h2 className="db-hero-name">{profileName || session.displayName} 👋 <BadgeIcon tier={ownBadge} size={22} /></h2>
+          <h2 className="db-hero-name"><BadgeIcon tier={ownBadge} size={22} />{profileName || session.displayName} 👋</h2>
           <p className="db-hero-sub">
             {completedCount === 0
               ? 'Mulai perjalanan belajarmu sekarang.'
