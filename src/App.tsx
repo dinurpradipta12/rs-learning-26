@@ -173,24 +173,24 @@ async function processTelegramCommand(text: string): Promise<string | null> {
   return `❓ Command tidak dikenal. Ketik /help untuk daftar command.`;
 }
 
+// Singleton guard: only one polling loop allowed across all React renders/mounts
+let tgPollingActive = false;
+
 function useTelegramPolling(active: boolean) {
   const offsetRef = useRef(0);
   useEffect(() => {
     if (!active) return;
+    // Prevent duplicate polling instances (React StrictMode double-invoke)
+    if (tgPollingActive) return;
+    tgPollingActive = true;
     let cancelled = false;
-    const start = async () => {
-      // Remove any existing webhook so getUpdates polling can work (409 = webhook conflict)
-      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_updates=true`, { method: 'POST' });
-      if (!cancelled) void poll();
-    };
     const poll = async () => {
       try {
         const url = `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${offsetRef.current}&timeout=0`;
         const res = await fetch(url);
-        // If webhook still active, try deleting it again and back off
         if (res.status === 409) {
-          await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_updates=true`, { method: 'POST' });
-          if (!cancelled) setTimeout(poll, 5000);
+          // Another instance is polling; back off and retry
+          if (!cancelled) setTimeout(poll, 8000);
           return;
         }
         type TgUpdate = {
@@ -222,8 +222,8 @@ function useTelegramPolling(active: boolean) {
       } catch { /* silent */ }
       if (!cancelled) setTimeout(poll, 4000);
     };
-    void start();
-    return () => { cancelled = true; };
+    void poll();
+    return () => { cancelled = true; tgPollingActive = false; };
   }, [active]);
 }
 
