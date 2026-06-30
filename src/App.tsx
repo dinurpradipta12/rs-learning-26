@@ -178,10 +178,21 @@ function useTelegramPolling(active: boolean) {
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
+    const start = async () => {
+      // Remove any existing webhook so getUpdates polling can work (409 = webhook conflict)
+      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_updates=true`, { method: 'POST' });
+      if (!cancelled) void poll();
+    };
     const poll = async () => {
       try {
         const url = `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${offsetRef.current}&timeout=0`;
         const res = await fetch(url);
+        // If webhook still active, try deleting it again and back off
+        if (res.status === 409) {
+          await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_updates=true`, { method: 'POST' });
+          if (!cancelled) setTimeout(poll, 5000);
+          return;
+        }
         type TgUpdate = {
           update_id: number;
           message?: { text?: string; chat?: { id: number } };
@@ -211,7 +222,7 @@ function useTelegramPolling(active: boolean) {
       } catch { /* silent */ }
       if (!cancelled) setTimeout(poll, 4000);
     };
-    void poll();
+    void start();
     return () => { cancelled = true; };
   }, [active]);
 }
@@ -4704,16 +4715,19 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
     // Load progress per kelas untuk user ini
     if (sessionUsername && courseList.length > 0) {
       const [{ data: progressRows }, { data: lessonRows }] = await Promise.all([
-        supabase.from('lesson_progress').select('lesson_key, course_key').eq('session_username', sessionUsername),
+        supabase.from('lesson_progress').select('lesson_key').eq('session_username', sessionUsername),
         supabase.from('lessons').select('lesson_key, course_key'),
       ]);
       const completedByCourse: Record<string, number> = {};
       const totalByCourse: Record<string, number> = {};
+      const lessonToCourse: Record<string, string> = {};
       for (const r of (lessonRows ?? []) as { lesson_key: string; course_key: string }[]) {
         totalByCourse[r.course_key] = (totalByCourse[r.course_key] ?? 0) + 1;
+        lessonToCourse[r.lesson_key] = r.course_key;
       }
-      for (const r of (progressRows ?? []) as { lesson_key: string; course_key: string }[]) {
-        if (r.course_key) completedByCourse[r.course_key] = (completedByCourse[r.course_key] ?? 0) + 1;
+      for (const r of (progressRows ?? []) as { lesson_key: string }[]) {
+        const ck = lessonToCourse[r.lesson_key];
+        if (ck) completedByCourse[ck] = (completedByCourse[ck] ?? 0) + 1;
       }
       const pct: Record<string, number> = {};
       for (const key of Object.keys(totalByCourse)) {
