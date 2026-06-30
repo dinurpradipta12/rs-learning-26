@@ -10957,29 +10957,40 @@ function DashboardBanner({ settings }: { settings: BannerSettings }) {
 
   if (!settings.enabled || slides.length === 0) return null;
 
-  const slide = slides[current];
-  const content = (
-    <div className="db-banner-slide" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      <img src={slide.imageUrl} alt={slide.title ?? 'Banner'} className="db-banner-img" />
+  const goTo = (i: number) => setCurrent((i + slides.length) % slides.length);
+
+  return (
+    <div
+      className="db-banner-wrap"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      {/* sliding track */}
+      <div className="db-banner-track" style={{ transform: `translateX(-${current * 100}%)` }}>
+        {slides.map((slide, i) => {
+          const img = <img src={slide.imageUrl} alt={slide.title ?? 'Banner'} className="db-banner-img" loading="eager" />;
+          return (
+            <div key={i} className="db-banner-slide">
+              {slide.linkUrl
+                ? <a href={slide.linkUrl} target={slide.linkUrl.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer">{img}</a>
+                : img}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* controls */}
       {slides.length > 1 && (
         <>
-          <button type="button" className="db-banner-arrow db-banner-arrow--left" onClick={(e) => { e.preventDefault(); setCurrent((c) => (c - 1 + slides.length) % slides.length); }}>‹</button>
-          <button type="button" className="db-banner-arrow db-banner-arrow--right" onClick={(e) => { e.preventDefault(); setCurrent((c) => (c + 1) % slides.length); }}>›</button>
+          <button type="button" className="db-banner-arrow db-banner-arrow--left" onClick={() => goTo(current - 1)}>‹</button>
+          <button type="button" className="db-banner-arrow db-banner-arrow--right" onClick={() => goTo(current + 1)}>›</button>
           <div className="db-banner-dots">
             {slides.map((_, i) => (
-              <button key={i} type="button" className={`db-banner-dot${i === current ? ' active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrent(i); }} />
+              <button key={i} type="button" className={`db-banner-dot${i === current ? ' active' : ''}`} onClick={() => setCurrent(i)} />
             ))}
           </div>
         </>
       )}
-    </div>
-  );
-
-  return (
-    <div className="db-banner-wrap">
-      {slide.linkUrl
-        ? <a href={slide.linkUrl} target={slide.linkUrl.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer">{content}</a>
-        : content}
     </div>
   );
 }
