@@ -9684,7 +9684,10 @@ function ForumThreadDetail({
     setReplyingToName(displayName);
     setReplyBody(`@${displayName} `);
     setTimeout(() => {
-      document.getElementById('forum-reply-textarea')?.focus();
+      if (replyTextareaRef.current) {
+        replyTextareaRef.current.value = `@${displayName} `;
+        replyTextareaRef.current.focus();
+      }
     }, 50);
   };
 
@@ -9908,9 +9911,8 @@ function ForumThreadDetail({
               ref={replyTextareaRef}
               id="forum-reply-textarea"
               className="forum-reply-bar-input"
-              value={replyBody}
-              onChange={(e) => { setReplyBody(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
-              onInput={(e) => { setReplyBody((e.target as HTMLTextAreaElement).value); }}
+              defaultValue=""
+              onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }}
               onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
               placeholder={replyingToName ? `Balas @${replyingToName}…` : 'Tambah komentar…'}
               rows={1}
