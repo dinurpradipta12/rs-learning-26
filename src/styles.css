@@ -3256,12 +3256,12 @@ body.dark .login-form-sub    { color: var(--muted); }
 
 .calendar-view-toggle button:hover {
   background: rgba(var(--accent-rgb), 0.1);
-  color: #5a2fc2;
+  color: var(--accent);
 }
 
 .calendar-view-toggle button.active {
   background: #ffffff;
-  color: #3d1a8a;
+  color: var(--accent);
   font-weight: 600;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
@@ -3294,20 +3294,20 @@ body.dark .login-form-sub    { color: var(--muted); }
   padding: 14px 24px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(135deg, #6c3fc5, #4e22a0);
-  color: #f0e8ff;
+  background: var(--accent);
+  color: #fff;
   font: inherit;
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(78, 34, 160, 0.35);
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.35);
   transition: filter 0.15s, box-shadow 0.15s;
 }
 
 .calendar-add-button:hover {
   filter: brightness(1.12);
-  box-shadow: 0 6px 22px rgba(78, 34, 160, 0.45);
+  box-shadow: 0 6px 22px rgba(var(--accent-rgb), 0.45);
 }
 
 .calendar-add-button span {
@@ -4021,7 +4021,7 @@ textarea.aem-input {
   width: 4px;
   height: 4px;
   border-radius: 999px;
-  background: #7a4fd6;
+  background: var(--accent);
 }
 
 .mini-month-date.active.has-event::after {
@@ -4029,15 +4029,15 @@ textarea.aem-input {
 }
 
 .mini-month-date.active {
-  background: #7a4fd6;
+  background: var(--accent);
   color: #ffffff;
   font-weight: 900;
 }
 
 .mini-month-date.today {
-  outline: 2px solid #7a4fd6;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
-  color: #7a4fd6;
+  color: var(--accent);
   font-weight: 900;
 }
 
@@ -4489,7 +4489,7 @@ textarea.aem-input {
   padding-top: 14px;
   border-radius: 14px;
   color: #ffffff;
-  box-shadow: 0 16px 30px rgba(75, 66, 129, 0.12);
+  box-shadow: 0 16px 30px rgba(var(--accent-rgb), 0.15);
   z-index: 2;
 }
 
@@ -4511,7 +4511,7 @@ textarea.aem-input {
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: #7a4fd6;
+  background: var(--accent);
   box-shadow: 0 0 0 5px rgba(var(--accent-rgb), 0.12);
 }
 
@@ -4521,7 +4521,7 @@ textarea.aem-input {
   top: 5px;
   padding: 5px 9px;
   border-radius: 999px;
-  background: #7a4fd6;
+  background: var(--accent);
   color: #ffffff;
   font-size: 0.72rem;
   font-weight: 900;
@@ -4533,8 +4533,8 @@ textarea.aem-input {
 }
 
 .calendar-event-chip.purple {
-  background: linear-gradient(135deg, #cbbef5, #a78be0);
-  color: #2e1f5e;
+  background: linear-gradient(135deg, rgba(var(--accent-light-rgb), 0.9), var(--accent));
+  color: #fff;
 }
 
 .calendar-event-chip strong {
@@ -4576,6 +4576,7 @@ textarea.aem-input {
   border-right: 1px solid rgba(31, 28, 23, 0.07);
   border-bottom: 1px solid rgba(31, 28, 23, 0.07);
   background: rgba(255, 255, 255, 0.72);
+  overflow: hidden;
 }
 
 .calendar-month-cell:nth-child(7n) {
@@ -4601,30 +4602,32 @@ textarea.aem-input {
 }
 
 .calendar-month-cell.active > span {
-  background: #7a4fd6;
+  background: var(--accent);
   color: #ffffff;
 }
 
 .calendar-month-cell.today > span {
   background: rgba(var(--accent-rgb), 0.15);
-  color: #7a4fd6;
+  color: var(--accent);
   font-weight: 900;
-  outline: 2px solid #7a4fd6;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
 .calendar-month-events {
   display: grid;
-  gap: 7px;
+  gap: 5px;
   margin-top: 8px;
+  overflow: hidden;
 }
 
 .calendar-month-event {
   display: grid;
-  gap: 3px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  box-shadow: 0 10px 22px rgba(75, 66, 129, 0.1);
+  gap: 2px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(var(--accent-rgb), 0.1);
+  overflow: hidden;
 }
 
 .calendar-month-event.lime {
@@ -4633,8 +4636,8 @@ textarea.aem-input {
 }
 
 .calendar-month-event.purple {
-  background: linear-gradient(135deg, #cbbef5, #a78be0);
-  color: #2e1f5e;
+  background: linear-gradient(135deg, rgba(var(--accent-light-rgb), 0.85), var(--accent));
+  color: #fff;
 }
 
 .calendar-month-event strong {
