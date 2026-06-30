@@ -9153,38 +9153,42 @@ function ForumThreadDetail({
         ))}
       </div>
 
-      <form className="forum-reply-form" onSubmit={submitReply}>
-        <div className="forum-reply-form-header">
-          <img src={avatarUrl || forumAvatarSvg(displayName, session.username)} alt={displayName} className="forum-avatar-sm" />
-          <strong>{displayName}</strong>
+      <form className="forum-reply-bar" onSubmit={submitReply}>
+        <img src={avatarUrl || forumAvatarSvg(displayName, session.username)} alt={displayName} className="forum-avatar-sm forum-reply-bar-avatar" />
+        <div className="forum-reply-bar-inner">
           {replyingToName && (
-            <span className="forum-replying-to">
-              membalas @{replyingToName}
-              <button type="button" onClick={() => { setReplyingToId(null); setReplyingToName(''); setReplyBody(''); }}>✕</button>
-            </span>
+            <div className="forum-reply-bar-context">
+              <span>membalas <strong>@{replyingToName}</strong></span>
+              <button type="button" className="forum-reply-bar-cancel" onClick={() => { setReplyingToId(null); setReplyingToName(''); setReplyBody(''); }}>✕</button>
+            </div>
           )}
-        </div>
-        <textarea
-          id="forum-reply-textarea"
-          className="forum-reply-textarea"
-          rows={4}
-          value={replyBody}
-          onChange={(e) => setReplyBody(e.target.value)}
-          placeholder="tulis balasanmu…"
-          required
-        />
-        {replyImageUrl && (
-          <div className="forum-reply-preview-wrap">
-            <img src={replyImageUrl} alt="preview" className="forum-reply-preview" />
-            <button type="button" className="forum-remove-img" onClick={() => { setReplyImageUrl(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}>✕</button>
+          {replyImageUrl && (
+            <div className="forum-reply-preview-wrap" style={{ margin: '6px 0 0' }}>
+              <img src={replyImageUrl} alt="preview" className="forum-reply-preview" />
+              <button type="button" className="forum-remove-img" onClick={() => { setReplyImageUrl(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}>✕</button>
+            </div>
+          )}
+          <div className="forum-reply-bar-row">
+            <textarea
+              id="forum-reply-textarea"
+              className="forum-reply-bar-input"
+              value={replyBody}
+              onChange={(e) => { setReplyBody(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+              onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+              placeholder={replyingToName ? `Balas @${replyingToName}…` : 'Tambah komentar…'}
+              rows={1}
+              required
+            />
+            <div className="forum-reply-bar-icons">
+              <label className="forum-reply-bar-icon-btn" title="lampirkan gambar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
+              </label>
+              <button type="submit" className="forum-reply-bar-send" disabled={!replyBody.trim()} title="kirim">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
           </div>
-        )}
-        <div className="forum-reply-form-actions">
-          <label className="forum-attach-btn">
-            📎 lampirkan gambar
-            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
-          </label>
-          <button type="submit" className="button primary" style={{ padding: '8px 20px', fontSize: '0.85rem' }}>kirim balasan</button>
         </div>
       </form>
 
