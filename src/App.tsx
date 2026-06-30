@@ -2665,41 +2665,7 @@ function App() {
         </div>
 
         <div className="topbar-nav-row">
-          <nav className="floating-nav" aria-label="menu utama">
-            {menu.map((item) => (
-              <a
-                key={item.label}
-                href={item.hash}
-                className={`nav-item ${page === getPage(item.hash) ? 'active' : ''}`}
-              >
-                <span className="nav-icon">{item.icon}</span>
-                {item.label}
-              </a>
-            ))}
-            {isDeveloper && (
-              <>
-                <span className="nav-admin-divider" aria-hidden="true" />
-                <a href="#admin" className={`nav-item nav-admin-item ${page === 'admin' ? 'active' : ''}`}>
-                  <span className="nav-icon">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/>
-                      <circle cx="18" cy="18" r="3"/><line x1="18" y1="15" x2="18" y2="18"/><line x1="18" y1="18" x2="21" y2="18"/>
-                    </svg>
-                  </span>
-                  Admin
-                </a>
-                <a href="#inbox" className={`nav-item nav-admin-item nav-inbox-link ${page === 'inbox' ? 'active' : ''}`}>
-                  <span className="nav-icon">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
-                    </svg>
-                  </span>
-                  Inbox 1:1
-                  {pendingBookingCount > 0 && <span className="nav-inbox-badge">{pendingBookingCount}</span>}
-                </a>
-              </>
-            )}
-          </nav>
+          <div>{/* nav moved to sidebar */}</div>
 
           <div className="account-menu-wrap" onClick={(event) => event.stopPropagation()}>
             <div className="account-meta" aria-live="polite">
@@ -2807,6 +2773,45 @@ function App() {
         </div>
 
       </header>
+
+      <aside className="sidebar-nav" aria-label="menu utama">
+        <nav>
+          {menu.map((item) => (
+            <a
+              key={item.label}
+              href={item.hash}
+              className={`sidebar-nav-item ${page === getPage(item.hash) ? 'active' : ''}`}
+              data-label={item.label}
+            >
+              <span className="sidebar-nav-icon">{item.icon}</span>
+              <span className="sidebar-nav-tooltip">{item.label}</span>
+            </a>
+          ))}
+          {isDeveloper && (
+            <>
+              <span className="sidebar-nav-divider" />
+              <a href="#admin" className={`sidebar-nav-item${page === 'admin' ? ' active' : ''}`} data-label="Admin">
+                <span className="sidebar-nav-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/>
+                    <circle cx="18" cy="18" r="3"/><line x1="18" y1="15" x2="18" y2="18"/><line x1="18" y1="18" x2="21" y2="18"/>
+                  </svg>
+                </span>
+                <span className="sidebar-nav-tooltip">Admin</span>
+              </a>
+              <a href="#inbox" className={`sidebar-nav-item${page === 'inbox' ? ' active' : ''}`} data-label="Inbox 1:1">
+                <span className="sidebar-nav-icon" style={{ position: 'relative' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                  </svg>
+                  {pendingBookingCount > 0 && <span className="sidebar-nav-badge">{pendingBookingCount}</span>}
+                </span>
+                <span className="sidebar-nav-tooltip">Inbox 1:1</span>
+              </a>
+            </>
+          )}
+        </nav>
+      </aside>
 
       <main className="layout">
         {page === 'dashboard' && <DashboardSection session={session} />}
