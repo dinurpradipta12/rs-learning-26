@@ -9610,6 +9610,7 @@ function ForumThreadDetail({
   const [editBody, setEditBody] = useState(thread.body);
   const [copyToast, setCopyToast] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const isAuthor = thread.authorUsername === session.username;
   const canModerate = session.role === 'developer' || session.role === 'admin';
 
@@ -9707,7 +9708,9 @@ function ForumThreadDetail({
 
   const submitReply = (event?: FormEvent<HTMLFormElement> | React.MouseEvent) => {
     event?.preventDefault();
-    const trimmedBody = replyBody.trim();
+    // Baca langsung dari DOM agar tetap jalan walau ekstensi browser (mis. Grammarly)
+    // menulis ke textarea tanpa memicu onChange React, sehingga replyBody kosong.
+    const trimmedBody = (replyTextareaRef.current?.value ?? replyBody).trim();
     if (!trimmedBody) return;
 
     const newReply: ForumReply = {
@@ -9751,6 +9754,7 @@ function ForumThreadDetail({
     setReplyImageUrl('');
     setReplyingToId(null);
     setReplyingToName('');
+    if (replyTextareaRef.current) replyTextareaRef.current.value = '';
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -9901,21 +9905,22 @@ function ForumThreadDetail({
           )}
           <div className="forum-reply-bar-row">
             <textarea
+              ref={replyTextareaRef}
               id="forum-reply-textarea"
               className="forum-reply-bar-input"
               value={replyBody}
               onChange={(e) => { setReplyBody(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+              onInput={(e) => { setReplyBody((e.target as HTMLTextAreaElement).value); }}
               onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
               placeholder={replyingToName ? `Balas @${replyingToName}…` : 'Tambah komentar…'}
               rows={1}
-              required
             />
             <div className="forum-reply-bar-icons">
               <label className="forum-reply-bar-icon-btn" title="lampirkan gambar">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
               </label>
-              <button type="button" className="forum-reply-bar-send" disabled={!replyBody.trim()} title="kirim" onClick={submitReply}>
+              <button type="button" className="forum-reply-bar-send" title="kirim" onClick={submitReply}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
             </div>
