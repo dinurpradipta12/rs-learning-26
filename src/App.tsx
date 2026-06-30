@@ -9914,6 +9914,7 @@ function ForumThreadDetail({
               defaultValue=""
               onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }}
               onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitReply(); } }}
               placeholder={replyingToName ? `Balas @${replyingToName}…` : 'Tambah komentar…'}
               rows={1}
             />
