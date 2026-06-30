@@ -2575,7 +2575,8 @@ function App() {
   const redirectTarget = page === 'login' ? '#dashboard' : hash;
 
   // Telegram command polling — aktif saat admin login
-  useTelegramPolling(isDeveloper);
+  // Telegram commands handled by supabase/functions/telegram-webhook (webhook mode)
+  // useTelegramPolling(isDeveloper);
 
   // Re-fetch perks on every page navigation so changes take effect immediately
   useEffect(() => {
