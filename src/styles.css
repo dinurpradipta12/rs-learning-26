@@ -6851,16 +6851,12 @@ body.dark .forum-filter-btn--qna { color: #fbbf24; }
   flex-direction: column;
   height: calc(100vh - 160px);
   min-height: 400px;
+  overflow: hidden;
 }
 
-.forum-detail-scroll {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding-bottom: 16px;
-  scrollbar-width: thin;
+.forum-detail-top {
+  flex-shrink: 0;
+  padding-bottom: 12px;
 }
 
 .forum-back-btn {
@@ -7170,10 +7166,18 @@ body.dark .forum-action-menu .forum-action-delete:hover {
   border-top: 1px solid var(--line);
 }
 
+.forum-op--sticky {
+  flex-shrink: 0;
+}
+
 .forum-replies-section {
+  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 12px 0 8px;
+  scrollbar-width: thin;
 }
 
 .forum-replies-heading {

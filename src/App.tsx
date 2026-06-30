@@ -9033,16 +9033,17 @@ function ForumThreadDetail({
 
   return (
     <div className="forum-detail">
-      <div className="forum-detail-scroll">
-      <button type="button" className="forum-back-btn" onClick={onBack}>
-        ← kembali ke forum
-      </button>
+      {/* ── Fixed top: back + OP post ── */}
+      <div className="forum-detail-top">
+        <button type="button" className="forum-back-btn" onClick={onBack}>
+          ← kembali ke forum
+        </button>
+        {copyToast && (
+          <div className="forum-copy-toast">Link thread disalin!</div>
+        )}
+      </div>
 
-      {copyToast && (
-        <div className="forum-copy-toast">Link thread disalin!</div>
-      )}
-
-      <article className="forum-op">
+      <article className="forum-op forum-op--sticky">
         <div className="forum-op-header">
           {(() => {
             const isMe = thread.authorUsername === session.username;
@@ -9129,6 +9130,7 @@ function ForumThreadDetail({
         </div>
       </article>
 
+      {/* ── Scrollable replies ── */}
       <div className="forum-replies-section">
         {thread.replies.length > 0 && (
           <p className="forum-replies-heading">{thread.replies.length} Balasan</p>
@@ -9154,7 +9156,7 @@ function ForumThreadDetail({
         ))}
       </div>
 
-      </div>{/* end forum-detail-scroll */}
+      {/* ── Pinned reply bar ── */}
       <form className="forum-reply-bar" onSubmit={submitReply}>
         <img src={avatarUrl || forumAvatarSvg(displayName, session.username)} alt={displayName} className="forum-avatar-sm forum-reply-bar-avatar" />
         <div className="forum-reply-bar-inner">
