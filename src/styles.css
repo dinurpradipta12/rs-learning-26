@@ -34,7 +34,7 @@ body.dark {
 
 /* Dark — specific overrides */
 body.dark .topbar {
-  background: transparent;
+  background: var(--bg);
 }
 body.dark .floating-nav {
   background: rgba(20, 26, 55, 0.55);
@@ -1082,7 +1082,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
 .topbar {
   position: fixed;
   top: 0;
-  left: 80px;
+  left: 0;
   right: 0;
   display: flex;
   align-items: center;
@@ -1090,7 +1090,7 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   gap: 16px;
   z-index: 50;
   overflow: visible;
-  background: transparent;
+  background: var(--bg);
   padding: 16px clamp(18px, 2vw, 32px);
   margin: 0;
 }
