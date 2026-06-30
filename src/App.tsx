@@ -14537,52 +14537,75 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             </div>
           )}
 
-          {upcoming.length > 0 && (
-            <div className="events-section">
-              <h3 className="events-section-title">Upcoming</h3>
-              <div className="events-grid">
-                {upcoming.map((ev) => {
-                  const joined = isJoined(ev);
-                  return (
-                    <div key={ev.id} className={`event-card${joined ? ' joined' : ''}`}>
-                      {ev.coverUrl && <img src={ev.coverUrl} alt={ev.title} className="event-card-cover" />}
-                      <div className="event-card-type-row">
-                        <span className="event-card-type">{typeIcon[ev.type]} {typeLabel[ev.type]}</span>
-                        {joined && <span className="event-joined-badge">✓ Terdaftar</span>}
-                      </div>
-                      <h4 className="event-card-title">{ev.title}</h4>
-                      {ev.description && <p className="event-card-desc">{ev.description}</p>}
-                      <div className="event-card-date">
-                        📅 {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                        {ev.time && <> · 🕐 {ev.time}</>}
-                      </div>
-                      <span className={`event-link-capsule${ev.link ? ' available' : ' pending'}`}>
-                        {ev.link
-                          ? <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link Tersedia</>
-                          : <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Link Menyusul</>}
-                      </span>
-                      <div className="event-card-footer">
-                        {joined ? (
-                          ev.link
-                            ? <a href={ev.link} target="_blank" rel="noopener noreferrer" className="button primary event-join-btn">🔗 Buka Link</a>
-                            : <span className="event-joined-label">✓ Terdaftar — link menyusul</span>
-                        ) : (
-                          <button
-                            className="button primary event-join-btn"
-                            onClick={() => { setJoinTarget(ev); setJoinError(''); }}
-                          >
-                            {ev.coinCost === 0 || userPerks.credit_exempt || userPerks.free_event
-                              ? 'Ikut Gratis'
-                              : <><span>Ikut · </span><CoinIcon size={12} />{ev.coinCost}</>}
-                          </button>
-                        )}
-                      </div>
+          {upcoming.length > 0 && (() => {
+            const joinedUpcoming = upcoming.filter((ev) => isJoined(ev));
+            const openUpcoming = upcoming.filter((ev) => !isJoined(ev));
+            const renderCard = (ev: CalendarEvent) => {
+              const joined = isJoined(ev);
+              return (
+                <div key={ev.id} className={`event-card${joined ? ' joined' : ''}`}>
+                  {ev.coverUrl && <img src={ev.coverUrl} alt={ev.title} className="event-card-cover" />}
+                  <div className="event-card-type-row">
+                    <span className="event-card-type">{typeIcon[ev.type]} {typeLabel[ev.type]}</span>
+                    {joined && <span className="event-joined-badge">✓ Terdaftar</span>}
+                  </div>
+                  <h4 className="event-card-title">{ev.title}</h4>
+                  {ev.description && <p className="event-card-desc">{ev.description}</p>}
+                  <div className="event-card-date">
+                    📅 {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    {ev.time && <> · 🕐 {ev.time}</>}
+                  </div>
+                  <span className={`event-link-capsule${ev.link ? ' available' : ' pending'}`}>
+                    {ev.link
+                      ? <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link Tersedia</>
+                      : <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Link Menyusul</>}
+                  </span>
+                  <div className="event-card-footer">
+                    {joined ? (
+                      ev.link
+                        ? <a href={ev.link} target="_blank" rel="noopener noreferrer" className="button primary event-join-btn">🔗 Buka Link</a>
+                        : <span className="event-joined-label">✓ Terdaftar — link menyusul</span>
+                    ) : (
+                      <button
+                        className="button primary event-join-btn"
+                        onClick={() => { setJoinTarget(ev); setJoinError(''); }}
+                      >
+                        {ev.coinCost === 0 || userPerks.credit_exempt || userPerks.free_event
+                          ? 'Ikut Gratis'
+                          : <><span>Ikut · </span><CoinIcon size={12} />{ev.coinCost}</>}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            };
+            return (
+              <>
+                {joinedUpcoming.length > 0 && (
+                  <div className="events-section">
+                    <div className="events-section-title-row">
+                      <h3 className="events-section-title">Sudah Diikuti</h3>
+                      <span className="events-section-badge">{joinedUpcoming.length} event</span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                    <div className="events-grid">
+                      {joinedUpcoming.map(renderCard)}
+                    </div>
+                  </div>
+                )}
+                {openUpcoming.length > 0 && (
+                  <div className="events-section">
+                    <div className="events-section-title-row">
+                      <h3 className="events-section-title">Upcoming</h3>
+                      {joinedUpcoming.length > 0 && <span className="events-section-badge events-section-badge--muted">{openUpcoming.length} event</span>}
+                    </div>
+                    <div className="events-grid">
+                      {openUpcoming.map(renderCard)}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {past.length > 0 && (
             <div className="events-section">
