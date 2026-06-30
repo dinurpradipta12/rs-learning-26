@@ -3146,25 +3146,29 @@ type TodayStats = { newUsers: number; transactions: number; bookings: number; to
 // ── Asset & Spending Monitor ────────────────────────────────────
 type AssetStat = { asset_key: string; title: string; type: string; unlock_count: number };
 type SpendUser = { username: string; display_name: string; total_coin_spent: number; total_rp_spent: number; topup_count: number };
+type VideoViewUser = { username: string; display_name: string; total_plays: number; last_viewed: string };
 
 function AssetMonitor() {
   const [assets, setAssets] = useState<AssetStat[]>([]);
   const [spenders, setSpenders] = useState<SpendUser[]>([]);
+  const [videoViewUsers, setVideoViewUsers] = useState<VideoViewUser[]>([]);
+  const [totalVideoPlays, setTotalVideoPlays] = useState(0);
   const [totalCoinSpent, setTotalCoinSpent] = useState(0);
   const [totalRpTopup, setTotalRpTopup] = useState(0);
   const [totalTopupCount, setTotalTopupCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'assets' | 'users'>('assets');
+  const [tab, setTab] = useState<'assets' | 'users' | 'videos'>('assets');
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
-      const [{ data: assetRows }, { data: unlockRows }, { data: txRows }, { data: topupRows }, { data: profileRows }] = await Promise.all([
+      const [{ data: assetRows }, { data: unlockRows }, { data: txRows }, { data: topupRows }, { data: profileRows }, { data: videoRows }] = await Promise.all([
         supabase.from('lesson_assets').select('asset_key, title, type').order('title'),
         supabase.from('user_asset_unlocks').select('asset_id, username'),
         supabase.from('credit_transactions').select('username, amount, type'),
         supabase.from('topup_requests').select('username, amount_rp, credits').eq('status', 'approved'),
         supabase.from('user_profiles').select('username, name'),
+        supabase.from('video_views').select('username, video_title, viewed_at').order('viewed_at', { ascending: false }),
       ]);
 
       // Asset stats
@@ -3203,6 +3207,22 @@ function AssetMonitor() {
       for (const p of (profileRows ?? []) as { username: string; name: string }[]) {
         nameMap[p.username] = p.name;
       }
+
+      // Video view stats per user
+      const videoPlayMap: Record<string, number> = {};
+      const videoLastMap: Record<string, string> = {};
+      for (const r of (videoRows ?? []) as { username: string; video_title: string; viewed_at: string }[]) {
+        videoPlayMap[r.username] = (videoPlayMap[r.username] ?? 0) + 1;
+        if (!videoLastMap[r.username]) videoLastMap[r.username] = r.viewed_at;
+      }
+      setTotalVideoPlays((videoRows ?? []).length);
+      const videoUserList: VideoViewUser[] = Object.keys(videoPlayMap).map((u) => ({
+        username: u,
+        display_name: nameMap[u] ?? u,
+        total_plays: videoPlayMap[u],
+        last_viewed: videoLastMap[u] ?? '',
+      })).sort((a, b) => b.total_plays - a.total_plays);
+      setVideoViewUsers(videoUserList);
 
       const allUsernames = new Set([...Object.keys(spendMap), ...Object.keys(topupRpMap)]);
       const spenderList: SpendUser[] = [...allUsernames].map((u) => ({
@@ -3251,6 +3271,7 @@ function AssetMonitor() {
       <div className="asset-monitor-tabs">
         <button className={`amt-tab${tab === 'assets' ? ' active' : ''}`} onClick={() => setTab('assets')}>📦 Per Asset</button>
         <button className={`amt-tab${tab === 'users' ? ' active' : ''}`} onClick={() => setTab('users')}>👤 Per User</button>
+        <button className={`amt-tab${tab === 'videos' ? ' active' : ''}`} onClick={() => setTab('videos')}>▶ Video Play</button>
       </div>
 
       {tab === 'assets' && (
@@ -3315,6 +3336,44 @@ function AssetMonitor() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === 'videos' && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>User</th>
+                <th>Total Play</th>
+                <th>Terakhir Nonton</th>
+              </tr>
+            </thead>
+            <tbody>
+              {videoViewUsers.length === 0 && (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data — data akan muncul setelah user memutar video</td></tr>
+              )}
+              {videoViewUsers.map((u, i) => (
+                <tr key={u.username}>
+                  <td style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{i + 1}</td>
+                  <td>
+                    <strong>{u.display_name}</strong>
+                    <span style={{ color: 'var(--muted)', fontSize: '0.8rem', marginLeft: 6 }}>@{u.username}</span>
+                  </td>
+                  <td>
+                    <span className={`amc-count${u.total_plays > 0 ? ' has-data' : ''}`}>{u.total_plays}×</span>
+                  </td>
+                  <td style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
+                    {u.last_viewed ? new Date(u.last_viewed).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: '0.82rem' }}>
+            Total {totalVideoPlays.toLocaleString('id-ID')} play dari {videoViewUsers.length} user
+          </div>
         </div>
       )}
     </div>
@@ -6181,6 +6240,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                               });
                             } else {
                               setYoutubeUnlocked(true);
+                              void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: selectedLesson.id, video_title: selectedLesson.title });
                             }
                           }}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
@@ -6248,6 +6308,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                           } else {
                             setIsVideoPlaying(true);
                             setIsTheaterMode(true);
+                            void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: selectedLesson.id, video_title: selectedLesson.title });
                           }
                         }}
                         onPause={() => setIsVideoPlaying(false)}
