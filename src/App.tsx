@@ -7665,7 +7665,7 @@ function LoginPage({
 
     const nextSession: AppSession = {
       username: registeredUsername,
-      displayName: (result as { display_name?: string })?.display_name ?? displayName.trim() || registeredUsername,
+      displayName: (result as { display_name?: string })?.display_name ?? (displayName.trim() || registeredUsername),
       role: (result as { role?: string })?.role ?? 'user',
       createdAt: (result as { created_at?: string })?.created_at ?? new Date().toISOString(),
     };
