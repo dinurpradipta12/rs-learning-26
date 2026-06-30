@@ -855,6 +855,222 @@ async function insertNotification(recipient: string, type: NotifType, title: str
   await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null }]);
 }
 
+// ── Badge system ─────────────────────────────────────────────
+type BadgeTier = 'wood' | 'silver' | 'gold' | 'diamond' | null;
+
+function calcBadgeTier(weeklyRp: number, monthlyRp: number): BadgeTier {
+  if (monthlyRp >= 10_000_000) return 'diamond';
+  if (monthlyRp >= 7_000_000)  return 'gold';
+  if (weeklyRp  >= 5_000_000)  return 'silver';
+  if (weeklyRp  >= 1_000_000)  return 'wood';
+  return null;
+}
+
+const BADGE_LABEL: Record<NonNullable<BadgeTier>, string> = {
+  wood:    'Wood Member',
+  silver:  'Silver Member',
+  gold:    'Gold Member',
+  diamond: 'Diamond Member',
+};
+
+function BadgeIcon({ tier, size = 18 }: { tier: BadgeTier; size?: number }) {
+  if (!tier) return null;
+  const s = size;
+  const label = BADGE_LABEL[tier];
+
+  const icons: Record<NonNullable<BadgeTier>, JSX.Element> = {
+    wood: (
+      <svg width={s} height={s} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bw-bg" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stopColor="#c8975a"/>
+            <stop offset="100%" stopColor="#7a4a1e"/>
+          </radialGradient>
+          <radialGradient id="bw-face" cx="40%" cy="35%" r="60%">
+            <stop offset="0%" stopColor="#e8b87a"/>
+            <stop offset="100%" stopColor="#a0622a"/>
+          </radialGradient>
+        </defs>
+        {/* Shield shape */}
+        <path d="M16 2 L28 7 L28 18 Q28 26 16 30 Q4 26 4 18 L4 7 Z" fill="url(#bw-bg)" stroke="#5a3010" strokeWidth="1"/>
+        {/* Inner panel */}
+        <path d="M16 5 L25 9 L25 17 Q25 23 16 27 Q7 23 7 17 L7 9 Z" fill="url(#bw-face)" opacity="0.85"/>
+        {/* Bear face */}
+        <circle cx="13" cy="14" r="2" fill="#5a3010" opacity="0.8"/>
+        <circle cx="19" cy="14" r="2" fill="#5a3010" opacity="0.8"/>
+        <ellipse cx="16" cy="17" rx="3" ry="2" fill="#5a3010" opacity="0.6"/>
+        {/* Ears */}
+        <circle cx="10" cy="8" r="2.5" fill="#a0622a"/>
+        <circle cx="22" cy="8" r="2.5" fill="#a0622a"/>
+        <circle cx="10" cy="8" r="1.5" fill="#c8975a"/>
+        <circle cx="22" cy="8" r="1.5" fill="#c8975a"/>
+        {/* Shine */}
+        <ellipse cx="12" cy="9" rx="3" ry="1.5" fill="white" opacity="0.15" transform="rotate(-20 12 9)"/>
+      </svg>
+    ),
+    silver: (
+      <svg width={s} height={s} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bs-bg" cx="50%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#e8e8f0"/>
+            <stop offset="60%" stopColor="#a0a8c0"/>
+            <stop offset="100%" stopColor="#5a6080"/>
+          </radialGradient>
+          <radialGradient id="bs-gem" cx="40%" cy="30%" r="60%">
+            <stop offset="0%" stopColor="#d0e8ff"/>
+            <stop offset="100%" stopColor="#4080c0"/>
+          </radialGradient>
+        </defs>
+        <path d="M16 2 L28 7 L28 18 Q28 26 16 30 Q4 26 4 18 L4 7 Z" fill="url(#bs-bg)" stroke="#707898" strokeWidth="1"/>
+        {/* Spike top */}
+        <polygon points="16,1 18,5 14,5" fill="#c0c8e0"/>
+        {/* Diamond gem center */}
+        <polygon points="16,10 20,14 16,20 12,14" fill="url(#bs-gem)" stroke="#80b0e0" strokeWidth="0.5"/>
+        <polygon points="16,10 20,14 16,12" fill="white" opacity="0.4"/>
+        {/* Side spikes */}
+        <polygon points="4,13 8,11 8,15" fill="#c0c8e0"/>
+        <polygon points="28,13 24,11 24,15" fill="#c0c8e0"/>
+        {/* Shine */}
+        <ellipse cx="12" cy="8" rx="4" ry="2" fill="white" opacity="0.2" transform="rotate(-15 12 8)"/>
+      </svg>
+    ),
+    gold: (
+      <svg width={s} height={s} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bg-bg" cx="50%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#ffe066"/>
+            <stop offset="50%" stopColor="#e8a020"/>
+            <stop offset="100%" stopColor="#9a5800"/>
+          </radialGradient>
+          <radialGradient id="bg-face" cx="40%" cy="35%" r="60%">
+            <stop offset="0%" stopColor="#fff0a0"/>
+            <stop offset="100%" stopColor="#c87800"/>
+          </radialGradient>
+          <radialGradient id="bg-gem" cx="40%" cy="30%" r="60%">
+            <stop offset="0%" stopColor="#ffffc0"/>
+            <stop offset="100%" stopColor="#e8a020"/>
+          </radialGradient>
+        </defs>
+        {/* Outer shield with spikes */}
+        <path d="M16 1 L18 5 L28 7 L28 18 Q28 27 16 31 Q4 27 4 18 L4 7 L14 5 Z" fill="url(#bg-bg)" stroke="#b07000" strokeWidth="1"/>
+        {/* Inner shield */}
+        <path d="M16 6 L24 10 L24 18 Q24 24 16 27 Q8 24 8 18 L8 10 Z" fill="url(#bg-face)" opacity="0.9"/>
+        {/* Lion face */}
+        <circle cx="13.5" cy="15" r="1.8" fill="#8a5000" opacity="0.9"/>
+        <circle cx="18.5" cy="15" r="1.8" fill="#8a5000" opacity="0.9"/>
+        <circle cx="16" cy="18" r="2.2" fill="#8a5000" opacity="0.7"/>
+        {/* Mane spikes */}
+        <polygon points="16,7 17.5,11 14.5,11" fill="#e8a020"/>
+        <polygon points="11,9 13,12 10,13" fill="#e8a020"/>
+        <polygon points="21,9 19,12 22,13" fill="#e8a020"/>
+        {/* Crown gems */}
+        <circle cx="16" cy="4" r="1.5" fill="#fff0a0"/>
+        <circle cx="12" cy="5" r="1" fill="#ffe066"/>
+        <circle cx="20" cy="5" r="1" fill="#ffe066"/>
+        {/* Shine */}
+        <ellipse cx="12" cy="9" rx="4" ry="1.8" fill="white" opacity="0.25" transform="rotate(-20 12 9)"/>
+      </svg>
+    ),
+    diamond: (
+      <svg width={s} height={s} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bd-bg" cx="50%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#e0d0ff"/>
+            <stop offset="40%" stopColor="#a060e0"/>
+            <stop offset="100%" stopColor="#3a0080"/>
+          </radialGradient>
+          <radialGradient id="bd-gold" cx="40%" cy="30%" r="60%">
+            <stop offset="0%" stopColor="#ffe880"/>
+            <stop offset="100%" stopColor="#c08000"/>
+          </radialGradient>
+          <radialGradient id="bd-gem" cx="35%" cy="30%" r="65%">
+            <stop offset="0%" stopColor="#ffffff"/>
+            <stop offset="30%" stopColor="#c0e8ff"/>
+            <stop offset="100%" stopColor="#4040c0"/>
+          </radialGradient>
+        </defs>
+        {/* Outer ornate shield */}
+        <path d="M16 1 L19 4 L28 6 L29 18 Q29 27 16 31 Q3 27 3 18 L4 6 L13 4 Z" fill="url(#bd-bg)" stroke="#8040c0" strokeWidth="0.8"/>
+        {/* Gold trim */}
+        <path d="M16 3 L18 6 L26 8 L26 18 Q26 25 16 29 Q6 25 6 18 L6 8 L14 6 Z" fill="none" stroke="url(#bd-gold)" strokeWidth="1.2"/>
+        {/* Dragon face */}
+        <polygon points="16,8 20,12 18,16 14,16 12,12" fill="url(#bd-gold)" opacity="0.9"/>
+        {/* Dragon eyes */}
+        <circle cx="13.5" cy="13" r="1.5" fill="#ff4040"/>
+        <circle cx="18.5" cy="13" r="1.5" fill="#ff4040"/>
+        <circle cx="13.8" cy="12.8" r="0.6" fill="white" opacity="0.6"/>
+        <circle cx="18.8" cy="12.8" r="0.6" fill="white" opacity="0.6"/>
+        {/* Center gem */}
+        <polygon points="16,17 19,20 16,24 13,20" fill="url(#bd-gem)" stroke="#8080ff" strokeWidth="0.5"/>
+        <polygon points="16,17 19,20 16,19" fill="white" opacity="0.5"/>
+        {/* Crown spikes with gems */}
+        <polygon points="16,1 17.5,5 14.5,5" fill="url(#bd-gold)"/>
+        <polygon points="10,3 12,7 9,7" fill="url(#bd-gold)"/>
+        <polygon points="22,3 23,7 20,7" fill="url(#bd-gold)"/>
+        <circle cx="16" cy="2" r="1.2" fill="#c0e8ff"/>
+        <circle cx="10.5" cy="3.5" r="0.9" fill="#ff80ff"/>
+        <circle cx="21.5" cy="3.5" r="0.9" fill="#ff80ff"/>
+        {/* Side ornaments */}
+        <polygon points="3,13 7,11 7,15" fill="url(#bd-gold)"/>
+        <polygon points="29,13 25,11 25,15" fill="url(#bd-gold)"/>
+        {/* Shine */}
+        <ellipse cx="11" cy="8" rx="4" ry="1.8" fill="white" opacity="0.3" transform="rotate(-20 11 8)"/>
+      </svg>
+    ),
+  };
+
+  return (
+    <span className="badge-icon" title={label} style={{ display: 'inline-flex', alignItems: 'center', cursor: 'default', flexShrink: 0 }}>
+      {icons[tier]}
+      <span className="badge-tooltip">{label}</span>
+    </span>
+  );
+}
+
+// ── Badge fetcher hook ────────────────────────────────────────
+function useBadgeTier(username: string): BadgeTier {
+  const [tier, setTier] = useState<BadgeTier>(null);
+  useEffect(() => {
+    if (!username) return;
+    const now = new Date();
+    const weekAgo  = new Date(now.getTime() - 7  * 86400_000).toISOString();
+    const monthAgo = new Date(now.getTime() - 30 * 86400_000).toISOString();
+    void Promise.all([
+      supabase.from('topup_requests').select('amount_rp').eq('username', username).eq('status', 'approved').gte('created_at', weekAgo),
+      supabase.from('topup_requests').select('amount_rp').eq('username', username).eq('status', 'approved').gte('created_at', monthAgo),
+    ]).then(([{ data: wRows }, { data: mRows }]) => {
+      const weeklyRp  = (wRows ?? []).reduce((s: number, r: { amount_rp: number }) => s + (r.amount_rp ?? 0), 0);
+      const monthlyRp = (mRows ?? []).reduce((s: number, r: { amount_rp: number }) => s + (r.amount_rp ?? 0), 0);
+      setTier(calcBadgeTier(weeklyRp, monthlyRp));
+    });
+  }, [username]);
+  return tier;
+}
+
+// ── Global badge map (admin/forum views) ─────────────────────
+async function fetchAllBadgeTiers(): Promise<Record<string, BadgeTier>> {
+  const now = new Date();
+  const weekAgo  = new Date(now.getTime() - 7  * 86400_000).toISOString();
+  const monthAgo = new Date(now.getTime() - 30 * 86400_000).toISOString();
+  const { data } = await supabase
+    .from('topup_requests')
+    .select('username, amount_rp, created_at')
+    .eq('status', 'approved')
+    .gte('created_at', monthAgo);
+  const weeklyMap:  Record<string, number> = {};
+  const monthlyMap: Record<string, number> = {};
+  for (const r of (data ?? []) as { username: string; amount_rp: number; created_at: string }[]) {
+    const u = r.username;
+    const amt = r.amount_rp ?? 0;
+    monthlyMap[u] = (monthlyMap[u] ?? 0) + amt;
+    if (r.created_at >= weekAgo) weeklyMap[u] = (weeklyMap[u] ?? 0) + amt;
+  }
+  const result: Record<string, BadgeTier> = {};
+  const allUsers = new Set([...Object.keys(weeklyMap), ...Object.keys(monthlyMap)]);
+  for (const u of allUsers) result[u] = calcBadgeTier(weeklyMap[u] ?? 0, monthlyMap[u] ?? 0);
+  return result;
+}
+
 function timeAgo(isoString: string) {
   const diff = Date.now() - new Date(isoString).getTime();
   const mins = Math.floor(diff / 60_000);
@@ -4253,6 +4469,9 @@ function DashboardSection({ session }: { session: AppSession }) {
   // ── realtime new reply badge ──
   const [newReplyCount, setNewReplyCount] = useState(0);
 
+  // ── own badge tier ──
+  const ownBadge = useBadgeTier(session.username);
+
   const [isLoading, setIsLoading] = useState(true);
 
   // ── joined class events (calendar) ──
@@ -4471,7 +4690,7 @@ function DashboardSection({ session }: { session: AppSession }) {
       <section className="db-hero card">
         <div className="db-hero-left">
           <p className="eyebrow">{greeting}</p>
-          <h2 className="db-hero-name">{profileName || session.displayName} 👋</h2>
+          <h2 className="db-hero-name">{profileName || session.displayName} 👋 <BadgeIcon tier={ownBadge} size={22} /></h2>
           <p className="db-hero-sub">
             {completedCount === 0
               ? 'Mulai perjalanan belajarmu sekarang.'
@@ -4768,7 +4987,10 @@ function DashboardSection({ session }: { session: AppSession }) {
               <div className="db-pc-avatar-wrap">
                 <img className="db-pc-avatar" src={profileAvatarUrl ?? fallbackAvatar} alt={profileName} />
               </div>
-              <strong className="db-pc-name">{profileName || session.displayName}</strong>
+              <div className="db-pc-name-row">
+                <strong className="db-pc-name">{profileName || session.displayName}</strong>
+                <BadgeIcon tier={ownBadge} size={20} />
+              </div>
               <span className="db-pc-role">Student</span>
               <a className="button secondary tiny db-pc-btn" href="#profil">Profile</a>
 
@@ -9169,11 +9391,13 @@ function ForumThreadCard({
   thread,
   currentUser,
   userAvatarMap,
+  badgeMap = {},
   onClick,
 }: {
   thread: ForumThread;
   currentUser: { username: string; displayName: string; avatarUrl: string };
   userAvatarMap: Record<string, string>;
+  badgeMap?: Record<string, BadgeTier>;
   onClick: () => void;
 }) {
   const participantUsernames = Array.from(
@@ -9209,6 +9433,7 @@ function ForumThreadCard({
       )}
       <div className="forum-thread-card-author">
         <img src={authorAvatar} alt={thread.authorDisplayName} className="forum-avatar-xs" />
+        <BadgeIcon tier={badgeMap[thread.authorUsername] ?? null} size={15} />
         <span className="forum-thread-author-name">{thread.authorDisplayName}</span>
         <span className="forum-dot">·</span>
         <span className="forum-thread-card-time">{timeAgo(thread.createdAt)}</span>
@@ -9261,6 +9486,7 @@ function ForumReplyItem({
   depth,
   currentUser,
   userAvatarMap,
+  badgeMap = {},
   onReplyTo,
   onUpvote,
   onImageClick,
@@ -9273,6 +9499,7 @@ function ForumReplyItem({
   depth: number;
   currentUser: { username: string; displayName: string; avatarUrl: string };
   userAvatarMap: Record<string, string>;
+  badgeMap?: Record<string, BadgeTier>;
   onReplyTo: (replyId: string, displayName: string) => void;
   onUpvote: (replyId: string) => void;
   onImageClick: (url: string) => void;
@@ -9306,6 +9533,7 @@ function ForumReplyItem({
       </div>
       <div className="forum-reply-item-body">
         <div className="forum-reply-item-header">
+          <BadgeIcon tier={badgeMap[reply.authorUsername] ?? null} size={14} />
           <strong className="forum-reply-item-name">{replyDisplayName}</strong>
           {reply.answered && <span className="forum-reply-answered-badge">✓ Terjawab</span>}
         </div>
@@ -9354,6 +9582,7 @@ function ForumReplyItem({
                 depth={depth + 1}
                 currentUser={currentUser}
                 userAvatarMap={userAvatarMap}
+                badgeMap={badgeMap}
                 onReplyTo={onReplyTo}
                 onUpvote={onUpvote}
                 onImageClick={onImageClick}
@@ -9375,6 +9604,7 @@ function ForumThreadDetail({
   displayName,
   avatarUrl,
   userAvatarMap,
+  badgeMap = {},
   onBack,
   onUpdate,
   onDelete,
@@ -9384,6 +9614,7 @@ function ForumThreadDetail({
   displayName: string;
   avatarUrl: string;
   userAvatarMap: Record<string, string>;
+  badgeMap?: Record<string, BadgeTier>;
   onBack: () => void;
   onUpdate: (updated: ForumThread) => void;
   onDelete: (threadId: string) => void;
@@ -9656,6 +9887,7 @@ function ForumThreadDetail({
             depth={0}
             currentUser={{ username: session.username, displayName, avatarUrl }}
             userAvatarMap={userAvatarMap}
+            badgeMap={badgeMap}
             onReplyTo={handleReplyTo}
             onUpvote={handleUpvote}
             onImageClick={setLightboxUrl}
@@ -9951,6 +10183,10 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
   const [composerDisplayName, setComposerDisplayName] = useState(session.displayName);
   const [composerJobTitle, setComposerJobTitle] = useState<string>(session.role);
   const [userAvatarMap, setUserAvatarMap] = useState<Record<string, string>>({});
+  const [forumBadgeMap, setForumBadgeMap] = useState<Record<string, BadgeTier>>({});
+
+  // Load badge tiers for forum authors
+  useEffect(() => { void fetchAllBadgeTiers().then(setForumBadgeMap); }, []);
 
   // Bersihkan query param setelah mount
   useEffect(() => {
@@ -10078,6 +10314,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
           displayName={composerDisplayName}
           avatarUrl={composerAvatarUrl}
           userAvatarMap={userAvatarMap}
+          badgeMap={forumBadgeMap}
           onBack={() => setSelectedThreadId(null)}
           onUpdate={updateThread}
           onDelete={deleteThread}
@@ -10132,6 +10369,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
                 thread={thread}
                 currentUser={{ username: session.username, displayName: composerDisplayName, avatarUrl: composerAvatarUrl }}
                 userAvatarMap={userAvatarMap}
+                badgeMap={forumBadgeMap}
                 onClick={() => openThread(thread.id)}
               />
           ))}

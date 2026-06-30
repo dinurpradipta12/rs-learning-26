@@ -9345,11 +9345,52 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
   object-fit: cover;
   display: block;
 }
+.db-pc-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
 .db-pc-name {
   font-size: 1rem;
   font-weight: 700;
   text-align: center;
 }
+
+/* ── Badge icons & tooltip ── */
+.badge-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.badge-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30,20,50,0.92);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+}
+.badge-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: rgba(30,20,50,0.92);
+}
+.badge-icon:hover .badge-tooltip { opacity: 1; }
 .db-pc-role {
   font-size: 0.78rem;
   color: var(--muted);
