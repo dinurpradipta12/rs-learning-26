@@ -9705,11 +9705,10 @@ function ForumThreadDetail({
     reader.readAsDataURL(file);
   };
 
-  const submitReply = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitReply = (event?: FormEvent<HTMLFormElement> | React.MouseEvent) => {
+    event?.preventDefault();
     const trimmedBody = replyBody.trim();
-    if (!trimmedBody) { alert('DEBUG: replyBody kosong'); return; }
-    alert(`DEBUG: submit dipanggil, user=${session.username}, body=${trimmedBody.slice(0,30)}`);
+    if (!trimmedBody) return;
 
     const newReply: ForumReply = {
       id: crypto.randomUUID(),
@@ -9885,7 +9884,7 @@ function ForumThreadDetail({
       </div>
 
       {/* ── Pinned reply bar ── */}
-      <form className="forum-reply-bar" onSubmit={submitReply}>
+      <form className="forum-reply-bar" onSubmit={submitReply} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitReply(); }}>
         <img src={avatarUrl || forumAvatarSvg(displayName, session.username)} alt={displayName} className="forum-avatar-sm forum-reply-bar-avatar" />
         <div className="forum-reply-bar-inner">
           {replyingToName && (
@@ -9916,7 +9915,7 @@ function ForumThreadDetail({
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
               </label>
-              <button type="submit" className="forum-reply-bar-send" disabled={!replyBody.trim()} title="kirim">
+              <button type="button" className="forum-reply-bar-send" disabled={!replyBody.trim()} title="kirim" onClick={submitReply}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
             </div>
