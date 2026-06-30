@@ -10529,7 +10529,7 @@ async function deductCredits(
   }
 
   const { data, error } = await supabase.rpc('spend_credits', {
-    p_username: username,
+    p_username: username.toLowerCase(),
     p_amount: amount,
     p_type: type,
     p_description: description,
