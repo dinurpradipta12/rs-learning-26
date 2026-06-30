@@ -4566,16 +4566,26 @@ function DashboardSection({ session }: { session: AppSession }) {
             <p className="eyebrow">Jadwal Mendatang</p>
             <a className="mini-link" href="#calendar">lihat semua</a>
           </div>
-          {upcomingEvents.length === 0 ? (
+          {upcomingEvents.length === 0 && !nextLesson ? (
             <p className="db-empty">Tidak ada jadwal mendatang.</p>
           ) : (
             <div className="db-event-list">
+              {nextLesson && (
+                <a className="db-event-row" href="#materi" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className="db-event-dot" style={{ background: '#7a4fd6' }} />
+                  <div className="db-event-info">
+                    <strong>{nextLesson.title}</strong>
+                    <span>Lanjutkan sekarang</span>
+                    <span className="db-event-cat" style={{ color: '#7a4fd6' }}>E-Learning</span>
+                  </div>
+                </a>
+              )}
               {upcomingEvents.map((ev) => (
                 <div className="db-event-row" key={ev.id}>
                   <div className="db-event-dot" style={{ background: categoryColor[ev.category] ?? '#7a4fd6' }} />
                   <div className="db-event-info">
                     <strong>{ev.title}</strong>
-                    <span>{formatShortDate(ev.eventDate)} · {formatClockRange(ev.startTime, ev.endTime)}</span>
+                    <span>{ev.eventDate ? `${formatShortDate(ev.eventDate)} · ${formatClockRange(ev.startTime, ev.endTime)}` : ''}</span>
                     <span className="db-event-cat">{categoryLabel[ev.category] ?? ev.category}</span>
                   </div>
                 </div>
