@@ -8466,17 +8466,17 @@ body.dark .admin-row-selected { background: rgba(var(--accent-rgb), 0.1) !import
 .calendar-hub-event {
   display: flex;
   flex-direction: column;
-  background: rgba(124,77,255,0.18);
+  background: rgba(var(--accent-rgb), 0.12);
   border-left: 3px solid var(--accent);
   border-radius: 5px;
   padding: 2px 5px;
   font-size: 0.72rem;
   gap: 1px;
   text-decoration: none;
-  color: inherit;
+  color: var(--accent);
   cursor: pointer;
 }
-.calendar-hub-event:hover { background: rgba(124,77,255,0.28); }
+.calendar-hub-event:hover { background: rgba(var(--accent-rgb), 0.22); }
 .calendar-hub-event strong { font-weight: 600; line-height: 1.2; }
 .calendar-hub-chip { opacity: 0.92; text-decoration: none; }
 .calendar-hub-chip:hover { opacity: 1; }
