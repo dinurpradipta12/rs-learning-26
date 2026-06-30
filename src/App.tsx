@@ -8275,8 +8275,12 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
   async function handleDeleteEvent() {
     if (!deleteConfirmId) return;
     setDeleteSubmitting(true);
-    const { error } = await supabase.from('calendar_events').delete().eq('id', deleteConfirmId);
-    console.log('[delete]', deleteConfirmId, error);
+    if (deleteConfirmId.startsWith('booking-')) {
+      const realId = deleteConfirmId.replace('booking-', '');
+      await supabase.from('one_on_one_bookings').delete().eq('id', realId);
+    } else {
+      await supabase.from('calendar_events').delete().eq('id', deleteConfirmId);
+    }
     setDeleteSubmitting(false);
     setDeleteConfirmId(null);
     reloadCalendarEvents();
