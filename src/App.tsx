@@ -448,6 +448,7 @@ type ForumReply = {
   createdAt: string;
   upvotes: number;
   parentReplyId?: string;
+  answered?: boolean;
 };
 
 type ForumThread = {
@@ -8731,6 +8732,9 @@ function ForumReplyItem({
   onReplyTo,
   onUpvote,
   onImageClick,
+  isQnaThread,
+  canModerate,
+  onMarkAnswered,
 }: {
   reply: ForumReply;
   allReplies: ForumReply[];
@@ -8740,6 +8744,9 @@ function ForumReplyItem({
   onReplyTo: (replyId: string, displayName: string) => void;
   onUpvote: (replyId: string) => void;
   onImageClick: (url: string) => void;
+  isQnaThread?: boolean;
+  canModerate?: boolean;
+  onMarkAnswered?: (replyId: string) => void;
 }) {
   const children = allReplies.filter((r) => r.parentReplyId === reply.id);
   const isMe = reply.authorUsername === currentUser.username;
@@ -8749,13 +8756,16 @@ function ForumReplyItem({
   const replyDisplayName = isMe ? currentUser.displayName : reply.authorDisplayName;
 
   return (
-    <div className={`forum-reply depth-${Math.min(depth, 3)}`}>
+    <div className={`forum-reply depth-${Math.min(depth, 3)}${reply.answered ? ' forum-reply--answered' : ''}`}>
       <div className="forum-reply-header">
         <img src={replyAvatarSrc} alt={replyDisplayName} className="forum-avatar-sm" />
         <div className="forum-reply-meta">
           <strong>{replyDisplayName}</strong>
           <span>{timeAgo(reply.createdAt)}</span>
         </div>
+        {reply.answered && (
+          <span className="forum-reply-answered-badge">✓ Terjawab</span>
+        )}
       </div>
       <div className="forum-reply-body">
         <p>{reply.body}</p>
@@ -8773,6 +8783,16 @@ function ForumReplyItem({
         <button type="button" className="forum-action-btn" onClick={() => onReplyTo(reply.id, reply.authorDisplayName)}>
           balas
         </button>
+        {isQnaThread && canModerate && onMarkAnswered && (
+          <button
+            type="button"
+            className={`forum-action-btn forum-answered-btn${reply.answered ? ' forum-answered-btn--active' : ''}`}
+            onClick={() => onMarkAnswered(reply.id)}
+            title={reply.answered ? 'Batalkan terjawab' : 'Tandai sebagai terjawab'}
+          >
+            {reply.answered ? '✓ Terjawab' : '✓ Tandai Terjawab'}
+          </button>
+        )}
       </div>
       {children.length > 0 && (
         <div className="forum-reply-children">
@@ -8787,6 +8807,9 @@ function ForumReplyItem({
               onReplyTo={onReplyTo}
               onUpvote={onUpvote}
               onImageClick={onImageClick}
+              isQnaThread={isQnaThread}
+              canModerate={canModerate}
+              onMarkAnswered={onMarkAnswered}
             />
           ))}
         </div>
@@ -8872,7 +8895,24 @@ function ForumThreadDetail({
     onUpdate({ ...thread, title: editTitle.trim(), body: editBody.trim() });
     setIsEditing(false);
   };
-  const topLevelReplies = thread.replies.filter((r) => !r.parentReplyId);
+  const isQnaThread = thread.category === 'qna session';
+
+  const topLevelReplies = (() => {
+    const all = thread.replies.filter((r) => !r.parentReplyId);
+    if (!isQnaThread) return all;
+    // Unanswered first, answered sink to bottom
+    return [...all.filter((r) => !r.answered), ...all.filter((r) => r.answered)];
+  })();
+
+  const handleMarkAnswered = (replyId: string) => {
+    const updated: ForumThread = {
+      ...thread,
+      replies: thread.replies.map((r) =>
+        r.id === replyId ? { ...r, answered: !r.answered } : r,
+      ),
+    };
+    onUpdate(updated);
+  };
 
   const handleReplyTo = (replyId: string, displayName: string) => {
     setReplyingToId(replyId);
@@ -9063,6 +9103,9 @@ function ForumThreadDetail({
             onReplyTo={handleReplyTo}
             onUpvote={handleUpvote}
             onImageClick={setLightboxUrl}
+            isQnaThread={isQnaThread}
+            canModerate={canModerate}
+            onMarkAnswered={handleMarkAnswered}
           />
         ))}
       </div>

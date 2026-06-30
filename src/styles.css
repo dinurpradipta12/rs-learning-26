@@ -7257,6 +7257,45 @@ body.dark .forum-action-menu .forum-action-delete:hover {
   color: var(--accent);
 }
 
+/* QNA answered button */
+.forum-answered-btn {
+  border-color: #f59e0b66;
+  color: #b45309;
+}
+.forum-answered-btn:hover {
+  border-color: #f59e0b !important;
+  color: #92400e !important;
+  background: #fef3c7;
+}
+.forum-answered-btn--active {
+  background: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #fff !important;
+}
+body.dark .forum-answered-btn { border-color: #f59e0b55; color: #fbbf24; }
+body.dark .forum-answered-btn:hover { background: #78350f44 !important; color: #fde68a !important; }
+body.dark .forum-answered-btn--active { background: #b45309 !important; border-color: #b45309 !important; color: #fff !important; }
+
+/* Answered reply row — muted / sunk */
+.forum-reply--answered {
+  opacity: 0.6;
+  border-left: 3px solid #f59e0b88;
+}
+.forum-reply--answered:hover { opacity: 1; }
+
+/* Answered badge next to author name */
+.forum-reply-answered-badge {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #92400e;
+  background: #fde68a;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+body.dark .forum-reply-answered-badge { background: #78350f; color: #fcd34d; }
+
 .forum-reply-children {
   margin-top: 12px;
   padding-left: 20px;
