@@ -7644,19 +7644,30 @@ function LoginPage({
       return;
     }
 
-    const matchedUser = Array.isArray(data) ? data[0] : null;
+    const result = Array.isArray(data) ? data[0] : data as Record<string, unknown> | null;
 
-    if (!matchedUser) {
+    // register_app_user returns { success, username } or legacy row format
+    const registeredUsername = (result as { success?: boolean; username?: string })?.username
+      ?? (result as { username?: string })?.username
+      ?? null;
+
+    if (!result || (result as { success?: boolean }).success === false) {
+      setError((result as { error?: string })?.error ?? 'gagal membuat akun baru.');
+      setSubmitting(false);
+      return;
+    }
+
+    if (!registeredUsername) {
       setError('gagal membuat akun baru.');
       setSubmitting(false);
       return;
     }
 
     const nextSession: AppSession = {
-      username: matchedUser.username,
-      displayName: matchedUser.display_name ?? matchedUser.username,
-      role: matchedUser.role,
-      createdAt: matchedUser.created_at,
+      username: registeredUsername,
+      displayName: (result as { display_name?: string })?.display_name ?? displayName.trim() || registeredUsername,
+      role: (result as { role?: string })?.role ?? 'user',
+      createdAt: (result as { created_at?: string })?.created_at ?? new Date().toISOString(),
     };
 
     // Apply referral code bonus — re-validate in case user didn't blur the input
