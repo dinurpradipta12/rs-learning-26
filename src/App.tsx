@@ -9033,6 +9033,7 @@ function ForumThreadDetail({
 
   return (
     <div className="forum-detail">
+      <div className="forum-detail-scroll">
       <button type="button" className="forum-back-btn" onClick={onBack}>
         ← kembali ke forum
       </button>
@@ -9153,6 +9154,7 @@ function ForumThreadDetail({
         ))}
       </div>
 
+      </div>{/* end forum-detail-scroll */}
       <form className="forum-reply-bar" onSubmit={submitReply}>
         <img src={avatarUrl || forumAvatarSvg(displayName, session.username)} alt={displayName} className="forum-avatar-sm forum-reply-bar-avatar" />
         <div className="forum-reply-bar-inner">

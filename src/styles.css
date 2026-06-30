@@ -6849,8 +6849,18 @@ body.dark .forum-filter-btn--qna { color: #fbbf24; }
 .forum-detail {
   display: flex;
   flex-direction: column;
+  height: calc(100vh - 160px);
+  min-height: 400px;
+}
+
+.forum-detail-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   gap: 24px;
-  padding-bottom: 80px;
+  padding-bottom: 16px;
+  scrollbar-width: thin;
 }
 
 .forum-back-btn {
@@ -7390,23 +7400,16 @@ body.dark .forum-card-last-reply { background: rgba(255,255,255,0.04); }
 }
 .forum-action-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── Reply Bar (thin pill style, sticky bottom) ─────── */
+/* ── Reply Bar (thin pill style, pinned at bottom of detail flex) ─────── */
 
 .forum-reply-bar {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 0 14px;
-  background: rgba(245,247,255,0.94);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: 10px 0 4px;
   border-top: 1px solid var(--line);
-  z-index: 10;
-}
-body.dark .forum-reply-bar {
-  background: rgba(14,17,36,0.94);
+  background: transparent;
 }
 
 .forum-reply-bar-avatar {
