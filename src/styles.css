@@ -8614,6 +8614,9 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
 .event-card-title { font-size: 1rem; font-weight: 700; margin: 0; line-height: 1.3; }
 .event-card-desc { font-size: 0.85rem; color: var(--muted); margin: 0; line-height: 1.5; }
 .event-card-date { font-size: 0.82rem; color: var(--muted); }
+.event-link-capsule { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-top: 10px; }
+.event-link-capsule.available { background: rgba(34,163,90,0.12); color: #22a35a; }
+.event-link-capsule.pending { background: rgba(220,38,38,0.1); color: #dc2626; }
 .event-card-footer { margin-top: auto; padding-top: 8px; }
 .event-join-btn { width: 100%; justify-content: center; font-size: 0.88rem; padding: 9px 16px; }
 .event-joined-label { font-size: 0.85rem; color: #22a35a; font-weight: 600; }

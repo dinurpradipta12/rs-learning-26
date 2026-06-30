@@ -14556,6 +14556,11 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                         📅 {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         {ev.time && <> · 🕐 {ev.time}</>}
                       </div>
+                      <span className={`event-link-capsule${ev.link ? ' available' : ' pending'}`}>
+                        {ev.link
+                          ? <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link Tersedia</>
+                          : <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Link Menyusul</>}
+                      </span>
                       <div className="event-card-footer">
                         {joined ? (
                           ev.link
