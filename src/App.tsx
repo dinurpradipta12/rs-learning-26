@@ -4184,7 +4184,14 @@ function UpdateToast() {
 
   return createPortal(
     <div className="update-toast" role="status" aria-live="polite">
-      <span className="update-toast-icon">✨</span>
+      <span className="update-toast-icon">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="18" cy="18" r="18" fill="#FF1744"/>
+          <path d="M25.5 18C25.5 22.1421 22.1421 25.5 18 25.5C13.8579 25.5 10.5 22.1421 10.5 18C10.5 13.8579 13.8579 10.5 18 10.5C20.3386 10.5 22.4386 11.5114 23.8995 13.1317" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
+          <polyline points="24,10 24,13.5 20.5,13.5" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M10.5 18C10.5 13.8579 13.8579 10.5 18 10.5C20.3386 10.5 22.4386 11.5114 23.8995 13.1317" stroke="white" strokeWidth="2.2" strokeLinecap="round" opacity="0"/>
+        </svg>
+      </span>
       <div className="update-toast-text">
         <strong>Versi baru tersedia</strong>
         <span>Refresh untuk memuat pembaruan terbaru.</span>
