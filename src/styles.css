@@ -13821,7 +13821,7 @@ body.dark .admin-input:focus {
 }
 .confirm-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 10px;
 }
 .confirm-btn {
