@@ -1907,7 +1907,20 @@ body.dark .sidebar-nav-pos-opt.active { background: rgba(255,255,255,0.12); colo
   color: var(--text);
   text-align: left;
   font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
+
+.account-menu-icon {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.account-menu a:hover .account-menu-icon,
+.account-menu button:hover .account-menu-icon {
+  color: var(--accent);
+}
+.account-menu-danger .account-menu-icon { color: #9f2f4f; }
 
 .account-menu a:hover,
 .account-menu button:hover {
