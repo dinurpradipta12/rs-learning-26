@@ -2966,9 +2966,18 @@ function App() {
     setCommunityUnread(0);
   }, [page, session, communityUnread]);
 
+  // Buka link thread (?thread=): begitu user login/ada sesi, arahkan ke forum
+  // agar thread langsung terbuka tanpa perlu login ulang.
+  useEffect(() => {
+    if (initialThreadId && session && getPage(window.location.hash) !== 'community') {
+      window.location.hash = '#community';
+    }
+  }, [session, initialThreadId]);
+
   if (!session) {
     // Landing untuk pengunjung di root/home; login untuk #login atau deep-link.
-    const showLogin = hash === '#login' || page !== 'dashboard';
+    // Kalau membuka link thread (?thread=), arahkan ke login dulu.
+    const showLogin = hash === '#login' || page !== 'dashboard' || !!initialThreadId;
     if (!showLogin) {
       return (
         <div className="shell landing-shell">
@@ -9773,7 +9782,7 @@ function ForumThreadDetail({
   const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
 
   const handleShare = () => {
-    const url = `${window.location.origin}${window.location.pathname}?thread=${thread.id}`;
+    const url = `${window.location.origin}${window.location.pathname}?thread=${thread.id}#community`;
     setShowActionMenu(false);
     const showToast = () => {
       setCopyToast(true);
