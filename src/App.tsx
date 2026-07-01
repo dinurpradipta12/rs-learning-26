@@ -4599,6 +4599,8 @@ function DashboardSection({ session }: { session: AppSession }) {
   const [journeyTelegram, setJourneyTelegram] = useState(false);
   const [journeyTopup, setJourneyTopup] = useState(false);
   const [journeyDismissed, setJourneyDismissed] = useState(() => !!localStorage.getItem(`journey_done_${session.username}`));
+  const [journeyRewardChecked, setJourneyRewardChecked] = useState(false);
+  const [journeyRewardToast, setJourneyRewardToast] = useState(false);
   useEffect(() => {
     void (async () => {
       const [{ data: u }, { count }] = await Promise.all([
@@ -4609,6 +4611,28 @@ function DashboardSection({ session }: { session: AppSession }) {
       setJourneyTopup((count ?? 0) > 0);
     })();
   }, [session.username]);
+
+  // Bonus +5 koin sekali saat semua 4 langkah journey selesai.
+  const JOURNEY_REWARD = 5;
+  useEffect(() => {
+    const allDone = !!profileAvatarUrl && journeyTelegram && journeyTopup && completedCount > 0;
+    if (!allDone || journeyRewardChecked) return;
+    setJourneyRewardChecked(true);
+    void (async () => {
+      const desc = 'Bonus: Selesai Journey';
+      const { count } = await supabase.from('credit_transactions').select('id', { count: 'exact', head: true }).eq('username', session.username).eq('description', desc);
+      if ((count ?? 0) > 0) return; // sudah pernah dapat
+      const { data: bal } = await supabase.from('user_credits').select('balance').eq('username', session.username).maybeSingle();
+      const next = (bal?.balance ?? 0) + JOURNEY_REWARD;
+      await Promise.all([
+        supabase.from('user_credits').upsert({ username: session.username, balance: next }),
+        supabase.from('credit_transactions').insert({ username: session.username, amount: JOURNEY_REWARD, type: 'topup', description: desc }),
+      ]);
+      setCredits(next);
+      setJourneyRewardToast(true);
+      setTimeout(() => setJourneyRewardToast(false), 6000);
+    })();
+  }, [profileAvatarUrl, journeyTelegram, journeyTopup, completedCount, journeyRewardChecked, session.username]);
 
   // ── mini calendar month ──
   const [miniCalDate, setMiniCalDate] = useState(() => new Date());
@@ -4956,6 +4980,7 @@ function DashboardSection({ session }: { session: AppSession }) {
               <div>
                 <p className="eyebrow">Langkah Awal Kamu</p>
                 <h3 className="db-journey-title">Selesaikan {steps.length} langkah ini biar makin optimal 🚀</h3>
+                <p className="db-journey-reward-hint">Selesaikan semua → bonus <strong><CoinIcon size={12} /> +{JOURNEY_REWARD} koin</strong> otomatis!</p>
               </div>
               <div className="db-journey-progress">
                 <strong>{doneCount}/{steps.length}</strong>
@@ -4976,6 +5001,13 @@ function DashboardSection({ session }: { session: AppSession }) {
           </section>
         );
       })()}
+
+      {journeyRewardToast && createPortal(
+        <div className="journey-reward-toast" onClick={() => setJourneyRewardToast(false)}>
+          🎉 Semua langkah selesai! Kamu dapat <strong><CoinIcon size={14} /> +{JOURNEY_REWARD} koin</strong> bonus.
+        </div>,
+        document.body,
+      )}
 
       {/* ── Main grid ────────────────────────────────────── */}
       <div className="db-grid">
