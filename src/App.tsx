@@ -9028,7 +9028,7 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                         </div>
                       ))}
                       {dateHubEvents.slice(0, 3).map((ev) => (
-                        <a key={ev.id} href="#events" className="calendar-month-event calendar-hub-event">
+                        <a key={ev.id} href="#events" className="calendar-month-event calendar-hub-event" onClick={(e) => { if (canManage) { e.preventDefault(); sessionStorage.setItem('edit_hub_event_id', ev.id); window.location.hash = '#events'; } }}>
                           <strong>{({ zoom: '📹', video: '🎬', other: '📌' } as const)[ev.type]} {ev.title}</strong>
                           {ev.time && <small>{ev.time}</small>}
                         </a>
@@ -9086,6 +9086,7 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                       className="calendar-event-chip purple calendar-hub-chip"
                       style={{ '--event-left': `${left}%`, '--event-top': `${top}%`, '--event-width': `${columnWidth}%`, '--event-height': '8%' } as CSSProperties}
                       key={ev.id}
+                      onClick={(e) => { if (canManage) { e.preventDefault(); sessionStorage.setItem('edit_hub_event_id', ev.id); window.location.hash = '#events'; } }}
                     >
                       <strong>{({ zoom: '📹', video: '🎬', other: '📌' } as const)[ev.type]} {ev.title}</strong>
                       {ev.time && <span>{ev.time}</span>}
@@ -15795,7 +15796,26 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const isJoined = (e: HubEvent) => canManage || userPerks.credit_exempt || userPerks.free_event || e.coinCost === 0 || joinedIds.has(e.id) || !!localStorage.getItem(joinedKey(e.id));
 
   useEffect(() => {
-    void loadHubEvents().then((evs) => { setEvents(evs); setLoading(false); });
+    void loadHubEvents().then((evs) => {
+      setEvents(evs);
+      setLoading(false);
+      // Handoff dari halaman Kalender: buka edit event yang diklik.
+      if (canManage) {
+        const editId = sessionStorage.getItem('edit_hub_event_id');
+        if (editId) {
+          sessionStorage.removeItem('edit_hub_event_id');
+          const idx = evs.findIndex((e) => e.id === editId);
+          if (idx >= 0) {
+            const { id: _id, ...rest } = evs[idx];
+            setDraft(rest);
+            setEditingIdx(idx);
+            setCoverFile(null);
+            setCoverPreview(rest.coverUrl ?? '');
+            setShowForm(true);
+          }
+        }
+      }
+    });
   }, []);
 
   const openAdd = () => { setDraft(emptyDraft()); setEditingIdx(null); setCoverFile(null); setCoverPreview(''); setShowForm(true); };
