@@ -74,11 +74,11 @@ async function sendStudentBot(chatId: string, text: string, token: string, butto
   } catch { /* silent */ }
 }
 
+// Token student bot dipakemkan agar tidak berubah lagi (tidak bergantung ke DB).
+const STUDENT_BOT_TOKEN = '8824436093:AAFOwAwqzVzUvKp-KSTb7S6b83m9O9FIW50';
+
 async function getStudentBotToken(): Promise<string> {
-  const { data } = await supabase.from('learning_hub_content').select('content').eq('content_key', 'admin_credit_settings').maybeSingle();
-  if (!data?.content) return '';
-  const s = (typeof data.content === 'string' ? JSON.parse(data.content) : data.content) as { student_bot_token?: string };
-  return s.student_bot_token ?? '';
+  return STUDENT_BOT_TOKEN;
 }
 
 async function getStudentChatId(username: string): Promise<string | null> {
@@ -12421,7 +12421,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     await supabase.removeChannel(channel);
 
     // Blast ke semua student yang sudah link Telegram
-    const botToken = settings.student_bot_token ?? '';
+    const botToken = STUDENT_BOT_TOKEN;
     if (botToken) {
       const { data: linkedUsers } = await supabase.from('app_users').select('telegram_chat_id').not('telegram_chat_id', 'is', null);
       if (linkedUsers && linkedUsers.length > 0) {
