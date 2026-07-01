@@ -16296,6 +16296,11 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                   <span>Tampilkan ke member</span>
                 </label>
                 <div className="admin-modal-actions">
+                  {editingIdx !== null && (
+                    <button type="button" className="admin-modal-delete" onClick={() => void confirmDialog('Hapus event ini? Tindakan tidak bisa dibatalkan.').then((ok) => { if (ok) { void handleDelete(editingIdx); setShowForm(false); } })}>
+                      Hapus Event
+                    </button>
+                  )}
                   <button type="button" className="admin-modal-cancel" onClick={() => setShowForm(false)}>Batal</button>
                   <button type="button" className="admin-modal-submit" disabled={saving || !draft.title.trim() || !draft.date} onClick={() => void handleSave()}>
                     {saving ? 'Menyimpan…' : editingIdx !== null ? 'Simpan Perubahan' : 'Tambah Event'}

@@ -8246,6 +8246,19 @@ body.dark .referral-preview-box {
 }
 .admin-modal-label { display: flex; flex-direction: column; gap: 5px; font-size: 0.83rem; font-weight: 600; color: var(--muted); margin-top: 10px; }
 .admin-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.admin-modal-delete {
+  margin-right: auto;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(239,68,68,0.4);
+  background: transparent;
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.admin-modal-delete:hover { background: rgba(239,68,68,0.1); }
 .admin-modal-cancel {
   padding: 8px 18px;
   border: 1px solid var(--line);
