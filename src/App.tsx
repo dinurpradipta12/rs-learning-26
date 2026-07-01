@@ -8155,12 +8155,23 @@ function LoginPage({
     setSubmitting(true);
     setError('');
 
-    const { data, error: rpcError } = await supabase.rpc('authenticate_app_user', {
+    const doAuth = () => supabase.rpc('authenticate_app_user', {
       p_username: username.trim().toLowerCase(),
       p_password: password,
     });
+    let { data, error: rpcError } = await doAuth();
+    // Retry sekali jika kena statement timeout (biasanya throttling sementara).
+    if (rpcError && /timeout|canceling statement/i.test(rpcError.message)) {
+      await new Promise((r) => setTimeout(r, 800));
+      ({ data, error: rpcError } = await doAuth());
+    }
 
     if (rpcError) {
+      if (/timeout|canceling statement/i.test(rpcError.message)) {
+        setError('Server sedang sibuk, coba login lagi sebentar lagi.');
+        setSubmitting(false);
+        return;
+      }
       if (isMissingSupabaseFunctionError(rpcError, 'authenticate_app_user')) {
         const localSession = authenticateLocalUser(username, password);
 
