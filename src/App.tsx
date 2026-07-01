@@ -2968,6 +2968,12 @@ function App() {
     setCommunityUnread(0);
   }, [page, session, communityUnread]);
 
+  // Bonus login harian (dibatasi 1x/hari oleh awardCoinReward).
+  useEffect(() => {
+    if (!session) return;
+    void awardCoinReward(session.username, 'daily_login').then((nb) => { if (nb != null) setUserCredits(nb); });
+  }, [session]);
+
   // Buka link thread (?thread=): begitu user login/ada sesi, arahkan ke forum
   // agar thread langsung terbuka tanpa perlu login ulang.
   useEffect(() => {
@@ -6543,11 +6549,18 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       return;
     }
 
+    const wasCompleted = completedLessons.has(selectedLesson.id);
+
     // Update state optimistically so UI responds immediately
     const nextCompletedLessons = new Set(completedLessons);
     nextCompletedLessons.add(selectedLesson.id);
     setCompletedLessons(nextCompletedLessons);
     try { localStorage.setItem(progressStorageKey, JSON.stringify([...nextCompletedLessons])); } catch { /* ignore */ }
+
+    // Bonus koin selesai materi (hanya saat pertama kali selesai, dibatasi per hari)
+    if (!wasCompleted) {
+      void awardCoinReward(sessionUsername, 'complete_lesson').then((nb) => { if (nb != null) onCreditChange(nb); });
+    }
 
     void (async () => {
       const { error } = await supabase.from('lesson_progress').upsert(
@@ -9756,6 +9769,7 @@ function ForumThreadDetail({
   onBack,
   onUpdate,
   onDelete,
+  onCreditChange,
 }: {
   thread: ForumThread;
   session: AppSession;
@@ -9766,6 +9780,7 @@ function ForumThreadDetail({
   onBack: () => void;
   onUpdate: (updated: ForumThread) => void;
   onDelete: (threadId: string) => void;
+  onCreditChange?: (n: number) => void;
 }) {
   const [replyBody, setReplyBody] = useState('');
   const [replyImageUrl, setReplyImageUrl] = useState('');
@@ -9904,6 +9919,9 @@ function ForumThreadDetail({
     };
 
     onUpdate(updated);
+
+    // Bonus koin balas thread (dibatasi per hari)
+    void awardCoinReward(session.username, 'reply_thread').then((nb) => { if (nb != null) onCreditChange?.(nb); });
 
     // Notifikasi ke pemilik thread jika bukan diri sendiri
     if (thread.authorUsername !== session.username) {
@@ -10190,6 +10208,8 @@ function ForumComposer({
       replies: [],
     };
     onPost(newThread);
+    // Bonus koin buat thread (dibatasi per hari)
+    void awardCoinReward(session.username, 'create_thread').then((nb) => { if (nb != null) onCreditChange(nb); });
     if (isQnaSession) {
       // Silent broadcast to all members with linked Telegram
       void (async () => {
@@ -10529,6 +10549,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
           onBack={() => setSelectedThreadId(null)}
           onUpdate={updateThread}
           onDelete={deleteThread}
+          onCreditChange={onCreditChange}
         />
       </section>
     );
@@ -10747,7 +10768,50 @@ function promoBg(p: PromoPopup): string {
   return p.bgColor ?? '#ffffff';
 }
 
-type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string };
+// ── Bonus Ruang Coin (earn koin dari aksi) ───────────────────
+type CoinRewardKey = 'reply_thread' | 'create_thread' | 'daily_login' | 'complete_lesson';
+type CoinRewardRule = { amount: number; perDay: number };
+type CoinRewards = Record<CoinRewardKey, CoinRewardRule>;
+const defaultCoinRewards: CoinRewards = {
+  reply_thread: { amount: 0, perDay: 3 },
+  create_thread: { amount: 0, perDay: 2 },
+  daily_login: { amount: 0, perDay: 1 },
+  complete_lesson: { amount: 0, perDay: 5 },
+};
+const coinRewardLabels: Record<CoinRewardKey, string> = {
+  reply_thread: 'Balas Thread / QNA',
+  create_thread: 'Buat Thread Baru',
+  daily_login: 'Login Harian',
+  complete_lesson: 'Selesai Materi / Video',
+};
+const coinRewardIcons: Record<CoinRewardKey, string> = {
+  reply_thread: '💬', create_thread: '📝', daily_login: '📅', complete_lesson: '🎬',
+};
+
+// Award koin ke user saat melakukan aksi tertentu (dengan batas harian anti-spam).
+async function awardCoinReward(username: string, key: CoinRewardKey): Promise<number | null> {
+  try {
+    const settings = await loadAdminSettings();
+    const rule = (settings.coin_rewards ?? defaultCoinRewards)[key];
+    if (!rule || rule.amount <= 0) return null;
+    const desc = `Bonus: ${coinRewardLabels[key]}`;
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+    const { count } = await supabase.from('credit_transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('username', username).eq('description', desc)
+      .gte('created_at', startOfDay.toISOString());
+    if ((count ?? 0) >= rule.perDay) return null;
+    const { data: bal } = await supabase.from('user_credits').select('balance').eq('username', username).maybeSingle();
+    const next = (bal?.balance ?? 0) + rule.amount;
+    await Promise.all([
+      supabase.from('user_credits').upsert({ username, balance: next }),
+      supabase.from('credit_transactions').insert({ username, amount: rule.amount, type: 'topup', description: desc }),
+    ]);
+    return next;
+  } catch { return null; }
+}
+
+type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards };
 
 let _adminSettingsCache: AdminSettings | null = null;
 async function loadAdminSettings(): Promise<AdminSettings> {
@@ -10768,6 +10832,7 @@ async function loadAdminSettings(): Promise<AdminSettings> {
     promo: raw.promo ?? defaultPromo,
     coin_rate: raw.coin_rate ?? CREDIT_RATE,
     student_bot_token: raw.student_bot_token ?? '',
+    coin_rewards: { ...defaultCoinRewards, ...(raw.coin_rewards ?? {}) },
   };
   return _adminSettingsCache;
 }
@@ -12545,6 +12610,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [costsSaving, setCostsSaving] = useState(false);
   const [costsSaved, setCostsSaved] = useState(false);
   const [showCostsModal, setShowCostsModal] = useState(false);
+  const [showRewardsModal, setShowRewardsModal] = useState(false);
+  const [draftRewards, setDraftRewards] = useState<CoinRewards>({ ...defaultCoinRewards });
+  const [rewardsSaving, setRewardsSaving] = useState(false);
+  const [rewardsSaved, setRewardsSaved] = useState(false);
   const [showResetTxModal, setShowResetTxModal] = useState(false);
   const [resettingTx, setResettingTx] = useState(false);
 
@@ -12590,6 +12659,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setDraftReferralCodes(settings.referralCodes ?? []);
     setDraftCoinRate(settings.coin_rate ?? CREDIT_RATE);
     setDraftStudentBotToken(settings.student_bot_token ?? '');
+    setDraftRewards({ ...defaultCoinRewards, ...(settings.coin_rewards ?? {}) });
     setReferralCodes(settings.referralCodes ?? []);
 
     // Count usage per referral code from user_profiles
@@ -13157,6 +13227,13 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
                   Atur Biaya Fitur
                 </button>
+                <button
+                  type="button"
+                  className="admin-settings-btn"
+                  onClick={() => { void loadAdminSettings().then((s) => setDraftRewards({ ...defaultCoinRewards, ...(s.coin_rewards ?? {}) })); setShowRewardsModal(true); }}
+                >
+                  🎁 Atur Bonus Koin
+                </button>
               </div>
             </div>
             <div className="admin-table-wrap">
@@ -13282,6 +13359,74 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                     }}
                   >
                     {costsSaving ? 'Menyimpan…' : 'Simpan'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+
+          {/* Bonus Ruang Coin Modal */}
+          {showRewardsModal && createPortal(
+            <div className="forum-modal-overlay" onClick={() => setShowRewardsModal(false)}>
+              <div className="forum-modal costs-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="costs-modal-header">
+                  <h3>Bonus Ruang Coin</h3>
+                  <button type="button" className="forum-modal-close" onClick={() => setShowRewardsModal(false)}>✕</button>
+                </div>
+                <p className="costs-modal-sub">Beri koin gratis ke student saat melakukan aksi tertentu. Isi 0 untuk menonaktifkan. "Maks/hari" membatasi berapa kali bonus bisa didapat per hari (anti-spam).</p>
+
+                <div className="costs-modal-grid">
+                  {(Object.keys(defaultCoinRewards) as CoinRewardKey[]).map((key) => (
+                    <div className="costs-modal-card" key={key}>
+                      <div className="costs-modal-card-left">
+                        <span className="costs-modal-icon">{coinRewardIcons[key]}</span>
+                        <div className="costs-modal-info">
+                          <strong>{coinRewardLabels[key]}</strong>
+                          <span>Koin per aksi</span>
+                        </div>
+                      </div>
+                      <div className="rewards-modal-inputs">
+                        <div className="rewards-field">
+                          <label>Koin</label>
+                          <input
+                            type="number" min="0" step="1"
+                            className="costs-modal-input"
+                            value={draftRewards[key].amount}
+                            onChange={(e) => setDraftRewards((p) => ({ ...p, [key]: { ...p[key], amount: Math.max(0, Number(e.target.value)) } }))}
+                          />
+                        </div>
+                        <div className="rewards-field">
+                          <label>Maks/hari</label>
+                          <input
+                            type="number" min="1" step="1"
+                            className="costs-modal-input"
+                            value={draftRewards[key].perDay}
+                            onChange={(e) => setDraftRewards((p) => ({ ...p, [key]: { ...p[key], perDay: Math.max(1, Number(e.target.value)) } }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="costs-modal-footer">
+                  {rewardsSaved && <span className="admin-costs-saved">✓ Tersimpan</span>}
+                  <button type="button" className="button secondary" onClick={() => setDraftRewards({ ...defaultCoinRewards })}>Reset ke default</button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    disabled={rewardsSaving}
+                    onClick={async () => {
+                      setRewardsSaving(true);
+                      const settings = await loadAdminSettings();
+                      await saveAdminSettings({ ...settings, coin_rewards: draftRewards });
+                      setRewardsSaving(false);
+                      setRewardsSaved(true);
+                      setTimeout(() => { setRewardsSaved(false); setShowRewardsModal(false); }, 1200);
+                    }}
+                  >
+                    {rewardsSaving ? 'Menyimpan…' : 'Simpan'}
                   </button>
                 </div>
               </div>
