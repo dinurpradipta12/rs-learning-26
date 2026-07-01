@@ -3803,9 +3803,24 @@ function DbMonitor() {
 
     const bucketStats = await Promise.all(
       BUCKET_DEFS.map(async (b) => {
-        const { data } = await supabase.storage.from(b.name).list('', { limit: 1000 });
-        const files = data?.length ?? 0;
-        const sizeBytes = data?.reduce((acc, f) => acc + ((f.metadata as { size?: number })?.size ?? 0), 0) ?? 0;
+        // File tersimpan di dalam subfolder (mis. topup-proofs/, shared-asset-thumbs/),
+        // jadi list('') hanya mengembalikan folder. Telusuri 1 level ke dalam.
+        const { data: top } = await supabase.storage.from(b.name).list('', { limit: 1000 });
+        let files = 0;
+        let sizeBytes = 0;
+        const folders: string[] = [];
+        for (const entry of top ?? []) {
+          const size = (entry.metadata as { size?: number } | null)?.size;
+          if (entry.id && typeof size === 'number') { files += 1; sizeBytes += size; }
+          else folders.push(entry.name); // folder (metadata null)
+        }
+        const subResults = await Promise.all(folders.map((folder) => supabase.storage.from(b.name).list(folder, { limit: 1000 })));
+        for (const { data: sub } of subResults) {
+          for (const f of sub ?? []) {
+            const size = (f.metadata as { size?: number } | null)?.size;
+            if (typeof size === 'number') { files += 1; sizeBytes += size; }
+          }
+        }
         return { name: b.name, label: b.label, files, warnAt: b.warnAt, sizeBytes };
       })
     );
