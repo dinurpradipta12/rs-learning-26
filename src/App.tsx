@@ -4596,6 +4596,21 @@ function DashboardSection({ session }: { session: AppSession }) {
   // ── profile avatar ──
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
+  // ── journey / onboarding steps (user baru) ──
+  const [journeyTelegram, setJourneyTelegram] = useState(false);
+  const [journeyTopup, setJourneyTopup] = useState(false);
+  const [journeyDismissed, setJourneyDismissed] = useState(() => !!localStorage.getItem(`journey_done_${session.username}`));
+  useEffect(() => {
+    void (async () => {
+      const [{ data: u }, { count }] = await Promise.all([
+        supabase.from('app_users').select('telegram_chat_id').eq('username', session.username).maybeSingle(),
+        supabase.from('topup_requests').select('id', { count: 'exact', head: true }).eq('username', session.username).eq('status', 'approved'),
+      ]);
+      setJourneyTelegram(!!(u as { telegram_chat_id?: string } | null)?.telegram_chat_id);
+      setJourneyTopup((count ?? 0) > 0);
+    })();
+  }, [session.username]);
+
   // ── mini calendar month ──
   const [miniCalDate, setMiniCalDate] = useState(() => new Date());
 
@@ -4925,6 +4940,43 @@ function DashboardSection({ session }: { session: AppSession }) {
           </div>
         </div>
       </section>
+
+      {/* ── Journey / langkah awal (user baru) ── */}
+      {(() => {
+        const steps = [
+          { done: !!profileAvatarUrl, icon: '👤', title: 'Lengkapi profil & foto', desc: 'Upload foto & isi data diri kamu', href: '#profil' },
+          { done: journeyTelegram, icon: '📲', title: 'Hubungkan Telegram', desc: 'Terima notif kelas, event & topup', href: '#profil' },
+          { done: journeyTopup, icon: '🪙', title: 'Topup Ruang Coin pertama', desc: 'Buka fitur premium & dapat bonus koin', href: '#profil' },
+          { done: completedCount > 0, icon: '🎓', title: 'Mulai belajar', desc: 'Selesaikan materi pertamamu', href: '#materi' },
+        ];
+        const doneCount = steps.filter((s) => s.done).length;
+        if (journeyDismissed || doneCount === steps.length) return null;
+        return (
+          <section className="db-journey card">
+            <div className="db-journey-head">
+              <div>
+                <p className="eyebrow">Langkah Awal Kamu</p>
+                <h3 className="db-journey-title">Selesaikan {steps.length} langkah ini biar makin optimal 🚀</h3>
+              </div>
+              <div className="db-journey-progress">
+                <strong>{doneCount}/{steps.length}</strong>
+                <button type="button" className="db-journey-dismiss" title="Sembunyikan" onClick={() => { localStorage.setItem(`journey_done_${session.username}`, '1'); setJourneyDismissed(true); }}>✕</button>
+              </div>
+            </div>
+            <div className="db-journey-steps">
+              {steps.map((s, i) => (
+                <a key={i} href={s.href} className={`db-journey-step${s.done ? ' done' : ''}`}>
+                  <span className="db-journey-step-icon">{s.done ? '✓' : s.icon}</span>
+                  <div className="db-journey-step-text">
+                    <strong>{s.title}</strong>
+                    <span>{s.desc}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* ── Main grid ────────────────────────────────────── */}
       <div className="db-grid">

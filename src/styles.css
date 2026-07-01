@@ -14319,3 +14319,21 @@ body.dark .checkin-day-label { color: #d6a86f; }
 body.dark .checkin-footer { color: #fdba74; }
 .checkin-btn { width: 100%; padding: 13px; border-radius: 14px; border: none; background: linear-gradient(90deg,#f59e0b,#ea580c); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; }
 .checkin-btn:hover { opacity: 0.92; }
+
+/* ── Dashboard journey ── */
+.db-journey { padding: 20px 22px; }
+.db-journey-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.db-journey-title { font-size: 1.05rem; font-weight: 800; color: var(--text); margin: 4px 0 0; }
+.db-journey-progress { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.db-journey-progress strong { font-size: 0.9rem; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 4px 12px; }
+.db-journey-dismiss { width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(0,0,0,0.05); color: var(--muted); cursor: pointer; }
+.db-journey-dismiss:hover { background: rgba(0,0,0,0.1); }
+.db-journey-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.db-journey-step { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--bg); text-decoration: none; transition: border-color 0.15s, transform 0.1s; }
+.db-journey-step:hover { border-color: var(--accent); transform: translateY(-2px); }
+.db-journey-step.done { opacity: 0.6; background: rgba(22,163,74,0.06); border-color: rgba(22,163,74,0.25); }
+.db-journey-step-icon { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-size: 1.1rem; background: var(--accent-soft); color: var(--accent); }
+.db-journey-step.done .db-journey-step-icon { background: #16a34a; color: #fff; font-weight: 800; }
+.db-journey-step-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.db-journey-step-text strong { font-size: 0.85rem; color: var(--text); }
+.db-journey-step-text span { font-size: 0.72rem; color: var(--muted); line-height: 1.35; }
