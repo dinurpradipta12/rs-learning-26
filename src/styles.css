@@ -14355,3 +14355,6 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 .lms-review-like:hover { border-color: var(--accent); color: var(--accent); }
 .lms-review-like.liked { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .lms-review-like-label { font-weight: 700; }
+
+.forum-action-reward { display: inline-flex; align-items: center; gap: 3px; font-size: 0.74rem; font-weight: 800; color: #16a34a; background: rgba(22,163,74,0.12); border-radius: 999px; padding: 3px 10px; }
+.forum-action-reward.inline { margin-left: 8px; padding: 1px 8px; font-size: 0.68rem; }

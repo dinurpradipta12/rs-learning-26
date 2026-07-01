@@ -5968,9 +5968,14 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [reviewRating, setReviewRating] = useState('5');
   const [reviewFeedback, setReviewFeedback] = useState('');
   const [reviewRewardCoins, setReviewRewardCoins] = useState(0);
+  const [completeLessonReward, setCompleteLessonReward] = useState(0);
   const [reviewLikes, setReviewLikes] = useState<Record<string, { count: number; liked: boolean }>>({});
   useEffect(() => {
-    void loadAdminSettings().then((s) => setReviewRewardCoins((s.coin_rewards ?? defaultCoinRewards).write_review.amount));
+    void loadAdminSettings().then((s) => {
+      const rw = s.coin_rewards ?? defaultCoinRewards;
+      setReviewRewardCoins(rw.write_review.amount);
+      setCompleteLessonReward(rw.complete_lesson.amount);
+    });
   }, []);
   const [reviewerAvatarUrl, setReviewerAvatarUrl] = useState<string | null>(null);
   const progressStorageKey = `lesson_progress_${sessionUsername}_${courseKey}`;
@@ -7074,6 +7079,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                     <button type="button" className="lms-bar-btn" onClick={markCurrentLessonComplete} disabled={currentLessonCompleted}>
                       <span className={`lms-bar-icon ${currentLessonCompleted ? 'done' : ''}`}>{currentLessonCompleted ? '✓' : '♡'}</span>
                       {currentLessonCompleted ? 'Selesai' : 'Tandai Selesai'}
+                      {!currentLessonCompleted && completeLessonReward > 0 && <span className="lms-review-reward"><CoinIcon size={12} /> +{completeLessonReward}</span>}
                     </button>
                   )}
                   <button
@@ -9957,6 +9963,8 @@ function ForumThreadDetail({
   const [copyToast, setCopyToast] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [replyReward, setReplyReward] = useState(0);
+  useEffect(() => { void loadAdminSettings().then((s) => setReplyReward((s.coin_rewards ?? defaultCoinRewards).reply_thread.amount)); }, []);
   const isAuthor = thread.authorUsername === session.username;
   const canModerate = session.role === 'developer' || session.role === 'admin';
   const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
@@ -10284,7 +10292,10 @@ function ForumThreadDetail({
           </div>
         </div>
       </form>
-      <p className="forum-reply-bar-hint">Enter untuk mengirim · Shift+Enter untuk baris baru</p>
+      <p className="forum-reply-bar-hint">
+        Enter untuk mengirim · Shift+Enter untuk baris baru
+        {replyReward > 0 && <span className="forum-action-reward inline"><CoinIcon size={11} /> +{replyReward} koin per balasan</span>}
+      </p>
 
       {lightboxUrl && createPortal(
         <div className="forum-lightbox-overlay" onClick={() => setLightboxUrl(null)}>
@@ -10328,6 +10339,8 @@ function ForumComposer({
   const isAdmin = session.role === 'admin' || session.role === 'developer';
   const availableCategories = forumAllCategories(isAdmin);
   const composerBadge = useBadgeTier(session.username);
+  const [postReward, setPostReward] = useState(0);
+  useEffect(() => { void loadAdminSettings().then((s) => setPostReward((s.coin_rewards ?? defaultCoinRewards).create_thread.amount)); }, []);
   const [body, setBody] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(forumCategories[0]);
@@ -10502,11 +10515,8 @@ function ForumComposer({
           </span>
         </div>
         <div className="forum-composer-post-row">
-          {featureCosts.post_thread > 0 && !userPerks.credit_exempt && !userPerks.free_thread && category !== 'qna session' && (
-            <span className="forum-composer-credit-cost">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              {featureCosts.post_thread} Ruang Coin
-            </span>
+          {postReward > 0 && (
+            <span className="forum-action-reward"><CoinIcon size={12} /> +{postReward} koin</span>
           )}
           <button
             type="submit"
