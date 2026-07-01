@@ -16007,7 +16007,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             </div>
           )}
 
-          {upcoming.length > 0 && (() => {
+          {!canManage && upcoming.length > 0 && (() => {
             const joinedUpcoming = upcoming.filter((ev) => isJoined(ev));
             const openUpcoming = upcoming.filter((ev) => !isJoined(ev));
             const renderCard = (ev: CalendarEvent) => {
@@ -16077,7 +16077,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             );
           })()}
 
-          {past.length > 0 && (
+          {!canManage && past.length > 0 && (
             <div className="events-section">
               <h3 className="events-section-title" style={{ color: 'var(--muted)' }}>Sudah Berlalu</h3>
               <div className="events-grid past">
