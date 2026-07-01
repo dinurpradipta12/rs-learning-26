@@ -5967,6 +5967,11 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [reviewName, setReviewName] = useState(sessionDisplayName || sessionUsername);
   const [reviewRating, setReviewRating] = useState('5');
   const [reviewFeedback, setReviewFeedback] = useState('');
+  const [reviewRewardCoins, setReviewRewardCoins] = useState(0);
+  const [reviewLikes, setReviewLikes] = useState<Record<string, { count: number; liked: boolean }>>({});
+  useEffect(() => {
+    void loadAdminSettings().then((s) => setReviewRewardCoins((s.coin_rewards ?? defaultCoinRewards).write_review.amount));
+  }, []);
   const [reviewerAvatarUrl, setReviewerAvatarUrl] = useState<string | null>(null);
   const progressStorageKey = `lesson_progress_${sessionUsername}_${courseKey}`;
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(() => {
@@ -6042,6 +6047,36 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       : Math.round((completedLessons.size / materialLessons.length) * 100);
   const quizUnlocked = allLessonsCompleted && moduleComplete === true;
   const selectedLessonReviews = selectedLesson ? reviewsByLesson[selectedLesson.id] ?? [] : [];
+
+  // Load likes untuk review di lesson yang dibuka
+  useEffect(() => {
+    const ids = selectedLessonReviews.map((r) => r.id).filter(Boolean) as string[];
+    if (ids.length === 0) { setReviewLikes({}); return; }
+    void (async () => {
+      const { data } = await supabase.from('review_likes').select('review_id, username').in('review_id', ids);
+      const map: Record<string, { count: number; liked: boolean }> = {};
+      for (const id of ids) map[id] = { count: 0, liked: false };
+      for (const row of (data ?? []) as { review_id: string; username: string }[]) {
+        if (!map[row.review_id]) map[row.review_id] = { count: 0, liked: false };
+        map[row.review_id].count += 1;
+        if (row.username === sessionUsername) map[row.review_id].liked = true;
+      }
+      setReviewLikes(map);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLesson?.id, reviewsByLesson, sessionUsername]);
+
+  const toggleReviewLike = async (reviewId: string) => {
+    if (!sessionUsername) return;
+    const cur = reviewLikes[reviewId] ?? { count: 0, liked: false };
+    // optimistic
+    setReviewLikes((p) => ({ ...p, [reviewId]: { count: cur.liked ? cur.count - 1 : cur.count + 1, liked: !cur.liked } }));
+    if (cur.liked) {
+      await supabase.from('review_likes').delete().eq('review_id', reviewId).eq('username', sessionUsername);
+    } else {
+      await supabase.from('review_likes').upsert({ review_id: reviewId, username: sessionUsername }, { onConflict: 'review_id,username' });
+    }
+  };
   const selectedLessonMedia = selectedLesson ? resolveLessonMedia(selectedLesson.videoUrl) : null;
 
   const loadLessonsFromDatabase = async () => {
@@ -7100,6 +7135,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                       ref={reviewTriggerRef as unknown as React.RefObject<HTMLButtonElement>}
                     >
                       + Tulis Review
+                      {reviewRewardCoins > 0 && <span className="lms-review-reward"><CoinIcon size={12} /> +{reviewRewardCoins}</span>}
                     </button>
                   )}
                 </div>
@@ -7200,6 +7236,17 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                             </div>
                           </div>
                           <p>{review.feedback}</p>
+                          {review.id && (
+                            <button
+                              type="button"
+                              className={`lms-review-like${reviewLikes[review.id]?.liked ? ' liked' : ''}`}
+                              onClick={() => void toggleReviewLike(review.id!)}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill={reviewLikes[review.id]?.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                              {(reviewLikes[review.id]?.count ?? 0) > 0 && <span>{reviewLikes[review.id]?.count}</span>}
+                              <span className="lms-review-like-label">Suka</span>
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
