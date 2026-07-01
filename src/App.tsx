@@ -9928,9 +9928,9 @@ function ForumThreadDetail({
               </button>
             </div>
           </div>
-          <p className="forum-reply-bar-hint">Enter untuk mengirim · Shift+Enter untuk baris baru</p>
         </div>
       </form>
+      <p className="forum-reply-bar-hint">Enter untuk mengirim · Shift+Enter untuk baris baru</p>
 
       {lightboxUrl && createPortal(
         <div className="forum-lightbox-overlay" onClick={() => setLightboxUrl(null)}>
