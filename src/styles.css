@@ -14292,3 +14292,30 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 .rewards-field .costs-modal-input { width: 68px; text-align: center; }
 
 .forum-edited-tag { font-size: 0.75rem; color: var(--muted); font-style: italic; }
+
+/* ── Daily check-in modal ── */
+.checkin-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9300; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fade-in 0.15s ease; }
+.checkin-modal { position: relative; width: 100%; max-width: 460px; background: linear-gradient(180deg,#fff7ed,#ffedd5); border: 2px solid #fdba74; border-radius: 22px; padding: 44px 24px 24px; box-shadow: 0 24px 70px rgba(0,0,0,0.3); animation: modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1); }
+body.dark .checkin-modal { background: linear-gradient(180deg,#2a1e12,#241a10); border-color: #b45309; }
+.checkin-ribbon { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg,#fbbf24,#f59e0b); color: #7c2d12; font-weight: 800; font-size: 0.95rem; padding: 8px 40px; border-radius: 0 0 16px 16px; box-shadow: 0 4px 10px rgba(245,158,11,0.3); }
+.checkin-close { position: absolute; top: 12px; right: 14px; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,0.08); color: #92400e; cursor: pointer; }
+.checkin-head { margin-bottom: 18px; }
+.checkin-title { font-size: 1.3rem; font-weight: 800; color: #9a3412; margin: 0 0 6px; }
+body.dark .checkin-title { color: #fdba74; }
+.checkin-sub { font-size: 0.9rem; color: #b45309; margin: 0; }
+body.dark .checkin-sub { color: #d6a86f; }
+.checkin-sub strong { color: #ea580c; }
+.checkin-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 18px; }
+.checkin-day { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.checkin-day-coin { position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; background: #fffbeb; border: 1.5px solid #fde68a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+body.dark .checkin-day-coin { background: rgba(255,255,255,0.05); border-color: #78500f; }
+.checkin-day.done .checkin-day-coin { background: #fef3c7; border-color: #fcd34d; opacity: 0.7; }
+.checkin-day.today .checkin-day-coin { border-color: #f59e0b; border-width: 2.5px; box-shadow: 0 0 0 3px rgba(245,158,11,0.2); }
+.checkin-day-amt { font-size: 0.72rem; font-weight: 800; color: #b45309; }
+.checkin-check { font-size: 1.2rem; color: #16a34a; font-weight: 900; }
+.checkin-day-label { font-size: 0.66rem; font-weight: 600; color: #92400e; }
+body.dark .checkin-day-label { color: #d6a86f; }
+.checkin-footer { font-size: 0.85rem; color: #9a3412; text-align: center; margin: 0 0 18px; line-height: 1.5; }
+body.dark .checkin-footer { color: #fdba74; }
+.checkin-btn { width: 100%; padding: 13px; border-radius: 14px; border: none; background: linear-gradient(90deg,#f59e0b,#ea580c); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; }
+.checkin-btn:hover { opacity: 0.92; }
