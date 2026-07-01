@@ -2618,6 +2618,7 @@ function App() {
   const [initialThreadId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('thread'));
   const [session, setSession] = useState<AppSession | null>(() => readStoredSession());
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [showReferralClaim, setShowReferralClaim] = useState(false);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
   const [userCredits, setUserCredits] = useState<number | null>(null);
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -3034,6 +3035,13 @@ function App() {
                 <button
                   type="button"
                   role="menuitem"
+                  onClick={() => { setShowReferralClaim(true); setIsAccountMenuOpen(false); }}
+                >
+                  🎁 klaim kode referral
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
                   className="account-menu-danger"
                   onClick={() => {
                     clearStoredSession();
@@ -3143,6 +3151,15 @@ function App() {
         {confirmContext && <CreditConfirmModal ctx={confirmContext} onClose={() => setConfirmContext(null)} />}
         {promoPopup && <PromoPopupModal promo={promoPopup} onClose={() => setPromoPopup(null)} onTopUp={() => setTopUpContext({ feature: 'promo', needed: 0, balance: 0 })} />}
         {searchOpen && <GlobalSearchModal onClose={() => setSearchOpen(false)} />}
+        {showReferralClaim && session && (
+          <ReferralClaimModal
+            session={session}
+            currentCredits={userCredits ?? 0}
+            onClose={() => setShowReferralClaim(false)}
+            onCoinClaimed={(bal) => setUserCredits(bal)}
+            onFeatureClaimed={(features) => setUserPerks((prev) => { const next = { ...prev }; for (const f of features) next[f as keyof UserPerks] = true; return next; })}
+          />
+        )}
         {showOnboarding && session && (
           <OnboardingModal
             username={session.username}
@@ -10718,6 +10735,154 @@ async function validateReferralCode(code: string): Promise<ReferralCode | null> 
 
 function formatRupiah(n: number) {
   return 'Rp ' + n.toLocaleString('id-ID');
+}
+
+const REFERRAL_FEATURE_LABELS: Record<string, string> = {
+  free_video: '🎬 Video Learning',
+  free_booking: '📅 Booking 1:1',
+  free_thread: '💬 Post Thread',
+  free_asset: '📁 Asset Manager',
+  free_event: '🎥 Join Event / Kelas',
+};
+
+function ReferralClaimModal({ session, currentCredits, onClose, onCoinClaimed, onFeatureClaimed }: {
+  session: AppSession;
+  currentCredits: number;
+  onClose: () => void;
+  onCoinClaimed: (newBalance: number) => void;
+  onFeatureClaimed: (features: string[]) => void;
+}) {
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState<'idle' | 'checking' | 'invalid' | 'used' | 'claiming'>('idle');
+  const [preview, setPreview] = useState<ReferralCode | null>(null);
+  const [success, setSuccess] = useState<{ credits: number; features?: string[]; code: string } | null>(null);
+
+  const codeUpper = code.trim().toUpperCase();
+
+  const handleCheck = async () => {
+    if (!codeUpper) return;
+    setStatus('checking');
+    setPreview(null);
+    const match = await validateReferralCode(codeUpper);
+    if (!match) { setStatus('invalid'); return; }
+    // Cek apakah user sudah pernah pakai kode ini
+    const { data: txs } = await supabase.from('credit_transactions').select('description').eq('username', session.username);
+    const already = (txs ?? []).some((t) => t.description === `Bonus kode referral: ${codeUpper}` || t.description === `Klaim akses fitur: ${codeUpper}`);
+    if (already) { setStatus('used'); return; }
+    setPreview(match);
+    setStatus('idle');
+  };
+
+  const handleClaim = async () => {
+    if (!preview) return;
+    setStatus('claiming');
+    const codeType = preview.type ?? 'coin';
+
+    if (codeType === 'feature' && preview.features && preview.features.length > 0) {
+      const { data: profRow } = await supabase.from('user_profiles').select('referral_perks').eq('username', session.username).maybeSingle();
+      const existingPerks = ((profRow as { referral_perks?: UserPerks } | null)?.referral_perks ?? {}) as UserPerks;
+      const referralPerks: UserPerks = { ...existingPerks };
+      for (const f of preview.features) referralPerks[f as keyof UserPerks] = true;
+      await Promise.all([
+        supabase.from('user_profiles').update({
+          referral_perks: referralPerks,
+          referral_perks_expires_at: preview.expiresAt ?? null,
+          referral_code: codeUpper,
+        } as never).eq('username', session.username),
+        supabase.from('credit_transactions').insert({ username: session.username, amount: 0, type: 'topup', description: `Klaim akses fitur: ${codeUpper}` }),
+      ]);
+      onFeatureClaimed(preview.features);
+      setSuccess({ credits: 0, features: preview.features, code: codeUpper });
+      return;
+    }
+
+    // Coin
+    const newBal = currentCredits + preview.credits;
+    await Promise.all([
+      supabase.from('user_credits').upsert({ username: session.username, balance: newBal }),
+      supabase.from('credit_transactions').insert({ username: session.username, amount: preview.credits, type: 'topup', description: `Bonus kode referral: ${codeUpper}` }),
+    ]);
+    onCoinClaimed(newBal);
+    setSuccess({ credits: preview.credits, code: codeUpper });
+  };
+
+  return createPortal(
+    <div className="referral-claim-overlay" onClick={onClose}>
+      <div className="referral-claim-modal" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="referral-claim-close" onClick={onClose}>✕</button>
+
+        {success ? (
+          <div className="referral-claim-success">
+            <div className="referral-claim-success-icon">🎉</div>
+            {success.features && success.features.length > 0 ? (
+              <>
+                <h3>Akses Fitur Aktif!</h3>
+                <div className="referral-claim-feat-list">
+                  {success.features.map((f) => <span key={f} className="referral-badge valid">{REFERRAL_FEATURE_LABELS[f] ?? f}</span>)}
+                </div>
+                <p>Kode <strong>{success.code}</strong> berhasil diklaim. Fitur di atas sekarang gratis untukmu{preview?.expiresAt ? ` sampai ${new Date(preview.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.</p>
+              </>
+            ) : (
+              <>
+                <h3>Ruang Coin Ditambahkan!</h3>
+                <div className="referral-claim-coin"><CoinIcon size={22} /> +{success.credits.toLocaleString('id-ID')}</div>
+                <p>Kode <strong>{success.code}</strong> berhasil diklaim. Coin sudah masuk ke saldomu.</p>
+              </>
+            )}
+            <button type="button" className="referral-claim-btn primary" onClick={onClose}>Sip, makasih! 🚀</button>
+          </div>
+        ) : (
+          <>
+            <div className="referral-claim-head">
+              <div className="referral-claim-gift">🎁</div>
+              <div>
+                <h3 className="referral-claim-title">Klaim Kode Referral</h3>
+                <p className="referral-claim-sub">Punya kode? Masukkan untuk dapat Ruang Coin atau akses fitur gratis.</p>
+              </div>
+            </div>
+
+            <div className="referral-claim-input-row">
+              <input
+                className={`referral-claim-input${status === 'invalid' || status === 'used' ? ' error' : ''}`}
+                placeholder="MASUKKAN KODE…"
+                value={code}
+                onChange={(e) => { setCode(e.target.value); setStatus('idle'); setPreview(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleCheck(); }}
+                autoFocus
+              />
+              <button type="button" className="referral-claim-btn" disabled={!codeUpper || status === 'checking'} onClick={() => void handleCheck()}>
+                {status === 'checking' ? '…' : 'Cek'}
+              </button>
+            </div>
+
+            {status === 'invalid' && <p className="referral-claim-msg error">Kode tidak ditemukan atau sudah kedaluwarsa.</p>}
+            {status === 'used' && <p className="referral-claim-msg error">Kamu sudah pernah mengklaim kode ini. Satu kode hanya bisa diklaim sekali per akun.</p>}
+
+            {preview && (
+              <div className="referral-claim-preview">
+                <div className="referral-claim-preview-head">
+                  <span className="referral-badge valid">{codeUpper}</span>
+                  <span className="referral-claim-type">{(preview.type ?? 'coin') === 'feature' ? 'Akses Fitur' : 'Ruang Coin'}</span>
+                </div>
+                {(preview.type ?? 'coin') === 'feature' ? (
+                  <div className="referral-claim-feat-list">
+                    {(preview.features ?? []).map((f) => <span key={f} className="referral-badge valid">{REFERRAL_FEATURE_LABELS[f] ?? f}</span>)}
+                  </div>
+                ) : (
+                  <div className="referral-claim-coin"><CoinIcon size={18} /> +{preview.credits.toLocaleString('id-ID')} Ruang Coin</div>
+                )}
+                {preview.expiresAt && <p className="referral-claim-expiry">Berlaku sampai {new Date(preview.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>}
+                <button type="button" className="referral-claim-btn primary full" disabled={status === 'claiming'} onClick={() => void handleClaim()}>
+                  {status === 'claiming' ? 'Memproses…' : 'Klaim Sekarang'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 // ── Feature cost system ──────────────────────────────────────

@@ -13952,3 +13952,94 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
   .topup-proof-col { width: 100%; border-left: none; padding-left: 0; border-top: 1.5px dashed var(--line); padding-top: 12px; flex-direction: row; align-items: center; }
   .topup-proof-thumb { width: 90px; aspect-ratio: 3/4; }
 }
+
+/* ── Referral Claim Modal ── */
+.referral-claim-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 9200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fade-in 0.15s ease;
+}
+.referral-claim-modal {
+  position: relative;
+  background: var(--card);
+  border-radius: 22px;
+  padding: 26px 26px 24px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.28);
+  animation: modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1);
+}
+.referral-claim-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.06);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.referral-claim-close:hover { background: rgba(0,0,0,0.12); }
+.referral-claim-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+.referral-claim-gift { font-size: 2rem; line-height: 1; }
+.referral-claim-title { font-size: 1.15rem; font-weight: 800; margin: 0 0 4px; color: var(--text); }
+.referral-claim-sub { font-size: 0.85rem; color: var(--muted); margin: 0; line-height: 1.5; }
+.referral-claim-input-row { display: flex; gap: 8px; }
+.referral-claim-input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.referral-claim-input:focus { outline: none; border-color: var(--accent); }
+.referral-claim-input.error { border-color: #ef4444; }
+.referral-claim-btn {
+  padding: 11px 20px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.referral-claim-btn:hover:not(:disabled) { opacity: 0.88; }
+.referral-claim-btn:disabled { opacity: 0.5; cursor: default; }
+.referral-claim-btn.full { width: 100%; margin-top: 12px; }
+.referral-claim-msg { font-size: 0.82rem; margin: 12px 2px 0; line-height: 1.45; }
+.referral-claim-msg.error { color: #ef4444; }
+.referral-claim-preview {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(var(--accent-rgb), 0.06);
+  border: 1.5px solid rgba(var(--accent-rgb), 0.2);
+}
+.referral-claim-preview-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.referral-claim-type { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.referral-claim-feat-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.referral-claim-coin { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 1.3rem; font-weight: 800; color: var(--accent); }
+.referral-claim-expiry { font-size: 0.75rem; color: var(--muted); text-align: center; margin: 10px 0 0; }
+.referral-claim-success { text-align: center; padding: 8px 0; }
+.referral-claim-success-icon { font-size: 3rem; margin-bottom: 8px; }
+.referral-claim-success h3 { font-size: 1.2rem; font-weight: 800; margin: 0 0 12px; color: var(--text); }
+.referral-claim-success p { font-size: 0.86rem; color: var(--muted); line-height: 1.55; margin: 14px 0 20px; }
+.referral-claim-success .referral-claim-coin { margin: 8px 0; font-size: 1.8rem; }
