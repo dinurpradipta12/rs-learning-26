@@ -13222,25 +13222,28 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           <span>Ruang Coin per aksi</span>
                         </div>
                       </div>
-                      <div className="costs-modal-input-wrap">
-                        <button
-                          type="button"
-                          className="costs-modal-stepper"
-                          onClick={() => setDraftCosts((p) => ({ ...p, [key]: Math.max(0, p[key] - 1) }))}
-                        >−</button>
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          className="costs-modal-input"
-                          value={draftCosts[key]}
-                          onChange={(e) => setDraftCosts((p) => ({ ...p, [key]: Math.max(0, Number(e.target.value)) }))}
-                        />
-                        <button
-                          type="button"
-                          className="costs-modal-stepper"
-                          onClick={() => setDraftCosts((p) => ({ ...p, [key]: p[key] + 1 }))}
-                        >+</button>
+                      <div className="costs-modal-input-col">
+                        <div className="costs-modal-input-wrap">
+                          <button
+                            type="button"
+                            className="costs-modal-stepper"
+                            onClick={() => setDraftCosts((p) => ({ ...p, [key]: Math.max(0, p[key] - 1) }))}
+                          >−</button>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className="costs-modal-input"
+                            value={draftCosts[key]}
+                            onChange={(e) => setDraftCosts((p) => ({ ...p, [key]: Math.max(0, Number(e.target.value)) }))}
+                          />
+                          <button
+                            type="button"
+                            className="costs-modal-stepper"
+                            onClick={() => setDraftCosts((p) => ({ ...p, [key]: p[key] + 1 }))}
+                          >+</button>
+                        </div>
+                        <span className="coin-rupiah-hint">{draftCosts[key] === 0 ? 'Gratis' : `≈ ${formatRupiah(draftCosts[key] * draftCoinRate)}`}</span>
                       </div>
                     </div>
                   ))}
@@ -13554,6 +13557,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                     onChange={(e) => setReferralDraft((p) => ({ ...p, credits: parseInt(e.target.value, 10) || 0 }))}
                     placeholder="contoh: 50"
                   />
+                  {referralDraft.credits > 0 && <span className="coin-rupiah-hint">≈ {formatRupiah(referralDraft.credits * draftCoinRate)} nilai</span>}
                 </label>
               ) : (
                 <div className="referral-feature-checks">
@@ -13938,6 +13942,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 onChange={(e) => setCustomCredits(e.target.value)}
                 placeholder="contoh: 500"
               />
+              {parseInt(customCredits, 10) > 0 && <span className="coin-rupiah-hint">≈ {formatRupiah(parseInt(customCredits, 10) * draftCoinRate)} nilai</span>}
             </label>
             <label className="admin-modal-label">Catatan (opsional)
               <input
@@ -16257,6 +16262,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                 </label>
                 <label>Biaya (Ruang Coin) <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '0.8rem' }}>(0 = gratis)</span>
                   <input className="admin-modal-input" type="number" min="0" value={draft.coinCost} onChange={(e) => setDraft((p) => ({ ...p, coinCost: parseInt(e.target.value, 10) || 0 }))} />
+                  <span className="coin-rupiah-hint">{draft.coinCost === 0 ? 'Gratis' : `≈ ${formatRupiah(draft.coinCost * CREDIT_RATE)}`}</span>
                 </label>
                 <label className="referral-feature-check-row" style={{ fontWeight: 600 }}>
                   <input type="checkbox" checked={draft.isActive !== false} onChange={(e) => setDraft((p) => ({ ...p, isActive: e.target.checked }))} />
@@ -16660,6 +16666,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
                   value={draft.coin_cost}
                   onChange={(e) => setDraft((d) => ({ ...d, coin_cost: Math.max(0, Number(e.target.value)) }))}
                 />
+                <span className="coin-rupiah-hint">{draft.coin_cost === 0 ? 'Gratis' : `≈ ${formatRupiah(draft.coin_cost * CREDIT_RATE)}`}</span>
               </label>
               <label className="asset-claimable-toggle">
                 <input
