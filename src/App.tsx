@@ -6204,6 +6204,10 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       };
 
       setReviewsByLesson(nextReviewsByLesson);
+      // Bonus koin tulis review (dibatasi per hari)
+      if (sessionUsername) {
+        void awardCoinReward(sessionUsername, 'write_review').then((nb) => { if (nb != null) onCreditChange(nb); });
+      }
       setReviewName('');
       setReviewRating('5');
       setReviewFeedback('');
@@ -10769,7 +10773,7 @@ function promoBg(p: PromoPopup): string {
 }
 
 // ── Bonus Ruang Coin (earn koin dari aksi) ───────────────────
-type CoinRewardKey = 'reply_thread' | 'create_thread' | 'daily_login' | 'complete_lesson';
+type CoinRewardKey = 'reply_thread' | 'create_thread' | 'daily_login' | 'complete_lesson' | 'write_review';
 type CoinRewardRule = { amount: number; perDay: number };
 type CoinRewards = Record<CoinRewardKey, CoinRewardRule>;
 const defaultCoinRewards: CoinRewards = {
@@ -10777,15 +10781,17 @@ const defaultCoinRewards: CoinRewards = {
   create_thread: { amount: 0, perDay: 2 },
   daily_login: { amount: 0, perDay: 1 },
   complete_lesson: { amount: 0, perDay: 5 },
+  write_review: { amount: 0, perDay: 3 },
 };
 const coinRewardLabels: Record<CoinRewardKey, string> = {
   reply_thread: 'Balas Thread / QNA',
   create_thread: 'Buat Thread Baru',
   daily_login: 'Login Harian',
   complete_lesson: 'Selesai Materi / Video',
+  write_review: 'Tulis Review Materi',
 };
 const coinRewardIcons: Record<CoinRewardKey, string> = {
-  reply_thread: '💬', create_thread: '📝', daily_login: '📅', complete_lesson: '🎬',
+  reply_thread: '💬', create_thread: '📝', daily_login: '📅', complete_lesson: '🎬', write_review: '⭐',
 };
 
 // Award koin ke user saat melakukan aksi tertentu (dengan batas harian anti-spam).
