@@ -10464,6 +10464,8 @@ type AdminUser = {
   credits: number;
   email?: string;
   perks: UserPerks;
+  referralPerks?: UserPerks;
+  referralPerksExpiresAt?: string | null;
   avatarUrl?: string | null;
   referralCode?: string | null;
 };
@@ -12430,7 +12432,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     const [{ data: appUsers }, { data: profiles }, { data: credits }, { data: txs }, settings] =
       await Promise.all([
         supabase.from('app_users').select('username, display_name, role, is_active, created_at').order('created_at', { ascending: false }),
-        supabase.from('user_profiles').select('username, email, perks, avatar_path, name, referral_code'),
+        supabase.from('user_profiles').select('username, email, perks, avatar_path, name, referral_code, referral_perks, referral_perks_expires_at'),
         supabase.from('user_credits').select('username, balance'),
         supabase.from('credit_transactions').select('*').order('created_at', { ascending: false }).limit(50),
         loadAdminSettings(),
@@ -12456,8 +12458,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setPromo(settings.promo ?? { ...defaultPromo });
     setSelectedPackage(settings.packages[1] ?? settings.packages[0]);
 
-    const profileMap: Record<string, { email: string; perks: UserPerks; avatarUrl: string | null; name: string | null; referralCode: string | null }> = {};
-    for (const p of profiles ?? []) profileMap[p.username] = { email: p.email ?? '', perks: (p.perks ?? {}) as UserPerks, avatarUrl: p.avatar_path ? profileAvatarPublicUrl(p.avatar_path) : null, name: p.name ?? null, referralCode: (p as { referral_code?: string | null }).referral_code ?? null };
+    const profileMap: Record<string, { email: string; perks: UserPerks; referralPerks: UserPerks; referralPerksExpiresAt: string | null; avatarUrl: string | null; name: string | null; referralCode: string | null }> = {};
+    for (const p of profiles ?? []) profileMap[p.username] = { email: p.email ?? '', perks: (p.perks ?? {}) as UserPerks, referralPerks: ((p as { referral_perks?: UserPerks }).referral_perks ?? {}) as UserPerks, referralPerksExpiresAt: (p as { referral_perks_expires_at?: string | null }).referral_perks_expires_at ?? null, avatarUrl: p.avatar_path ? profileAvatarPublicUrl(p.avatar_path) : null, name: p.name ?? null, referralCode: (p as { referral_code?: string | null }).referral_code ?? null };
     const creditMap: Record<string, number> = {};
     for (const c of credits ?? []) creditMap[c.username] = c.balance;
 
@@ -12471,6 +12473,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
         credits: creditMap[u.username] ?? 0,
         email: profileMap[u.username]?.email,
         perks: profileMap[u.username]?.perks ?? {},
+        referralPerks: profileMap[u.username]?.referralPerks ?? {},
+        referralPerksExpiresAt: profileMap[u.username]?.referralPerksExpiresAt ?? null,
         avatarUrl: profileMap[u.username]?.avatarUrl ?? null,
         referralCode: profileMap[u.username]?.referralCode ?? null,
       })),
@@ -12928,17 +12932,30 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           : <span className="perk-none">—</span>}
                       </td>
                       <td>
-                        <div className="admin-user-perks">
-                          {u.perks.credit_exempt && <span className="perk-badge perk-exempt" title="Exempt semua Ruang Coin">✦</span>}
-                          {u.perks.free_video && <span className="perk-badge perk-free" title="Video gratis">🎬</span>}
-                          {u.perks.free_thread && <span className="perk-badge perk-free" title="Thread gratis">💬</span>}
-                          {u.perks.free_booking && <span className="perk-badge perk-free" title="Booking gratis">📅</span>}
-                          {u.perks.free_asset && <span className="perk-badge perk-free" title="Asset gratis">📁</span>}
-                          {u.perks.free_event && <span className="perk-badge perk-free" title="Event gratis">🎥</span>}
-                          {!u.perks.credit_exempt && !u.perks.free_video && !u.perks.free_thread && !u.perks.free_booking && !u.perks.free_asset && !u.perks.free_event && (
-                            <span className="perk-none">—</span>
-                          )}
-                        </div>
+                        {(() => {
+                          const refActive = !u.referralPerksExpiresAt || new Date(u.referralPerksExpiresAt) > new Date();
+                          const rp = refActive ? (u.referralPerks ?? {}) : {};
+                          const expTxt = u.referralPerksExpiresAt ? ` (referral, s/d ${new Date(u.referralPerksExpiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })})` : ' (referral)';
+                          const featIcons: Array<[keyof UserPerks, string, string]> = [
+                            ['free_video', '🎬', 'Video'],
+                            ['free_thread', '💬', 'Thread'],
+                            ['free_booking', '📅', 'Booking'],
+                            ['free_asset', '📁', 'Asset'],
+                            ['free_event', '🎥', 'Event'],
+                          ];
+                          const hasAny = u.perks.credit_exempt || featIcons.some(([k]) => u.perks[k] || rp[k]);
+                          return (
+                            <div className="admin-user-perks">
+                              {u.perks.credit_exempt && <span className="perk-badge perk-exempt" title="Exempt semua Ruang Coin">✦</span>}
+                              {featIcons.map(([k, icon, label]) => {
+                                if (u.perks[k]) return <span key={k} className="perk-badge perk-free" title={`${label} gratis`}>{icon}</span>;
+                                if (rp[k]) return <span key={k} className="perk-badge perk-referral" title={`${label} gratis${expTxt}`}>{icon}</span>;
+                                return null;
+                              })}
+                              {!hasAny && <span className="perk-none">—</span>}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td>
                         <div className="admin-actions">

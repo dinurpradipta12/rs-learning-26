@@ -10588,6 +10588,15 @@ body.dark .db-asset-row--locked { background: rgba(255,255,255,0.02); }
 .perk-badge.perk-free {
   background: #f3f0ff; border: 1px solid #ddd6fe;
 }
+.perk-badge.perk-referral {
+  background: #fff7ed; border: 1px dashed #fb923c; position: relative;
+}
+.perk-badge.perk-referral::after {
+  content: 'R'; position: absolute; top: -4px; right: -4px;
+  font-size: 8px; font-weight: 800; line-height: 1;
+  width: 12px; height: 12px; display: grid; place-items: center;
+  background: #fb923c; color: #fff; border-radius: 50%;
+}
 .perk-none {
   color: #ccc; font-size: 0.85rem;
 }
