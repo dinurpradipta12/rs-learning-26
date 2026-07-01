@@ -12357,7 +12357,13 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   };
 
   const handleSaveReferral = async () => {
-    if (!referralDraft.code.trim() || referralDraft.credits <= 0) return;
+    if (!referralDraft.code.trim()) return;
+    // Kode tipe coin wajib punya credits > 0; kode tipe feature wajib pilih minimal 1 fitur
+    if (referralDraft.type === 'feature') {
+      if (!referralDraft.features || referralDraft.features.length === 0) return;
+    } else if (referralDraft.credits <= 0) {
+      return;
+    }
     setReferralSaving(true);
     let updated: ReferralCode[];
     if (editingReferral !== null) {
