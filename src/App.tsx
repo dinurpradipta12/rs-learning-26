@@ -4973,7 +4973,7 @@ function DashboardSection({ session }: { session: AppSession }) {
           </div>
           {(() => {
             const unlockedAssets = recentAssets.filter((a) =>
-              a.coin_cost === 0 || dashPerks.credit_exempt || dashPerks.free_asset || dashUnlockedIds.has(a.id)
+              a.coin_cost === 0 || dashPerks.credit_exempt || (dashPerks.free_asset && a.feature_claimable !== false) || dashUnlockedIds.has(a.id)
             );
             return unlockedAssets.length === 0 ? (
               <p className="db-empty">Belum ada asset yang kamu miliki. <a href="#assets" style={{ color: 'var(--accent)' }}>Lihat semua asset →</a></p>
@@ -15571,6 +15571,7 @@ type SharedAsset = {
   sort_order: number;
   thumbnail_url: string | null;
   coin_cost: number;
+  feature_claimable?: boolean;
   created_at: string;
 };
 
@@ -15582,13 +15583,14 @@ type SharedAssetDraft = {
   type: string;
   thumbnail_url: string | null;
   coin_cost: number;
+  feature_claimable: boolean;
 };
 
 const assetTypeOptions = ['link', 'pdf', 'sheet', 'zip', 'video', 'doc', 'lainnya'];
 const assetCategoryOptions = ['template', 'referensi', 'modul', 'tool', 'lainnya'];
 
 function createEmptyAssetDraft(): SharedAssetDraft {
-  return { title: '', description: '', category: 'template', url: '', type: 'link', thumbnail_url: null, coin_cost: 10 };
+  return { title: '', description: '', category: 'template', url: '', type: 'link', thumbnail_url: null, coin_cost: 10, feature_claimable: true };
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
@@ -16091,7 +16093,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
 
   const isUnlocked = (asset: SharedAsset) =>
-    canEdit || asset.coin_cost === 0 || userPerks?.credit_exempt || userPerks?.free_asset || unlockedIds.has(asset.id);
+    canEdit || asset.coin_cost === 0 || userPerks?.credit_exempt || (userPerks?.free_asset && asset.feature_claimable !== false) || unlockedIds.has(asset.id);
 
   const handleUnlock = async () => {
     if (!unlockTarget || !session) return;
@@ -16138,7 +16140,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
 
   const openEdit = (asset: SharedAsset) => {
     setEditingAsset(asset);
-    setDraft({ title: asset.title, description: asset.description, category: asset.category, url: asset.url, type: asset.type, thumbnail_url: asset.thumbnail_url, coin_cost: asset.coin_cost ?? 10 });
+    setDraft({ title: asset.title, description: asset.description, category: asset.category, url: asset.url, type: asset.type, thumbnail_url: asset.thumbnail_url, coin_cost: asset.coin_cost ?? 10, feature_claimable: asset.feature_claimable !== false });
     setThumbFile(null);
     setThumbPreview(asset.thumbnail_url ?? null);
     setModalOpen(true);
@@ -16168,6 +16170,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
         type: draft.type,
         thumbnail_url: thumbnailUrl,
         coin_cost: draft.coin_cost,
+        feature_claimable: draft.feature_claimable,
       }).eq('id', editingAsset.id);
       if (error) console.error('shared_assets update error:', error);
     } else {
@@ -16181,6 +16184,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
         sort_order: maxOrder + 1,
         thumbnail_url: thumbnailUrl,
         coin_cost: draft.coin_cost,
+        feature_claimable: draft.feature_claimable,
       });
       if (error) console.error('shared_assets insert error:', error);
     }
@@ -16270,6 +16274,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
                           <div className="asset-manager-card-top">
                             <span className="asset-manager-type-icon">{typeIcon[asset.type] ?? '📎'}</span>
                             <span className="tag">{asset.category}</span>
+                            {canEdit && asset.feature_claimable === false && <span className="asset-nofeature-badge" title="Voucher fitur gratis tidak berlaku — hanya bisa dibuka dengan Ruang Coin">🔒 non-voucher</span>}
                           </div>
                           <strong className="asset-manager-title">{asset.title}</strong>
                           {asset.description && <p className="asset-manager-desc">{asset.description}</p>}
@@ -16310,6 +16315,7 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
                             <span className="asset-manager-type-icon">{typeIcon[asset.type] ?? '📎'}</span>
                             <span className="tag">{asset.category}</span>
                             <span className="asset-coin-badge"><CoinIcon size={12} />{asset.coin_cost ?? 10}</span>
+                            {canEdit && asset.feature_claimable === false && <span className="asset-nofeature-badge" title="Voucher fitur gratis tidak berlaku — hanya bisa dibuka dengan Ruang Coin">🔒 non-voucher</span>}
                           </div>
                           <strong className="asset-manager-title">{asset.title}</strong>
                           {asset.description && <p className="asset-manager-desc">{asset.description}</p>}
@@ -16417,6 +16423,19 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
                   value={draft.coin_cost}
                   onChange={(e) => setDraft((d) => ({ ...d, coin_cost: Math.max(0, Number(e.target.value)) }))}
                 />
+              </label>
+              <label className="asset-claimable-toggle">
+                <input
+                  type="checkbox"
+                  checked={draft.feature_claimable}
+                  onChange={(e) => setDraft((d) => ({ ...d, feature_claimable: e.target.checked }))}
+                />
+                <span className="asset-claimable-text">
+                  <strong>Bisa dibuka dengan voucher fitur gratis</strong>
+                  <small>{draft.feature_claimable
+                    ? 'User dengan akses "Asset gratis" (dari kode referral/fitur) bisa membuka asset ini tanpa coin.'
+                    : 'Asset ini dikunci — voucher fitur gratis tidak berlaku, user tetap harus bayar Ruang Coin.'}</small>
+                </span>
               </label>
               <div className="asset-manager-form-actions">
                 <button type="button" className="button secondary" onClick={() => setModalOpen(false)}>batal</button>

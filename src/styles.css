@@ -9248,6 +9248,20 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
   display: grid;
   gap: 5px;
 }
+.asset-manager-form label.asset-claimable-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.asset-claimable-toggle input { width: auto !important; margin-top: 3px; flex-shrink: 0; }
+.asset-claimable-text { display: flex; flex-direction: column; gap: 3px; }
+.asset-claimable-text strong { font-size: 0.82rem; color: var(--text); text-transform: none; font-weight: 700; }
+.asset-claimable-text small { font-size: 0.72rem; color: var(--muted); line-height: 1.45; }
 .asset-manager-form label span {
   font-size: 0.78rem;
   font-weight: 600;
@@ -14065,3 +14079,14 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 .referral-claim-success h3 { font-size: 1.2rem; font-weight: 800; margin: 0 0 12px; color: var(--text); }
 .referral-claim-success p { font-size: 0.86rem; color: var(--muted); line-height: 1.55; margin: 14px 0 20px; }
 .referral-claim-success .referral-claim-coin { margin: 8px 0; font-size: 1.8rem; }
+
+.asset-nofeature-badge {
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #b45309;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
