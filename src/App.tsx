@@ -10592,6 +10592,7 @@ async function loadAdminSettings(): Promise<AdminSettings> {
     referralCodes: raw.referralCodes ?? [],
     promo: raw.promo ?? defaultPromo,
     coin_rate: raw.coin_rate ?? CREDIT_RATE,
+    student_bot_token: raw.student_bot_token ?? '',
   };
   return _adminSettingsCache;
 }
