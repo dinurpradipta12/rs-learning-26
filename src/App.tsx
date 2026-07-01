@@ -1895,17 +1895,11 @@ function useCalendarEvents() {
     const loadEvents = async () => {
       setIsLoading(true);
 
-      const [{ data, error }, { data: bookingData }] = await Promise.all([
-        supabase
-          .from('calendar_events')
-          .select('id, title, note, event_date, start_time, end_time, category, accent, attendee_count, is_done, sort_order')
-          .order('event_date', { ascending: true })
-          .order('start_time', { ascending: true }),
-        supabase
-          .from('one_on_one_bookings')
-          .select('id, topic, preferred_date, preferred_time, requester_username, requester_display_name')
-          .eq('status', 'approved'),
-      ]);
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .select('id, title, note, event_date, start_time, end_time, category, accent, attendee_count, is_done, sort_order')
+        .order('event_date', { ascending: true })
+        .order('start_time', { ascending: true });
 
       if (!isActive) {
         return;
@@ -1918,27 +1912,11 @@ function useCalendarEvents() {
         return;
       }
 
+      // Booking 1:1 yang disetujui SUDAH otomatis dibuatkan calendar_events saat
+      // approval, jadi tidak perlu di-merge lagi di sini (mencegah tampil dobel).
       const calendarEvts = (data as CalendarEventRow[] | null)?.map(mapCalendarEventRow) ?? initialCalendarSchedule;
 
-      // Merge approved bookings as calendar events
-      const bookingEvts: CalendarEvent[] = ((bookingData ?? []) as {
-        id: string; topic: string; preferred_date: string; preferred_time: string;
-        requester_username: string; requester_display_name: string;
-      }[]).map((b) => ({
-        id: `booking-${b.id}`,
-        title: `📅 1:1 — ${b.topic}`,
-        note: `Booking dari ${b.requester_display_name ?? b.requester_username}`,
-        eventDate: b.preferred_date,
-        startTime: String(b.preferred_time ?? '').slice(0, 5),
-        endTime: '',
-        category: 'zoom' as CalendarEventRow['category'],
-        accent: '#6366f1' as CalendarEventRow['accent'],
-        attendeeCount: 1,
-        isDone: false,
-        sortOrder: 99,
-      }));
-
-      setEvents([...calendarEvts, ...bookingEvts].sort((a, b) => a.eventDate.localeCompare(b.eventDate)));
+      setEvents([...calendarEvts].sort((a, b) => a.eventDate.localeCompare(b.eventDate)));
       setIsLoading(false);
     };
 
@@ -12974,11 +12952,17 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   // Stats
   const isReferralTx = (t: { description: string }) =>
     t.description?.startsWith('Bonus kode referral:') || t.description === 'Ruang Coin awal pendaftaran';
-  const paidTopups = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && !isReferralTx(t));
+  // Koin bonus (reward aksi, bonus paket, klaim fitur) BUKAN pendapatan asli.
+  const isBonusTx = (t: { description: string }) => {
+    const d = t.description ?? '';
+    return d.startsWith('Bonus:') || d.startsWith('🎁 Bonus paket') || d.startsWith('Klaim akses fitur:');
+  };
+  const isNonRevenueTx = (t: { description: string }) => isReferralTx(t) || isBonusTx(t);
+  const paidTopups = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && !isNonRevenueTx(t));
   const referralTxs = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && isReferralTx(t));
   const totalRevenue = paidTopups.reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalReferralCoins = referralTxs.reduce((s, t) => s + t.amount, 0);
-  const totalRevenueAll = transactions.filter((t) => t.type === 'topup' && t.amount > 0).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
+  const totalRevenueAll = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && !isBonusTx(t)).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalCreditsIssued = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const activeUsers = users.filter((u) => u.isActive).length;
   const filteredUsers = users.filter((u) => {
