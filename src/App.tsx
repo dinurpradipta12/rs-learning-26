@@ -2640,6 +2640,12 @@ function App() {
   useEffect(() => {
     void loadAppTheme().then(applyAppTheme);
     void loadHelpSettings().then(setHelpSettings);
+    // Bersihkan cache-bust param dari URL setelah page load
+    if (new URLSearchParams(window.location.search).has('_v')) {
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('_v');
+      window.history.replaceState(null, '', clean.pathname + (clean.search || '') + clean.hash);
+    }
   }, []);
 
   useEffect(() => {
