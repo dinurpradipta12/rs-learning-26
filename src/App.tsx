@@ -15769,6 +15769,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [joinError, setJoinError] = useState('');
   const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
   const [adminTab, setAdminTab] = useState<'events' | 'peserta'>('events');
+  const [eventsView, setEventsView] = useState<'calendar' | 'table'>('calendar');
+  const [calMonth, setCalMonth] = useState(() => new Date());
   const [participants, setParticipants] = useState<Array<{ event_id: string; username: string; display_name: string | null; event_title: string | null; event_date: string | null; joined_at: string }>>([]);
   const [participantsLoading, setParticipantsLoading] = useState(false);
 
@@ -15980,31 +15982,96 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       ) : (
         <>
           {canManage && events.length > 0 && (
-            <div className="events-admin-table-wrap">
-              <table className="events-admin-table">
-                <thead><tr><th>Event</th><th>Tipe</th><th>Tanggal</th><th>Biaya</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                  {events.map((ev, idx) => (
-                    <tr key={ev.id} className={ev.isActive === false ? 'admin-row-inactive' : ''}>
-                      <td><strong>{ev.title}</strong>{ev.recurrenceGroupId && <span className="event-recurrence-badge">🔁 berulang</span>}{ev.description && <div className="events-admin-desc">{ev.description}</div>}</td>
-                      <td>{typeIcon[ev.type]} {typeLabel[ev.type]}</td>
-                      <td className="admin-date-cell">{new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</td>
-                      <td>{ev.coinCost === 0 ? <span className="events-free-badge">Gratis</span> : <span className="admin-credits-cell"><CoinIcon size={12} /> {ev.coinCost}</span>}</td>
-                      <td><span className={`admin-status-badge ${ev.isActive === false ? 'inactive' : 'active'}`}>{ev.isActive === false ? 'Nonaktif' : 'Aktif'}</span></td>
-                      <td>
-                        <div className="admin-actions">
-                          <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
-                          <button type="button" className="admin-action-btn danger" onClick={() => void handleDelete(idx)}>hapus</button>
-                          {ev.recurrenceGroupId && (
-                            <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`).then((ok) => { if (ok) void handleDeleteGroup(ev.recurrenceGroupId!); })} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="events-view-toggle">
+                <button type="button" className={`events-view-btn${eventsView === 'calendar' ? ' active' : ''}`} onClick={() => setEventsView('calendar')}>🗓 Kalender</button>
+                <button type="button" className={`events-view-btn${eventsView === 'table' ? ' active' : ''}`} onClick={() => setEventsView('table')}>☰ Tabel</button>
+              </div>
+
+              {eventsView === 'calendar' ? (() => {
+                const y = calMonth.getFullYear();
+                const m = calMonth.getMonth();
+                const monthLabel = calMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                const firstDow = new Date(y, m, 1).getDay(); // 0=Min
+                const daysInMonth = new Date(y, m + 1, 0).getDate();
+                const pad = (n: number) => String(n).padStart(2, '0');
+                const cells: Array<{ day: number; dateStr: string } | null> = [];
+                for (let i = 0; i < firstDow; i++) cells.push(null);
+                for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, dateStr: `${y}-${pad(m + 1)}-${pad(d)}` });
+                const todayStr = (() => { const t = new Date(); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`; })();
+                const eventsByDate = new Map<string, HubEvent[]>();
+                for (const ev of events) {
+                  if (!eventsByDate.has(ev.date)) eventsByDate.set(ev.date, []);
+                  eventsByDate.get(ev.date)!.push(ev);
+                }
+                return (
+                  <div className="events-cal">
+                    <div className="events-cal-head">
+                      <button type="button" className="events-cal-nav" onClick={() => setCalMonth(new Date(y, m - 1, 1))}>‹</button>
+                      <strong className="events-cal-month">{monthLabel}</strong>
+                      <button type="button" className="events-cal-nav" onClick={() => setCalMonth(new Date(y, m + 1, 1))}>›</button>
+                      <button type="button" className="events-cal-today" onClick={() => setCalMonth(new Date())}>Hari ini</button>
+                    </div>
+                    <div className="events-cal-grid">
+                      {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((d) => <div key={d} className="events-cal-dow">{d}</div>)}
+                      {cells.map((cell, i) => {
+                        if (!cell) return <div key={`e${i}`} className="events-cal-cell events-cal-cell--empty" />;
+                        const dayEvents = eventsByDate.get(cell.dateStr) ?? [];
+                        return (
+                          <div key={cell.dateStr} className={`events-cal-cell${cell.dateStr === todayStr ? ' events-cal-cell--today' : ''}`}>
+                            <span className="events-cal-daynum">{cell.day}</span>
+                            <div className="events-cal-events">
+                              {dayEvents.map((ev) => {
+                                const idx = events.findIndex((e) => e.id === ev.id);
+                                return (
+                                  <button
+                                    key={ev.id}
+                                    type="button"
+                                    className={`events-cal-chip${ev.isActive === false ? ' inactive' : ''}`}
+                                    title={`${ev.title}${ev.time ? ` · ${ev.time}` : ''} — klik untuk edit`}
+                                    onClick={() => openEdit(idx)}
+                                  >
+                                    {ev.time && <span className="events-cal-chip-time">{ev.time.slice(0, 5)}</span>}
+                                    <span className="events-cal-chip-title">{ev.title}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="events-cal-hint">Klik event untuk edit. Ganti ke tampilan Tabel untuk hapus / hapus semua.</p>
+                  </div>
+                );
+              })() : (
+                <div className="events-admin-table-wrap">
+                  <table className="events-admin-table">
+                    <thead><tr><th>Event</th><th>Tipe</th><th>Tanggal</th><th>Biaya</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                      {events.map((ev, idx) => (
+                        <tr key={ev.id} className={ev.isActive === false ? 'admin-row-inactive' : ''}>
+                          <td><strong>{ev.title}</strong>{ev.recurrenceGroupId && <span className="event-recurrence-badge">🔁 berulang</span>}{ev.description && <div className="events-admin-desc">{ev.description}</div>}</td>
+                          <td>{typeIcon[ev.type]} {typeLabel[ev.type]}</td>
+                          <td className="admin-date-cell">{new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</td>
+                          <td>{ev.coinCost === 0 ? <span className="events-free-badge">Gratis</span> : <span className="admin-credits-cell"><CoinIcon size={12} /> {ev.coinCost}</span>}</td>
+                          <td><span className={`admin-status-badge ${ev.isActive === false ? 'inactive' : 'active'}`}>{ev.isActive === false ? 'Nonaktif' : 'Aktif'}</span></td>
+                          <td>
+                            <div className="admin-actions">
+                              <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
+                              <button type="button" className="admin-action-btn danger" onClick={() => void handleDelete(idx)}>hapus</button>
+                              {ev.recurrenceGroupId && (
+                                <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`).then((ok) => { if (ok) void handleDeleteGroup(ev.recurrenceGroupId!); })} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
 
           {!canManage && upcoming.length > 0 && (() => {
