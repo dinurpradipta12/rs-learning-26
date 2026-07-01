@@ -3729,7 +3729,7 @@ body.dark .login-form-sub    { color: var(--muted); }
 .topup-reject-form { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .admin-inbox-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
   gap: 14px;
 }
 
@@ -13836,3 +13836,119 @@ body.dark .admin-input:focus {
 .confirm-btn:hover { opacity: 0.85; transform: scale(1.03); }
 .confirm-btn--cancel { background: var(--line); color: var(--muted); }
 .confirm-btn--ok { background: #ef4444; color: #fff; }
+
+/* ── Topup proof (bukti bayar) ── */
+.topup-request-card--withproof {
+  display: flex !important;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 14px;
+}
+.topup-request-card--withproof .topup-req-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.topup-proof-col {
+  flex-shrink: 0;
+  width: 108px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 1.5px dashed var(--line);
+  padding-left: 14px;
+}
+.topup-proof-col-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.topup-proof-thumb {
+  position: relative;
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #f4f4f6;
+  aspect-ratio: 3 / 4;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.topup-proof-thumb:hover { border-color: var(--accent); transform: scale(1.02); }
+.topup-proof-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.topup-proof-zoom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  padding: 3px 0;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.topup-proof-thumb:hover .topup-proof-zoom { opacity: 1; }
+.topup-proof-empty {
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: rgba(0,0,0,0.03);
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  padding: 12px 6px;
+  text-align: center;
+  line-height: 1.4;
+}
+body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
+
+/* ── Proof lightbox ── */
+.proof-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.82);
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  animation: fade-in 0.15s ease;
+}
+.proof-lightbox-img {
+  max-width: 90vw;
+  max-height: 88vh;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  cursor: default;
+}
+.proof-lightbox-close {
+  position: fixed;
+  top: 22px;
+  right: 26px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.proof-lightbox-close:hover { background: rgba(255,255,255,0.3); }
+
+@media (max-width: 560px) {
+  .topup-request-card--withproof { flex-direction: column; }
+  .topup-proof-col { width: 100%; border-left: none; padding-left: 0; border-top: 1.5px dashed var(--line); padding-top: 12px; flex-direction: row; align-items: center; }
+  .topup-proof-thumb { width: 90px; aspect-ratio: 3/4; }
+}

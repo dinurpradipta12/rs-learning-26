@@ -13917,6 +13917,7 @@ type TopupRequest = {
   created_at: string;
   note?: string;
   promo_bonus?: PackagePromo | null;
+  proof_url?: string | null;
 };
 
 function InboxPage() {
@@ -13938,6 +13939,7 @@ function InboxPage() {
   // Konfirmasi pengosongan riwayat: 'booking' | 'topup' | null
   const [clearTarget, setClearTarget] = useState<'booking' | 'topup' | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
 
   const loadTopupRequests = async () => {
     setTopupLoading(true);
@@ -14270,7 +14272,8 @@ function InboxPage() {
                 <p className="admin-section-label">Menunggu Verifikasi ({pendingTopup.length})</p>
                 <div className="admin-inbox-list">
                   {pendingTopup.map((r) => (
-                    <div key={r.id} className="admin-inbox-card pending topup-request-card">
+                    <div key={r.id} className="admin-inbox-card pending topup-request-card topup-request-card--withproof">
+                      <div className="topup-req-main">
                       <div className="admin-inbox-card-head">
                         <div className="admin-inbox-identity">
                           {renderInboxAvatar(r.username, resolveName(r.username, r.display_name || r.username))}
@@ -14323,6 +14326,18 @@ function InboxPage() {
                           </button>
                         </div>
                       )}
+                      </div>
+                      <div className="topup-proof-col">
+                        <span className="topup-proof-col-label">Bukti Bayar</span>
+                        {r.proof_url ? (
+                          <button type="button" className="topup-proof-thumb" onClick={() => setProofPreview(r.proof_url!)}>
+                            <img src={r.proof_url} alt="Bukti transfer" />
+                            <span className="topup-proof-zoom">🔍 Lihat</span>
+                          </button>
+                        ) : (
+                          <div className="topup-proof-empty">Belum ada bukti</div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -14397,6 +14412,14 @@ function InboxPage() {
               </button>
             </div>
           </div>
+        </div>,
+        document.body,
+      )}
+
+      {proofPreview && createPortal(
+        <div className="proof-lightbox-overlay" onClick={() => setProofPreview(null)}>
+          <button type="button" className="proof-lightbox-close" onClick={() => setProofPreview(null)}>✕</button>
+          <img src={proofPreview} alt="Bukti transfer" className="proof-lightbox-img" onClick={(e) => e.stopPropagation()} />
         </div>,
         document.body,
       )}
