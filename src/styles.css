@@ -8342,14 +8342,14 @@ body.dark .referral-preview-box {
 
 .admin-modal-wide { max-width: 560px; }
 .admin-modal-landscape {
-  max-width: 940px;
+  max-width: 1240px;
   width: 96vw;
   max-height: 90vh;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.15fr 1fr;
   grid-template-rows: auto 1fr auto;
-  column-gap: 28px;
+  column-gap: 40px;
   row-gap: 0;
   align-items: start;
 }
