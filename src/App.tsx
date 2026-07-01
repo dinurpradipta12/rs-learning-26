@@ -4682,17 +4682,10 @@ function DashboardSection({ session }: { session: AppSession }) {
 
     void load();
 
-    // realtime: new replies → badge
+    // realtime: new replies → cukup naikkan badge (tidak refetch thread demi hemat egress)
     const channel = supabase.channel('dashboard-replies')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'forum_replies' }, () => {
         setNewReplyCount((n) => n + 1);
-        void supabase.from('forum_threads').select('*').order('created_at', { ascending: false }).limit(4).then(({ data }) => {
-          if (!data) return;
-          setRecentThreads((prev) => data.map((t) => {
-            const existing = prev.find((p) => p.id === t.id);
-            return { id: t.id, category: t.category, title: t.title, body: t.body, imageUrl: t.image_url ?? undefined, authorUsername: t.author_username, authorDisplayName: t.author_display_name, createdAt: t.created_at, viewCount: t.view_count, replies: existing?.replies ?? [] };
-          }));
-        });
       })
       .subscribe();
 
@@ -10313,23 +10306,60 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
     })();
   }, [forumThreads]);
 
-  // Realtime subscription — sinkronisasi ke semua user
+  // Realtime subscription — update inkremental (hemat egress: tidak reload semua
+  // thread+reply tiap ada perubahan, cukup ubah baris yang berubah dari payload).
   useEffect(() => {
+    const mapThreadRow = (t: Record<string, unknown>): Omit<ForumThread, 'replies'> => ({
+      id: t.id as string,
+      category: t.category as string,
+      title: t.title as string,
+      body: t.body as string,
+      imageUrl: (t.image_url as string) ?? undefined,
+      authorUsername: t.author_username as string,
+      authorDisplayName: t.author_display_name as string,
+      createdAt: t.created_at as string,
+      viewCount: (t.view_count as number) ?? 0,
+    });
+    const mapReplyRow = (r: Record<string, unknown>): ForumReply => ({
+      id: r.id as string,
+      authorUsername: r.author_username as string,
+      authorDisplayName: r.author_display_name as string,
+      body: r.body as string,
+      imageUrl: (r.image_url as string) ?? undefined,
+      createdAt: r.created_at as string,
+      upvotes: (r.upvotes as number) ?? 0,
+      parentReplyId: (r.parent_reply_id as string) ?? undefined,
+      answered: (r.answered as boolean) ?? false,
+    });
+
     const channel = supabase
       .channel('forum-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_threads' }, async (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_threads' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setForumThreads((prev) => prev.filter((t) => t.id !== (payload.old as { id: string }).id));
+        } else if (payload.eventType === 'INSERT') {
+          const row = mapThreadRow(payload.new as Record<string, unknown>);
+          setForumThreads((prev) => prev.some((t) => t.id === row.id) ? prev : [{ ...row, replies: [] }, ...prev]);
         } else {
-          // INSERT atau UPDATE: reload semua agar replies tetap sinkron
-          const threads = await fetchForumThreads();
-          setForumThreads(threads);
+          // UPDATE: ubah field thread, pertahankan replies yang sudah ada
+          const row = mapThreadRow(payload.new as Record<string, unknown>);
+          setForumThreads((prev) => prev.map((t) => t.id === row.id ? { ...t, ...row } : t));
         }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, async () => {
-        // Reload threads supaya replies nested tetap benar
-        const threads = await fetchForumThreads();
-        setForumThreads(threads);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const oldId = (payload.old as { id: string }).id;
+          setForumThreads((prev) => prev.map((t) => ({ ...t, replies: t.replies.filter((r) => r.id !== oldId) })));
+        } else {
+          const row = payload.new as Record<string, unknown>;
+          const threadId = row.thread_id as string;
+          const reply = mapReplyRow(row);
+          setForumThreads((prev) => prev.map((t) => {
+            if (t.id !== threadId) return t;
+            const exists = t.replies.some((r) => r.id === reply.id);
+            return { ...t, replies: exists ? t.replies.map((r) => r.id === reply.id ? reply : r) : [...t.replies, reply] };
+          }));
+        }
       })
       .subscribe();
 
