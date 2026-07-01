@@ -3778,7 +3778,7 @@ function DbMonitor() {
     );
     setBuckets(bucketStats);
     void loadActivity();
-    prevCounts.current = snap;
+    prevCounts.current = counts;
     setRefreshed(new Date());
     setCountdown(POLL_INTERVAL);
     if (!silent) setLoading(false);
