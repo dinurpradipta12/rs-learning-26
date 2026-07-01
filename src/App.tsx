@@ -14522,7 +14522,7 @@ function ProfilePage({
   const [profileReferralCode, setProfileReferralCode] = useState('');
   const [profileReferralStatus, setProfileReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid' | 'used'>('idle');
   const [profileReferralCredits, setProfileReferralCredits] = useState(0);
-  const [referralSuccessModal, setReferralSuccessModal] = useState<{ credits: number; code: string } | null>(null);
+  const [referralSuccessModal, setReferralSuccessModal] = useState<{ credits: number; code: string; features?: string[] } | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -14554,12 +14554,12 @@ function ProfilePage({
       return;
     }
 
-    // Cek apakah user sudah pernah pakai kode ini (exact match pada format deskripsi)
+    // Cek apakah user sudah pernah pakai kode ini (coin: "Bonus...", feature: "Klaim akses fitur...")
     const { data: existing } = await supabase
       .from('credit_transactions')
       .select('id')
       .eq('username', session.username)
-      .eq('description', `Bonus kode referral: ${code}`)
+      .or(`description.eq.Bonus kode referral: ${code},description.eq.Klaim akses fitur: ${code}`)
       .limit(1);
 
     if (existing && existing.length > 0) {
@@ -14567,6 +14567,38 @@ function ProfilePage({
       return;
     }
 
+    const codeType = match.type ?? 'coin';
+
+    // ── Kode tipe Akses Fitur ──
+    if (codeType === 'feature' && match.features && match.features.length > 0) {
+      // Gabung dengan referral_perks yang sudah ada agar tidak menimpa fitur lain
+      const { data: profRow } = await supabase.from('user_profiles').select('referral_perks').eq('username', session.username).maybeSingle();
+      const existingPerks = ((profRow as { referral_perks?: UserPerks } | null)?.referral_perks ?? {}) as UserPerks;
+      const referralPerks: UserPerks = { ...existingPerks };
+      for (const f of match.features) referralPerks[f as keyof UserPerks] = true;
+
+      await Promise.all([
+        supabase.from('user_profiles').update({
+          referral_perks: referralPerks,
+          referral_perks_expires_at: match.expiresAt ?? null,
+          referral_code: code,
+        } as never).eq('username', session.username),
+        // Penanda agar kode tidak bisa diklaim dua kali (amount 0)
+        supabase.from('credit_transactions').insert({
+          username: session.username,
+          amount: 0,
+          type: 'topup',
+          description: `Klaim akses fitur: ${code}`,
+        }),
+      ]);
+
+      setProfileReferralCode('');
+      setProfileReferralStatus('idle');
+      setReferralSuccessModal({ credits: 0, code, features: match.features });
+      return;
+    }
+
+    // ── Kode tipe Ruang Coin ──
     setProfileReferralCredits(match.credits);
     setProfileReferralStatus('valid');
 
@@ -15016,16 +15048,33 @@ function ProfilePage({
               <div className="referral-success-overlay" onClick={() => setReferralSuccessModal(null)}>
                 <div className="referral-success-modal" onClick={(e) => e.stopPropagation()}>
                   <div className="referral-success-icon">🎉</div>
-                  <h3 className="referral-success-title">Ruang Coin Berhasil Ditambahkan!</h3>
-                  <div className="referral-success-amount">
-                    <span className="referral-success-plus"><CoinIcon size={20} /></span>
-                    <span className="referral-success-num">{referralSuccessModal.credits.toLocaleString('id-ID')}</span>
-                    <span className="referral-success-unit">Ruang Coin</span>
-                  </div>
-                  <p className="referral-success-desc">
-                    Kode referral <strong>{referralSuccessModal.code}</strong> berhasil diklaim.<br />
-                    Coin sudah masuk ke saldo kamu sekarang.
-                  </p>
+                  {referralSuccessModal.features && referralSuccessModal.features.length > 0 ? (
+                    <>
+                      <h3 className="referral-success-title">Akses Fitur Aktif!</h3>
+                      <div className="referral-success-amount" style={{ flexWrap: 'wrap', justifyContent: 'center', gap: 6 }}>
+                        {referralSuccessModal.features.map((f) => (
+                          <span key={f} className="referral-badge valid">{({ free_video: '🎬 Video', free_booking: '📅 Booking', free_thread: '💬 Thread', free_asset: '📁 Asset', free_event: '🎥 Event' } as Record<string, string>)[f] ?? f}</span>
+                        ))}
+                      </div>
+                      <p className="referral-success-desc">
+                        Kode referral <strong>{referralSuccessModal.code}</strong> berhasil diklaim.<br />
+                        Fitur di atas sekarang gratis untuk kamu.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="referral-success-title">Ruang Coin Berhasil Ditambahkan!</h3>
+                      <div className="referral-success-amount">
+                        <span className="referral-success-plus"><CoinIcon size={20} /></span>
+                        <span className="referral-success-num">{referralSuccessModal.credits.toLocaleString('id-ID')}</span>
+                        <span className="referral-success-unit">Ruang Coin</span>
+                      </div>
+                      <p className="referral-success-desc">
+                        Kode referral <strong>{referralSuccessModal.code}</strong> berhasil diklaim.<br />
+                        Coin sudah masuk ke saldo kamu sekarang.
+                      </p>
+                    </>
+                  )}
                   <button
                     type="button"
                     className="referral-success-btn"
