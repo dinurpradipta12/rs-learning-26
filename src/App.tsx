@@ -8,6 +8,43 @@ import ruangCoinImg from './ruang-coin.png';
 const TG_TOKEN = '8366984234:AAHjA8l7QqvVNtc7kajGwaTwkzAy4t52Sko';
 const TG_CHAT  = '8830130248';
 
+// Kompres & resize gambar sebelum upload agar hemat storage + egress Supabase.
+// File non-gambar (pdf/zip), GIF (animasi), dan SVG dikembalikan apa adanya.
+async function compressImage(file: File, maxDim = 1280, quality = 0.82): Promise<File> {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result as string);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = dataUrl;
+    });
+    let { width, height } = img;
+    // Sudah kecil & ringan → tidak perlu diproses.
+    if (width <= maxDim && height <= maxDim && file.size < 300 * 1024) return file;
+    const scale = Math.min(1, maxDim / Math.max(width, height));
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    if (!blob || blob.size >= file.size) return file; // jangan sampai malah lebih besar
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+}
+
 async function scheduleEventReminders(username: string, ev: { id: string; title: string; date: string; time?: string; link?: string }): Promise<void> {
   // Get user's telegram chat id
   const { data: userRow } = await supabase.from('app_users').select('telegram_chat_id').eq('username', username).maybeSingle();
@@ -2385,10 +2422,11 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
     if (insertErr || !topupId) { setProofUploading(false); setProofPreview(null); alert('Gagal membuat request topup. Coba lagi.'); return; }
     setSavedTopupId(topupId);
 
-    // upload ke storage
-    const ext = file.name.split('.').pop();
+    // upload ke storage (kompres dulu; bukti transfer tetap terbaca di 1600px)
+    const uploadFile = await compressImage(file, 1600, 0.82);
+    const ext = uploadFile.name.split('.').pop();
     const path = `topup-proofs/${topupId}.${ext}`;
-    const { error } = await supabase.storage.from('lesson-assets').upload(path, file, { upsert: true, contentType: file.type });
+    const { error } = await supabase.storage.from('lesson-assets').upload(path, uploadFile, { upsert: true, contentType: uploadFile.type });
 
     if (error) { setProofUploading(false); return; }
 
@@ -4104,7 +4142,7 @@ function LandingImageInput({ value, onChange }: { value: string; onChange: (url:
               const file = e.target.files?.[0];
               if (!file) return;
               setUploading(true);
-              try { onChange(await uploadLandingImage(file)); } catch { alert('Gagal upload gambar.'); }
+              try { onChange(await uploadLandingImage(await compressImage(file, 1600, 0.82))); } catch { alert('Gagal upload gambar.'); }
               setUploading(false);
             }}
           />
@@ -5506,9 +5544,10 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
 
     let thumbnailUrl = form.thumbnail_url;
     if (thumbFile) {
-      const ext = thumbFile.name.split('.').pop();
+      const up = await compressImage(thumbFile, 1000, 0.82);
+      const ext = up.name.split('.').pop();
       const filePath = `course-thumbnails/${form.key.trim()}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('lesson-assets').upload(filePath, thumbFile, { upsert: true, contentType: thumbFile.type });
+      const { error: uploadError } = await supabase.storage.from('lesson-assets').upload(filePath, up, { upsert: true, contentType: up.type });
       if (uploadError) { setFormError(uploadError.message); setSaving(false); return; }
       thumbnailUrl = supabase.storage.from('lesson-assets').getPublicUrl(filePath).data.publicUrl;
     }
@@ -9776,9 +9815,11 @@ function ForumThreadDetail({
   const handleImageFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => setReplyImageUrl((e.target?.result as string) ?? '');
-    reader.readAsDataURL(file);
+    void compressImage(file, 1280, 0.8).then((compressed) => {
+      const reader = new FileReader();
+      reader.onload = (e) => setReplyImageUrl((e.target?.result as string) ?? '');
+      reader.readAsDataURL(compressed);
+    });
   };
 
   const submitReply = (event?: FormEvent<HTMLFormElement> | React.MouseEvent) => {
@@ -10058,9 +10099,11 @@ function ForumComposer({
   const handleImageFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => setImageUrl((e.target?.result as string) ?? '');
-    reader.readAsDataURL(file);
+    void compressImage(file, 1280, 0.8).then((compressed) => {
+      const reader = new FileReader();
+      reader.onload = (e) => setImageUrl((e.target?.result as string) ?? '');
+      reader.readAsDataURL(compressed);
+    });
   };
 
   const doPost = async () => {
@@ -12606,9 +12649,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     let savedPromo = { ...promo };
     if (promoIconFile) {
       // Try Supabase storage first
-      const ext = promoIconFile.name.split('.').pop() ?? 'png';
+      const iconUp = await compressImage(promoIconFile, 400, 0.85);
+      const ext = iconUp.name.split('.').pop() ?? 'png';
       const path = `promo-icons/promo-icon-${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from('lesson-assets').upload(path, promoIconFile, { upsert: true, contentType: promoIconFile.type });
+      const { error } = await supabase.storage.from('lesson-assets').upload(path, iconUp, { upsert: true, contentType: iconUp.type });
       if (!error) {
         const url = supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
         savedPromo = { ...savedPromo, iconUrl: url };
@@ -14955,9 +14999,11 @@ function ProfilePage({
       let photoUrl = draftProfile.photoUrl;
 
       if (pendingPhotoFile) {
-        const filePath = `${session.username}/${Date.now()}-${sanitizeFileName(pendingPhotoFile.name)}`;
-        const { error: uploadError } = await supabase.storage.from('profile-avatars').upload(filePath, pendingPhotoFile, {
+        const avatarUp = await compressImage(pendingPhotoFile, 512, 0.85);
+        const filePath = `${session.username}/${Date.now()}-${sanitizeFileName(avatarUp.name)}`;
+        const { error: uploadError } = await supabase.storage.from('profile-avatars').upload(filePath, avatarUp, {
           upsert: true,
+          contentType: avatarUp.type,
         });
 
         if (uploadError) {
@@ -15751,9 +15797,10 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     setSaving(true);
     let finalDraft = { ...draft };
     if (coverFile) {
-      const ext = coverFile.name.split('.').pop() ?? 'jpg';
+      const coverUp = await compressImage(coverFile, 1280, 0.82);
+      const ext = coverUp.name.split('.').pop() ?? 'jpg';
       const path = `event-covers/evt_${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from('lesson-assets').upload(path, coverFile, { upsert: true, contentType: coverFile.type });
+      const { error } = await supabase.storage.from('lesson-assets').upload(path, coverUp, { upsert: true, contentType: coverUp.type });
       if (!error) finalDraft = { ...finalDraft, coverUrl: supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl };
     }
     let updated: HubEvent[];
@@ -16266,9 +16313,10 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
     // Upload thumbnail if a new file was selected
     let thumbnailUrl = draft.thumbnail_url;
     if (thumbFile) {
-      const ext = thumbFile.name.split('.').pop() ?? 'jpg';
+      const up = await compressImage(thumbFile, 1000, 0.82);
+      const ext = up.name.split('.').pop() ?? 'jpg';
       const path = `shared-asset-thumbs/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('lesson-assets').upload(path, thumbFile, { upsert: true, contentType: thumbFile.type });
+      const { error: upErr } = await supabase.storage.from('lesson-assets').upload(path, up, { upsert: true, contentType: up.type });
       if (!upErr) thumbnailUrl = supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
       else console.error('thumbnail upload error:', upErr);
     }
