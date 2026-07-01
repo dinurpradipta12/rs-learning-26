@@ -16005,7 +16005,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             <>
               <div className="events-view-toggle">
                 <button type="button" className={`events-view-btn${eventsView === 'calendar' ? ' active' : ''}`} onClick={() => setEventsView('calendar')}>🗓 Kalender</button>
-                <button type="button" className={`events-view-btn${eventsView === 'table' ? ' active' : ''}`} onClick={() => setEventsView('table')}>☰ Tabel</button>
+                <button type="button" className={`events-view-btn${eventsView === 'table' ? ' active' : ''}`} onClick={() => setEventsView('table')}>☰ List</button>
               </div>
 
               {eventsView === 'calendar' ? (() => {
@@ -16069,30 +16069,36 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                   </div>
                 );
               })() : (
-                <div className="events-admin-table-wrap">
-                  <table className="events-admin-table">
-                    <thead><tr><th>Event</th><th>Tipe</th><th>Tanggal</th><th>Biaya</th><th>Status</th><th></th></tr></thead>
-                    <tbody>
-                      {events.map((ev, idx) => (
-                        <tr key={ev.id} className={ev.isActive === false ? 'admin-row-inactive' : ''}>
-                          <td><strong>{ev.title}</strong>{ev.recurrenceGroupId && <span className="event-recurrence-badge">🔁 berulang</span>}{ev.description && <div className="events-admin-desc">{ev.description}</div>}</td>
-                          <td>{typeIcon[ev.type]} {typeLabel[ev.type]}</td>
-                          <td className="admin-date-cell">{new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</td>
-                          <td>{ev.coinCost === 0 ? <span className="events-free-badge">Gratis</span> : <span className="admin-credits-cell"><CoinIcon size={12} /> {ev.coinCost}</span>}</td>
-                          <td><span className={`admin-status-badge ${ev.isActive === false ? 'inactive' : 'active'}`}>{ev.isActive === false ? 'Nonaktif' : 'Aktif'}</span></td>
-                          <td>
-                            <div className="admin-actions">
-                              <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
-                              <button type="button" className="admin-action-btn danger" onClick={() => void handleDelete(idx)}>hapus</button>
-                              {ev.recurrenceGroupId && (
-                                <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`).then((ok) => { if (ok) void handleDeleteGroup(ev.recurrenceGroupId!); })} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="events-list">
+                  {events.map((ev, idx) => (
+                    <div key={ev.id} className={`events-list-card${ev.isActive === false ? ' inactive' : ''}`}>
+                      <div className={`events-list-cover type-${ev.type}`}>
+                        {ev.coverUrl
+                          ? <img src={ev.coverUrl} alt={ev.title} />
+                          : <span className="events-list-cover-ph">{typeIcon[ev.type]}</span>}
+                      </div>
+                      <div className="events-list-body">
+                        <div className="events-list-title-row">
+                          <strong className="events-list-title">{ev.title}</strong>
+                          {ev.recurrenceGroupId && <span className="event-recurrence-badge">🔁 berulang</span>}
+                          <span className={`admin-status-badge ${ev.isActive === false ? 'inactive' : 'active'}`}>{ev.isActive === false ? 'Nonaktif' : 'Aktif'}</span>
+                        </div>
+                        <div className="events-list-meta">
+                          <span>{typeIcon[ev.type]} {typeLabel[ev.type]}</span>
+                          <span>📅 {new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</span>
+                          <span>{ev.coinCost === 0 ? <span className="events-free-badge">Gratis</span> : <span className="admin-credits-cell"><CoinIcon size={12} /> {ev.coinCost}</span>}</span>
+                        </div>
+                        {ev.description && <p className="events-list-desc">{ev.description}</p>}
+                      </div>
+                      <div className="events-list-actions">
+                        <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
+                        <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog('Hapus event ini? Tindakan tidak bisa dibatalkan.').then((ok) => { if (ok) void handleDelete(idx); })}>hapus</button>
+                        {ev.recurrenceGroupId && (
+                          <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`).then((ok) => { if (ok) void handleDeleteGroup(ev.recurrenceGroupId!); })} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </>
