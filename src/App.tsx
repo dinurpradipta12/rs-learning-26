@@ -2640,7 +2640,7 @@ function App() {
   const [session, setSession] = useState<AppSession | null>(() => readStoredSession());
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [showReferralClaim, setShowReferralClaim] = useState(false);
-  const [checkinModal, setCheckinModal] = useState<{ day: number; coins: number } | null>(null);
+  const [checkinModal, setCheckinModal] = useState<{ dailyCoins: number; day7: CheckinDay7 } | null>(null);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
   const [userCredits, setUserCredits] = useState<number | null>(null);
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -2950,28 +2950,20 @@ function App() {
     setCommunityUnread(0);
   }, [page, session, communityUnread]);
 
-  // Check-in / bonus login harian (streak 7 hari) + modal.
+  // Check-in login harian: tampilkan modal kalau hari ini belum diklaim.
+  // Klaim koin dilakukan lewat klik di modal (bukan otomatis).
   useEffect(() => {
     if (!session) return;
     const uname = session.username;
-    const dstr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
     void (async () => {
       const settings = await loadAdminSettings();
-      const coinPerDay = (settings.coin_rewards ?? defaultCoinRewards).daily_login.amount;
-      if (coinPerDay <= 0) return; // check-in dinonaktifkan admin
-      const todayStr = dstr(new Date());
-      const y = new Date(); y.setDate(y.getDate() - 1);
-      const yStr = dstr(y);
-      const { data } = await supabase.from('user_profiles').select('checkin_streak, last_checkin').eq('username', uname).maybeSingle();
-      const lastCheckin = (data as { last_checkin?: string } | null)?.last_checkin ?? null;
-      const prevStreak = (data as { checkin_streak?: number } | null)?.checkin_streak ?? 0;
-      if (lastCheckin === todayStr) return; // sudah check-in hari ini
-      const newStreak = lastCheckin === yStr ? prevStreak + 1 : 1;
-      const dayInCycle = ((newStreak - 1) % 7) + 1;
-      const nb = await awardCoinReward(uname, 'daily_login');
-      if (nb != null) setUserCredits(nb);
-      await supabase.from('user_profiles').update({ checkin_streak: newStreak, last_checkin: todayStr } as never).eq('username', uname);
-      setCheckinModal({ day: dayInCycle, coins: coinPerDay });
+      const dailyCoins = (settings.coin_rewards ?? defaultCoinRewards).daily_login.amount;
+      if (dailyCoins <= 0) return; // check-in dinonaktifkan admin
+      const { data } = await supabase.from('user_profiles').select('last_checkin').eq('username', uname).maybeSingle();
+      const last = (data as { last_checkin?: string } | null)?.last_checkin ?? null;
+      if (last === todayStr) return; // sudah check-in hari ini
+      setCheckinModal({ dailyCoins, day7: settings.checkin_day7 ?? defaultCheckinDay7 });
     })();
   }, [session]);
 
@@ -3255,8 +3247,15 @@ function App() {
             onFeatureClaimed={(features) => setUserPerks((prev) => { const next = { ...prev }; for (const f of features) next[f as keyof UserPerks] = true; return next; })}
           />
         )}
-        {checkinModal && (
-          <DailyCheckinModal day={checkinModal.day} coins={checkinModal.coins} onClose={() => setCheckinModal(null)} />
+        {checkinModal && session && (
+          <DailyCheckinModal
+            username={session.username}
+            dailyCoins={checkinModal.dailyCoins}
+            day7={checkinModal.day7}
+            onCoinChange={(b) => setUserCredits(b)}
+            onFeatureClaim={(features) => setUserPerks((prev) => { const n = { ...prev }; for (const f of features) n[f as keyof UserPerks] = true; return n; })}
+            onClose={() => setCheckinModal(null)}
+          />
         )}
         {showOnboarding && session && (
           <OnboardingModal
@@ -10892,7 +10891,11 @@ async function awardCoinReward(username: string, key: CoinRewardKey): Promise<nu
   } catch { return null; }
 }
 
-type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards };
+type CheckinFeatureKey = 'free_video' | 'free_booking' | 'free_thread' | 'free_asset' | 'free_event';
+type CheckinDay7 = { coins: number; features: CheckinFeatureKey[] };
+const defaultCheckinDay7: CheckinDay7 = { coins: 0, features: [] };
+
+type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards; checkin_day7?: CheckinDay7 };
 
 let _adminSettingsCache: AdminSettings | null = null;
 async function loadAdminSettings(): Promise<AdminSettings> {
@@ -10914,6 +10917,7 @@ async function loadAdminSettings(): Promise<AdminSettings> {
     coin_rate: raw.coin_rate ?? CREDIT_RATE,
     student_bot_token: raw.student_bot_token ?? '',
     coin_rewards: { ...defaultCoinRewards, ...(raw.coin_rewards ?? {}) },
+    checkin_day7: { ...defaultCheckinDay7, ...(raw.checkin_day7 ?? {}) },
   };
   return _adminSettingsCache;
 }
@@ -11043,8 +11047,75 @@ const REFERRAL_FEATURE_LABELS: Record<string, string> = {
   free_event: '🎥 Join Event / Kelas',
 };
 
-function DailyCheckinModal({ day, coins, onClose }: { day: number; coins: number; onClose: () => void }) {
-  const totalWeek = coins * 7;
+function DailyCheckinModal({ username, dailyCoins, day7, onCoinChange, onFeatureClaim, onClose }: {
+  username: string;
+  dailyCoins: number;
+  day7: CheckinDay7;
+  onCoinChange: (balance: number) => void;
+  onFeatureClaim: (features: string[]) => void;
+  onClose: () => void;
+}) {
+  const featLabel: Record<string, string> = { free_video: 'Video', free_booking: 'Booking 1:1', free_thread: 'Thread', free_asset: 'Asset', free_event: 'Event' };
+  const dstr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const todayStr = dstr(new Date());
+
+  const [claimedInCycle, setClaimedInCycle] = useState(0);
+  const [claimedToday, setClaimedToday] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(false);
+  const [justClaimed, setJustClaimed] = useState<{ coins: number; features: string[]; day: number } | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from('user_profiles').select('checkin_streak, last_checkin').eq('username', username).maybeSingle();
+      const last = (data as { last_checkin?: string } | null)?.last_checkin ?? null;
+      let streak = (data as { checkin_streak?: number } | null)?.checkin_streak ?? 0;
+      if (last) {
+        const diffDays = Math.round((new Date(todayStr).getTime() - new Date(last).getTime()) / 86400000);
+        // Lewat 2 hari tanpa check-in → streak reset (mulai minggu baru).
+        if (diffDays > 2) streak = 0;
+      }
+      // Siklus 7 hari selesai → mulai baru (kecuali baru diklaim hari ini).
+      if (streak >= 7 && last !== todayStr) streak = 0;
+      setClaimedInCycle(streak);
+      setClaimedToday(last === todayStr);
+      setLoading(false);
+    })();
+  }, [username, todayStr]);
+
+  const claimableDay = claimedToday ? -1 : claimedInCycle + 1;
+  const dayCoins = (d: number) => (d === 7 ? day7.coins || dailyCoins : dailyCoins);
+
+  const handleClaim = async (d: number) => {
+    if (d !== claimableDay || claiming) return;
+    setClaiming(true);
+    const isDay7 = d === 7;
+    const coins = dayCoins(d);
+    const desc = isDay7 ? 'Bonus: Check-in Hari ke-7' : 'Bonus: Login Harian';
+    const { data: bal } = await supabase.from('user_credits').select('balance').eq('username', username).maybeSingle();
+    const next = (bal?.balance ?? 0) + coins;
+    const ops: Promise<unknown>[] = [
+      supabase.from('user_credits').upsert({ username, balance: next }),
+      supabase.from('credit_transactions').insert({ username, amount: coins, type: 'topup', description: desc }),
+      supabase.from('user_profiles').update({ checkin_streak: d, last_checkin: todayStr } as never).eq('username', username),
+    ];
+    // Hari ke-7: bonus akses fitur (kalau diatur admin)
+    if (isDay7 && day7.features.length > 0) {
+      const { data: prof } = await supabase.from('user_profiles').select('referral_perks').eq('username', username).maybeSingle();
+      const existing = ((prof as { referral_perks?: UserPerks } | null)?.referral_perks ?? {}) as UserPerks;
+      const merged: UserPerks = { ...existing };
+      for (const f of day7.features) merged[f as keyof UserPerks] = true;
+      ops.push(supabase.from('user_profiles').update({ referral_perks: merged } as never).eq('username', username));
+    }
+    await Promise.all(ops);
+    onCoinChange(next);
+    if (isDay7 && day7.features.length > 0) onFeatureClaim(day7.features);
+    setClaimedInCycle(d);
+    setClaimedToday(true);
+    setJustClaimed({ coins, features: isDay7 ? day7.features : [], day: d });
+    setClaiming(false);
+  };
+
   return createPortal(
     <div className="checkin-overlay" onClick={onClose}>
       <div className="checkin-modal" onClick={(e) => e.stopPropagation()}>
@@ -11053,27 +11124,46 @@ function DailyCheckinModal({ day, coins, onClose }: { day: number; coins: number
         <div className="checkin-head">
           <div>
             <h3 className="checkin-title">Kumpulkan Koin Harian!</h3>
-            <p className="checkin-sub">Bonus hingga <strong>{totalWeek} Koin</strong> kalau check-in 7 hari berturut-turut.</p>
+            <p className="checkin-sub">Klik hari ini untuk klaim. Hari ke-7 dapat bonus spesial 🎁</p>
           </div>
         </div>
-        <div className="checkin-days">
-          {Array.from({ length: 7 }, (_, i) => {
-            const d = i + 1;
-            const done = d < day;
-            const isToday = d === day;
-            return (
-              <div key={d} className={`checkin-day${done ? ' done' : ''}${isToday ? ' today' : ''}`}>
-                <div className="checkin-day-coin">
-                  {done ? <span className="checkin-check">✓</span> : <CoinIcon size={22} />}
-                  <span className="checkin-day-amt">{coins}</span>
-                </div>
-                <span className="checkin-day-label">{d} Hari</span>
-              </div>
-            );
-          })}
-        </div>
-        <p className="checkin-footer">🎉 Kamu dapat <strong>+{coins} Koin</strong> hari ini! Check-in lagi besok untuk streak berikutnya.</p>
-        <button type="button" className="checkin-btn" onClick={onClose}>Mantap!</button>
+        {loading ? (
+          <div className="checkin-loading">Memuat…</div>
+        ) : (
+          <>
+            <div className="checkin-days">
+              {Array.from({ length: 7 }, (_, i) => {
+                const d = i + 1;
+                const claimed = d <= claimedInCycle;
+                const claimable = d === claimableDay;
+                const locked = !claimed && !claimable;
+                return (
+                  <button
+                    type="button"
+                    key={d}
+                    className={`checkin-day${claimed ? ' done' : ''}${claimable ? ' claimable' : ''}${locked ? ' locked' : ''}${d === 7 ? ' day7' : ''}`}
+                    disabled={!claimable || claiming}
+                    onClick={() => void handleClaim(d)}
+                  >
+                    <div className="checkin-day-coin">
+                      {claimed ? <span className="checkin-check">✓</span> : locked ? <span className="checkin-lock">🔒</span> : <CoinIcon size={22} />}
+                      <span className="checkin-day-amt">{dayCoins(d)}{d === 7 && day7.features.length > 0 ? '+🎁' : ''}</span>
+                    </div>
+                    <span className="checkin-day-label">{d} Hari</span>
+                  </button>
+                );
+              })}
+            </div>
+            {justClaimed ? (
+              <p className="checkin-footer">🎉 Kamu dapat <strong>+{justClaimed.coins} Koin</strong>{justClaimed.features.length > 0 ? ` + akses ${justClaimed.features.map((f) => featLabel[f] ?? f).join(', ')}` : ''}! Sampai jumpa besok.</p>
+            ) : claimedToday ? (
+              <p className="checkin-footer">Kamu sudah check-in hari ini ✓. Datang lagi besok ya!</p>
+            ) : (
+              <p className="checkin-footer">Klik kotak <strong>Hari {claimableDay}</strong> untuk klaim {dayCoins(claimableDay)} koin hari ini!</p>
+            )}
+            <button type="button" className="checkin-btn" onClick={onClose}>Saya mengerti</button>
+          </>
+        )}
       </div>
     </div>,
     document.body,
@@ -12730,6 +12820,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [showCostsModal, setShowCostsModal] = useState(false);
   const [showRewardsModal, setShowRewardsModal] = useState(false);
   const [draftRewards, setDraftRewards] = useState<CoinRewards>({ ...defaultCoinRewards });
+  const [draftDay7, setDraftDay7] = useState<CheckinDay7>({ ...defaultCheckinDay7 });
   const [rewardsSaving, setRewardsSaving] = useState(false);
   const [rewardsSaved, setRewardsSaved] = useState(false);
   const [showResetTxModal, setShowResetTxModal] = useState(false);
@@ -12778,6 +12869,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setDraftCoinRate(settings.coin_rate ?? CREDIT_RATE);
     setDraftStudentBotToken(settings.student_bot_token ?? '');
     setDraftRewards({ ...defaultCoinRewards, ...(settings.coin_rewards ?? {}) });
+    setDraftDay7({ ...defaultCheckinDay7, ...(settings.checkin_day7 ?? {}) });
     setReferralCodes(settings.referralCodes ?? []);
 
     // Count usage per referral code from user_profiles
@@ -13354,7 +13446,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 <button
                   type="button"
                   className="admin-settings-btn"
-                  onClick={() => { void loadAdminSettings().then((s) => setDraftRewards({ ...defaultCoinRewards, ...(s.coin_rewards ?? {}) })); setShowRewardsModal(true); }}
+                  onClick={() => { void loadAdminSettings().then((s) => { setDraftRewards({ ...defaultCoinRewards, ...(s.coin_rewards ?? {}) }); setDraftDay7({ ...defaultCheckinDay7, ...(s.checkin_day7 ?? {}) }); }); setShowRewardsModal(true); }}
                 >
                   🎁 Atur Bonus Koin
                 </button>
@@ -13534,9 +13626,42 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   ))}
                 </div>
 
+                <div className="checkin-day7-config">
+                  <div className="checkin-day7-head">
+                    <span className="costs-modal-icon">🎁</span>
+                    <div className="costs-modal-info">
+                      <strong>Bonus Check-in Hari ke-7</strong>
+                      <span>Hadiah spesial saat user check-in 7 hari berturut-turut</span>
+                    </div>
+                  </div>
+                  <div className="rewards-field" style={{ marginBottom: 10 }}>
+                    <label><CoinIcon size={11} /> Koin hari ke-7</label>
+                    <input type="number" min="0" className="costs-modal-input" style={{ width: 100 }}
+                      value={draftDay7.coins}
+                      onChange={(e) => setDraftDay7((p) => ({ ...p, coins: Math.max(0, Number(e.target.value)) }))} />
+                  </div>
+                  <p className="checkin-day7-feat-label">Akses fitur gratis (opsional):</p>
+                  <div className="checkin-day7-feats">
+                    {([
+                      { key: 'free_video', label: '🎬 Video' },
+                      { key: 'free_booking', label: '📅 Booking 1:1' },
+                      { key: 'free_thread', label: '💬 Thread' },
+                      { key: 'free_asset', label: '📁 Asset' },
+                      { key: 'free_event', label: '🎥 Event' },
+                    ] as const).map(({ key, label }) => (
+                      <label key={key} className="checkin-day7-feat">
+                        <input type="checkbox"
+                          checked={draftDay7.features.includes(key)}
+                          onChange={(e) => setDraftDay7((p) => ({ ...p, features: e.target.checked ? [...p.features, key] : p.features.filter((f) => f !== key) }))} />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="costs-modal-footer">
                   {rewardsSaved && <span className="admin-costs-saved">✓ Tersimpan</span>}
-                  <button type="button" className="button secondary" onClick={() => setDraftRewards({ ...defaultCoinRewards })}>Reset ke default</button>
+                  <button type="button" className="button secondary" onClick={() => { setDraftRewards({ ...defaultCoinRewards }); setDraftDay7({ ...defaultCheckinDay7 }); }}>Reset ke default</button>
                   <button
                     type="button"
                     className="button primary"
@@ -13544,7 +13669,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                     onClick={async () => {
                       setRewardsSaving(true);
                       const settings = await loadAdminSettings();
-                      await saveAdminSettings({ ...settings, coin_rewards: draftRewards });
+                      await saveAdminSettings({ ...settings, coin_rewards: draftRewards, checkin_day7: draftDay7 });
                       setRewardsSaving(false);
                       setRewardsSaved(true);
                       setTimeout(() => { setRewardsSaved(false); setShowRewardsModal(false); }, 1200);
