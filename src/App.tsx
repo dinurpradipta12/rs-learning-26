@@ -2936,6 +2936,36 @@ function App() {
     return () => { void supabase.removeChannel(channel); };
   }, [isDeveloper]);
 
+  // Badge komunitas: jumlah balasan belum dibaca pada thread milik user sendiri.
+  const [communityUnread, setCommunityUnread] = useState(0);
+  useEffect(() => {
+    if (!session) return;
+    const uname = session.username;
+    const load = async () => {
+      const { count } = await supabase.from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_username', uname)
+        .eq('type', 'thread_reply')
+        .eq('is_read', false);
+      setCommunityUnread(count ?? 0);
+    };
+    void load();
+    const channel = supabase.channel('community-unread')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_username=eq.${uname}` }, () => void load())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [session]);
+
+  // Saat user membuka forum, tandai balasan sudah dibaca → badge hilang.
+  useEffect(() => {
+    if (page !== 'community' || !session || communityUnread === 0) return;
+    void supabase.from('notifications').update({ is_read: true })
+      .eq('recipient_username', session.username)
+      .eq('type', 'thread_reply')
+      .eq('is_read', false);
+    setCommunityUnread(0);
+  }, [page, session, communityUnread]);
+
   if (!session) {
     // Landing untuk pengunjung di root/home; login untuk #login atau deep-link.
     const showLogin = hash === '#login' || page !== 'dashboard';
@@ -3142,7 +3172,12 @@ function App() {
               className={`sidebar-nav-item ${page === getPage(item.hash) ? 'active' : ''}`}
               data-label={item.label}
             >
-              <span className="sidebar-nav-icon">{item.icon}</span>
+              <span className="sidebar-nav-icon" style={item.hash === '#community' ? { position: 'relative' } : undefined}>
+                {item.icon}
+                {item.hash === '#community' && communityUnread > 0 && (
+                  <span className="sidebar-nav-badge">{communityUnread > 9 ? '9+' : communityUnread}</span>
+                )}
+              </span>
               <span className="sidebar-nav-tooltip">{item.label}</span>
             </a>
           ))}
