@@ -8383,7 +8383,7 @@ body.dark .referral-preview-box {
 }
 .admin-settings-pkg-col-headers {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto auto;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr auto auto;
   gap: 8px;
   padding: 0 2px 4px;
 }
@@ -8405,7 +8405,7 @@ body.dark .referral-preview-box {
 }
 .admin-settings-pkg-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto auto;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr auto auto;
   gap: 8px;
   align-items: center;
 }
@@ -14280,3 +14280,7 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 }
 .costs-modal-input-col { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .costs-modal-input-col .coin-rupiah-hint { text-align: right; }
+
+.admin-pkg-bonus-tag { display: block; font-size: 0.65rem; font-weight: 700; color: #16a34a; margin-top: 2px; }
+
+.credit-pkg-bonus { display: block; font-size: 0.72rem; font-weight: 700; color: #16a34a; margin-top: 2px; }

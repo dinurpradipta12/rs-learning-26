@@ -2351,7 +2351,7 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
   const [customAmount, setCustomAmount] = useState('');
   const [step, setStep] = useState<'select' | 'payment' | 'uploaded'>('select');
   const [processing, setProcessing] = useState(false);
-  const [activePkgSnapshot, setActivePkgSnapshot] = useState<{ label: string; credits: number; price: number } | null>(null);
+  const [activePkgSnapshot, setActivePkgSnapshot] = useState<{ label: string; credits: number; price: number; bonusCredits?: number } | null>(null);
   const [pendingPromoSnapshot, setPendingPromoSnapshot] = useState<PackagePromo | null>(null);
   const [savedTopupId, setSavedTopupId] = useState('');
   const [proofUploading, setProofUploading] = useState(false);
@@ -2417,6 +2417,7 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
       package_label: activePkgSnapshot.label,
       status: 'pending',
       promo_bonus: pendingPromoSnapshot ?? null,
+      bonus_credits: activePkgSnapshot.bonusCredits ?? 0,
     }).select('id').single();
     const topupId = (topupRow as { id?: string } | null)?.id ?? '';
     if (insertErr || !topupId) { setProofUploading(false); setProofPreview(null); alert('Gagal membuat request topup. Coba lagi.'); return; }
@@ -2502,6 +2503,7 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
                   <span className="credit-pkg-label">{pkg.label}</span>
                   {(pkg.discount ?? 0) > 0 && <span className="credit-pkg-discount">-{pkg.discount}%</span>}
                   <span className="credit-pkg-credits"><CoinIcon size={13} /> {pkg.credits.toLocaleString('id-ID')} Ruang Coin</span>
+                  {(pkg.bonusCredits ?? 0) > 0 && <span className="credit-pkg-bonus">🎁 +{pkg.bonusCredits} bonus koin</span>}
                   <span className="credit-pkg-price">{formatRupiah(pkg.price)}</span>
                   {(pkg.discount ?? 0) > 0 && (
                     <span className="credit-pkg-base-price">{formatRupiah(pkg.credits * CREDIT_RATE)}</span>
@@ -10630,7 +10632,7 @@ type PackagePromo = {
   bonus_booking?: boolean;
   end_date?: string;
 };
-type CreditPackage = { id: string; label: string; credits: number; price: number; discount?: number; promo?: PackagePromo; features?: string[] };
+type CreditPackage = { id: string; label: string; credits: number; price: number; discount?: number; bonusCredits?: number; promo?: PackagePromo; features?: string[] };
 
 function isPromoActive(pkg: CreditPackage): boolean {
   if (!pkg.promo?.active) return false;
@@ -12769,7 +12771,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const updateDraftPkg = (idx: number, field: keyof CreditPackage, value: string) => {
     setDraftPackages((prev) => prev.map((p, i) => {
       if (i !== idx) return p;
-      const updated = { ...p, [field]: field === 'credits' || field === 'discount' ? Number(value) : value };
+      const updated = { ...p, [field]: field === 'credits' || field === 'discount' || field === 'bonusCredits' ? Number(value) : value };
       const base = updated.credits * draftCoinRate;
       updated.price = Math.round(base * (1 - (updated.discount ?? 0) / 100));
       return updated;
@@ -14021,6 +14023,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 <span>Nama Paket</span>
                 <span>Ruang Coin</span>
                 <span>Diskon (%)</span>
+                <span>Bonus Koin</span>
                 <span>Harga Final</span>
                 <span></span>
               </div>
@@ -14047,8 +14050,17 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       value={pkg.discount ?? 0}
                       onChange={(e) => updateDraftPkg(idx, 'discount', e.target.value)}
                     />
+                    <input
+                      type="number" min="0"
+                      className="admin-settings-input"
+                      placeholder="0"
+                      title="Bonus koin gratis saat beli paket ini"
+                      value={pkg.bonusCredits ?? 0}
+                      onChange={(e) => updateDraftPkg(idx, 'bonusCredits', e.target.value)}
+                    />
                     <div className="admin-settings-pkg-price-preview">
                       {formatRupiah(pkg.price)}
+                      {(pkg.bonusCredits ?? 0) > 0 && <span className="admin-pkg-bonus-tag">+{pkg.bonusCredits} bonus</span>}
                     </div>
                     <button
                       type="button"
@@ -14266,6 +14278,7 @@ type TopupRequest = {
   note?: string;
   promo_bonus?: PackagePromo | null;
   proof_url?: string | null;
+  bonus_credits?: number;
 };
 
 function InboxPage() {
@@ -14301,12 +14314,17 @@ function InboxPage() {
     const { data: existing } = await supabase.from('user_credits').select('balance').eq('username', req.username).maybeSingle();
     const current = existing?.balance ?? 0;
     const promo = req.promo_bonus as PackagePromo | null | undefined;
+    const bonus = req.bonus_credits ?? 0;
+    const totalCredits = req.credits + bonus;
 
     const ops: Promise<unknown>[] = [
-      supabase.from('user_credits').upsert({ username: req.username, balance: current + req.credits }),
+      supabase.from('user_credits').upsert({ username: req.username, balance: current + totalCredits }),
       supabase.from('credit_transactions').insert({ username: req.username, amount: req.credits, type: 'topup', description: `Topup ${req.package_label} — ${formatRupiah(req.amount_rp)}` }),
       supabase.from('topup_requests').update({ status: 'approved', processed_at: new Date().toISOString() }).eq('id', req.id),
     ];
+    if (bonus > 0) {
+      ops.push(supabase.from('credit_transactions').insert({ username: req.username, amount: bonus, type: 'topup', description: `🎁 Bonus paket ${req.package_label}` }));
+    }
 
     // Apply promo bonus features / booking
     if (promo?.active) {
@@ -14322,18 +14340,22 @@ function InboxPage() {
         promo.bonus_booking && 'Sesi 1:1 Gratis',
         ...(promo.bonus_features ?? []).map((f: string) => ({ free_video: 'Video', free_booking: 'Booking', free_thread: 'Thread', free_asset: 'Asset', free_event: 'Event' }[f] ?? f)),
       ].filter(Boolean).join(', ');
-      const notifBody = `${req.credits} Ruang Coin ditambahkan. 🎁 Bonus promo: ${bonusDesc}`;
+      const notifBody = `${totalCredits} Ruang Coin ditambahkan${bonus > 0 ? ` (termasuk +${bonus} bonus paket)` : ''}. 🎁 Bonus promo: ${bonusDesc}`;
       ops.push(insertNotification(req.username, 'credits_added', '🎉 Topup + Bonus Promo!', notifBody, '#profile'));
     } else {
-      ops.push(insertNotification(req.username, 'credits_added', '✦ Ruang Coin Ditambahkan!', `${req.credits} Ruang Coin berhasil ditambahkan ke akunmu. Selamat belajar!`, '#profile'));
+      const body = bonus > 0
+        ? `${totalCredits} Ruang Coin ditambahkan ke akunmu (${req.credits} + 🎁 ${bonus} bonus paket). Selamat belajar!`
+        : `${req.credits} Ruang Coin berhasil ditambahkan ke akunmu. Selamat belajar!`;
+      ops.push(insertNotification(req.username, 'credits_added', '✦ Ruang Coin Ditambahkan!', body, '#profile'));
     }
 
     await Promise.all(ops);
 
     // Notify student via Telegram bot
+    const bonusLine = bonus > 0 ? `\n🎁 Termasuk <b>+${bonus} bonus paket</b>!` : '';
     const approveMsg = promo?.active
-      ? `🎉 <b>Topup Berhasil + Bonus Promo!</b>\n\n💰 <b>+${req.credits} Ruang Coin</b> sudah masuk ke akunmu.\n🎁 Bonus promo aktif — cek akunmu di Ruang Sosmed ID.`
-      : `✅ <b>Topup Berhasil!</b>\n\n💰 <b>+${req.credits} Ruang Coin</b> sudah masuk ke akunmu.\n\nLogin ke Ruang Sosmed ID untuk mulai belajar! 🚀`;
+      ? `🎉 <b>Topup Berhasil + Bonus Promo!</b>\n\n💰 <b>+${totalCredits} Ruang Coin</b> sudah masuk ke akunmu.${bonusLine}\n🎁 Bonus promo aktif — cek akunmu di Ruang Sosmed ID.`
+      : `✅ <b>Topup Berhasil!</b>\n\n💰 <b>+${totalCredits} Ruang Coin</b> sudah masuk ke akunmu.${bonusLine}\n\nLogin ke Ruang Sosmed ID untuk mulai belajar! 🚀`;
     void notifyStudent(req.username, approveMsg);
 
     setTopupActionId(null);
@@ -15315,6 +15337,7 @@ function ProfilePage({
                   <span className="credit-pkg-label">{pkg.label}</span>
                   {(pkg.discount ?? 0) > 0 && <span className="credit-pkg-discount">-{pkg.discount}%</span>}
                   <span className="credit-pkg-credits"><CoinIcon size={13} /> {pkg.credits.toLocaleString('id-ID')} Ruang Coin</span>
+                  {(pkg.bonusCredits ?? 0) > 0 && <span className="credit-pkg-bonus">🎁 +{pkg.bonusCredits} bonus koin</span>}
                   <span className="credit-pkg-price">{formatRupiah(pkg.price)}</span>
                   {(pkg.discount ?? 0) > 0 && (
                     <span className="credit-pkg-base-price">{formatRupiah(pkg.credits * CREDIT_RATE)}</span>
