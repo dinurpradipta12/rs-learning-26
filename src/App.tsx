@@ -856,6 +856,36 @@ async function insertNotification(recipient: string, type: NotifType, title: str
   await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null }]);
 }
 
+// ── Confirm Modal ─────────────────────────────────────────────
+function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return createPortal(
+    <div className="confirm-overlay" onClick={onCancel}>
+      <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+        <p className="confirm-message">{message}</p>
+        <div className="confirm-actions">
+          <button type="button" className="confirm-btn confirm-btn--cancel" onClick={onCancel}>Batal</button>
+          <button type="button" className="confirm-btn confirm-btn--ok" onClick={() => { onConfirm(); onCancel(); }}>Hapus</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function useConfirm() {
+  const [state, setState] = useState<{ message: string; resolve: (v: boolean) => void } | null>(null);
+  const confirm = (message: string): Promise<boolean> =>
+    new Promise((resolve) => setState({ message, resolve }));
+  const modal = state ? (
+    <ConfirmModal
+      message={state.message}
+      onConfirm={() => state.resolve(true)}
+      onCancel={() => { state.resolve(false); setState(null); }}
+    />
+  ) : null;
+  return { confirm, modal };
+}
+
 // ── Badge system ─────────────────────────────────────────────
 type BadgeTier = 'wood' | 'silver' | 'gold' | 'diamond' | null;
 
@@ -9613,6 +9643,7 @@ function ForumThreadDetail({
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const isAuthor = thread.authorUsername === session.username;
   const canModerate = session.role === 'developer' || session.role === 'admin';
+  const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
 
   const handleShare = () => {
     const url = `${window.location.origin}${window.location.pathname}?thread=${thread.id}`;
@@ -9647,8 +9678,8 @@ function ForumThreadDetail({
     }
   };
 
-  const handleDelete = () => {
-    if (window.confirm('Hapus thread ini? Tindakan tidak bisa dibatalkan.')) {
+  const handleDelete = async () => {
+    if (await confirmDialog('Hapus thread ini? Tindakan tidak bisa dibatalkan.')) {
       onDelete(thread.id);
     }
   };
@@ -9763,6 +9794,7 @@ function ForumThreadDetail({
 
   return (
     <div className="forum-detail">
+      {confirmModal}
       {/* ── Fixed top: back + OP post ── */}
       <div className="forum-detail-top">
         <button type="button" className="forum-back-btn" onClick={onBack}>
@@ -12128,6 +12160,7 @@ function HelpEditor() {
 
 function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: AppSession; featureCosts: FeatureCosts; onFeatureCostsChange: (c: FeatureCosts) => void }) {
   const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'revenue' | 'referral' | 'promo' | 'sertifikat' | 'hpp' | 'landing' | 'tema' | 'analytics' | 'monitor'>('users');
+  const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
   const [certCourses, setCertCourses] = useState<{ key: string; title: string }[]>([]);
   const [certSelectedKey, setCertSelectedKey] = useState<string | null>(null);
   const [promo, setPromo] = useState<PromoPopup>({ ...defaultPromo });
@@ -12412,7 +12445,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   };
 
   const handleDeleteUser = async (username: string) => {
-    if (!window.confirm(`Hapus user "${username}"? Semua data user akan ikut terhapus.`)) return;
+    if (!await confirmDialog(`Hapus user "${username}"? Semua data user akan ikut terhapus.`)) return;
     const { data: delResult, error } = await supabase.rpc('delete_app_user_as_admin', { p_target_username: username, p_admin_username: session.username });
     if (error) { window.alert(`Gagal menghapus user: ${error.message}`); return; }
     if ((delResult as { success?: boolean })?.success === false) { window.alert(`Gagal menghapus user: ${(delResult as { error?: string })?.error}`); return; }
@@ -12538,7 +12571,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
   const handleBulkDelete = async () => {
     if (selectedUsernames.has(session.username)) { window.alert('Tidak bisa menghapus akun sendiri.'); return; }
-    if (!window.confirm(`Hapus ${selectedUsernames.size} user yang dipilih? Semua data mereka akan ikut terhapus.`)) return;
+    if (!await confirmDialog(`Hapus ${selectedUsernames.size} user yang dipilih? Semua data mereka akan ikut terhapus.`)) return;
     for (const username of selectedUsernames) {
       await supabase.rpc('delete_app_user_as_admin', { p_target_username: username, p_admin_username: session.username });
     }
@@ -12568,6 +12601,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
   return (
     <section className="page card admin-page">
+      {confirmModal}
       <div className="admin-header">
         <div>
           <p className="eyebrow">developer panel</p>
@@ -15328,6 +15362,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [joinTarget, setJoinTarget] = useState<HubEvent | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
 
   const emptyDraft = (): Omit<HubEvent, 'id'> => ({ title: '', description: '', date: '', time: '', type: 'zoom', link: '', coinCost: featureCosts.join_event, isActive: true, coverUrl: '', recurrence: 'none', recurrenceGroupId: undefined });
   const [draft, setDraft] = useState<Omit<HubEvent, 'id'>>(emptyDraft());
@@ -15456,6 +15491,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
 
   return (
     <div className="events-page">
+      {confirmModal}
       <div className="events-header">
         <div>
           <h2 className="events-title">Events & Kelas</h2>
@@ -15487,7 +15523,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                           <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
                           <button type="button" className="admin-action-btn danger" onClick={() => void handleDelete(idx)}>hapus</button>
                           {ev.recurrenceGroupId && (
-                            <button type="button" className="admin-action-btn danger" onClick={() => { if (window.confirm(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`)) void handleDeleteGroup(ev.recurrenceGroupId!); }} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
+                            <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`).then((ok) => { if (ok) void handleDeleteGroup(ev.recurrenceGroupId!); })} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
                           )}
                         </div>
                       </td>
