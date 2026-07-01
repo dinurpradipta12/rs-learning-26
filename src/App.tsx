@@ -15642,6 +15642,20 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState('');
   const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
+  const [adminTab, setAdminTab] = useState<'events' | 'peserta'>('events');
+  const [participants, setParticipants] = useState<Array<{ event_id: string; username: string; display_name: string | null; event_title: string | null; event_date: string | null; joined_at: string }>>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
+
+  const loadParticipants = async () => {
+    setParticipantsLoading(true);
+    const { data } = await supabase.from('event_participants').select('*').order('joined_at', { ascending: false });
+    setParticipants((data ?? []) as typeof participants);
+    setParticipantsLoading(false);
+  };
+
+  useEffect(() => {
+    if (canManage && adminTab === 'peserta') void loadParticipants();
+  }, [canManage, adminTab]);
 
   const emptyDraft = (): Omit<HubEvent, 'id'> => ({ title: '', description: '', date: '', time: '', type: 'zoom', link: '', coinCost: featureCosts.join_event, isActive: true, coverUrl: '', recurrence: 'none', recurrenceGroupId: undefined });
   const [draft, setDraft] = useState<Omit<HubEvent, 'id'>>(emptyDraft());
@@ -15753,6 +15767,14 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     }
     localStorage.setItem(joinedKey(joinTarget.id), '1');
     setJoinedIds((prev) => new Set([...prev, joinTarget.id]));
+    // Catat peserta ke database agar admin bisa melihat siapa saja yang ikut
+    void supabase.from('event_participants').upsert({
+      event_id: joinTarget.id,
+      username: session.username,
+      display_name: session.displayName,
+      event_title: joinTarget.title,
+      event_date: joinTarget.date,
+    }, { onConflict: 'event_id,username' });
     void sendTelegram(`🎫 <b>User Baru Join Event</b>\n\n👤 @${session.username}\n🎯 Event: ${joinTarget.title}\n🗓 Tanggal: ${joinTarget.date}${joinTarget.time ? ` pukul ${joinTarget.time.slice(0, 5)}` : ''}\n💰 Biaya: ${joinTarget.coinCost === 0 ? 'Gratis' : `${joinTarget.coinCost} Ruang Coin`}`);
     // Schedule Telegram reminders for user (H-1, H-3 jam, H-30 menit)
     void scheduleEventReminders(session.username, joinTarget);
@@ -15781,8 +15803,53 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
         )}
       </div>
 
+      {canManage && (
+        <div className="events-admin-tabs">
+          <button type="button" className={`events-admin-tab${adminTab === 'events' ? ' active' : ''}`} onClick={() => setAdminTab('events')}>Daftar Event</button>
+          <button type="button" className={`events-admin-tab${adminTab === 'peserta' ? ' active' : ''}`} onClick={() => setAdminTab('peserta')}>Peserta Event</button>
+        </div>
+      )}
+
       {loading ? (
         <div className="events-loading">Memuat event…</div>
+      ) : canManage && adminTab === 'peserta' ? (
+        <div className="events-participants">
+          {participantsLoading ? (
+            <div className="events-loading">Memuat peserta…</div>
+          ) : (() => {
+            // Kelompokkan peserta per event
+            const groups = new Map<string, { title: string; date: string; rows: typeof participants }>();
+            for (const p of participants) {
+              const key = p.event_id;
+              if (!groups.has(key)) groups.set(key, { title: p.event_title || 'Event', date: p.event_date || '', rows: [] });
+              groups.get(key)!.rows.push(p);
+            }
+            const groupList = [...groups.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            if (groupList.length === 0) return <div className="events-empty">Belum ada peserta yang bergabung ke event manapun.</div>;
+            return groupList.map((g, i) => (
+              <div className="event-participants-group" key={i}>
+                <div className="event-participants-head">
+                  <div>
+                    <strong className="event-participants-title">{g.title}</strong>
+                    {g.date && <span className="event-participants-date">📅 {new Date(g.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>}
+                  </div>
+                  <span className="event-participants-count">{g.rows.length} peserta</span>
+                </div>
+                <div className="event-participants-list">
+                  {g.rows.map((p, j) => (
+                    <div className="event-participant-row" key={j}>
+                      <div className="event-participant-info">
+                        <strong>{p.display_name || p.username}</strong>
+                        <span className="event-participant-username">@{p.username}</span>
+                      </div>
+                      <span className="event-participant-time">{new Date(p.joined_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
       ) : (
         <>
           {canManage && events.length > 0 && (
