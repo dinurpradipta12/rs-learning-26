@@ -35,7 +35,9 @@ export async function onRequest(context) {
   const desc = bodySnippet
     ? `${thread.author_display_name ? thread.author_display_name + ': ' : ''}${bodySnippet}`
     : 'Diskusi di komunitas Ruang Sosmed ID';
-  const image = thread.image_url || DEFAULT_IMAGE;
+  // Gambar preview dinamis: judul thread dirender ke PNG oleh functions/og.js.
+  // Kalau thread punya gambar sendiri, pakai itu; kalau tidak, pakai OG dinamis.
+  const image = thread.image_url || `https://ruangsosmedid.com/og?thread=${encodeURIComponent(threadId)}`;
   const pageUrl = `https://ruangsosmedid.com/?thread=${encodeURIComponent(threadId)}`;
 
   const setContent = (value) => ({ element(el) { el.setAttribute('content', value); } });
