@@ -16023,17 +16023,18 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                             <div className="events-cal-events">
                               {dayEvents.map((ev) => {
                                 const idx = events.findIndex((e) => e.id === ev.id);
-                                const shortDate = new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
                                 return (
-                                  <div key={ev.id} className={`events-cal-chip${ev.isActive === false ? ' inactive' : ''}`} title={ev.title}>
-                                    {ev.coverUrl
-                                      ? <img src={ev.coverUrl} alt="" className="events-cal-chip-cover" />
-                                      : <span className="events-cal-chip-cover events-cal-chip-cover--ph">{typeIcon[ev.type]}</span>}
+                                  <div key={ev.id} className={`events-cal-chip type-${ev.type}${ev.isActive === false ? ' inactive' : ''}`} title={ev.title} onClick={() => openEdit(idx)}>
                                     <div className="events-cal-chip-info">
                                       <span className="events-cal-chip-name">{ev.title}</span>
-                                      <span className="events-cal-chip-meta">{ev.time ? ev.time.slice(0, 5) : '—'} · {shortDate}</span>
+                                      {ev.time && (
+                                        <span className="events-cal-chip-meta">
+                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                                          {ev.time.slice(0, 5)}
+                                        </span>
+                                      )}
                                     </div>
-                                    <button type="button" className="events-cal-chip-edit" title="Edit event" onClick={() => openEdit(idx)}>
+                                    <button type="button" className="events-cal-chip-edit" title="Edit event" onClick={(e) => { e.stopPropagation(); openEdit(idx); }}>
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                                     </button>
                                   </div>
