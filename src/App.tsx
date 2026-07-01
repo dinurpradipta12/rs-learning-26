@@ -2315,6 +2315,7 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
   const [step, setStep] = useState<'select' | 'payment' | 'uploaded'>('select');
   const [processing, setProcessing] = useState(false);
   const [activePkgSnapshot, setActivePkgSnapshot] = useState<{ label: string; credits: number; price: number } | null>(null);
+  const [pendingPromoSnapshot, setPendingPromoSnapshot] = useState<PackagePromo | null>(null);
   const [savedTopupId, setSavedTopupId] = useState('');
   const [proofUploading, setProofUploading] = useState(false);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
@@ -2343,21 +2344,12 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
 
   const handleProsesTopup = async () => {
     if (!activePkg) return;
-    setProcessing(true);
+    // Belum membuat request di database. Request baru dibuat setelah user
+    // upload bukti transfer, supaya antrian verifikasi admin tidak penuh
+    // dengan request tanpa bukti pembayaran.
     setActivePkgSnapshot(activePkg);
-    const promoSnapshot = isPromoActive(activePkg) ? activePkg.promo : null;
-    const { data: topupRow } = await supabase.from('topup_requests').insert({
-      username: session?.username ?? 'guest',
-      display_name: session?.displayName ?? '',
-      credits: activePkg.credits,
-      amount_rp: activePkg.price,
-      package_label: activePkg.label,
-      status: 'pending',
-      promo_bonus: promoSnapshot ?? null,
-    }).select('id').single();
-    const topupId = (topupRow as { id?: string } | null)?.id ?? '';
-    setSavedTopupId(topupId);
-    setProcessing(false);
+    setPendingPromoSnapshot(isPromoActive(activePkg) ? (activePkg.promo ?? null) : null);
+    setSavedTopupId('');
     setStep('payment');
   };
 
@@ -2379,9 +2371,23 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
     const localUrl = URL.createObjectURL(file);
     setProofPreview(localUrl);
 
+    // Buat request topup SEKARANG (baru dibuat saat bukti diupload)
+    const { data: topupRow, error: insertErr } = await supabase.from('topup_requests').insert({
+      username: session?.username ?? 'guest',
+      display_name: session?.displayName ?? '',
+      credits: activePkgSnapshot.credits,
+      amount_rp: activePkgSnapshot.price,
+      package_label: activePkgSnapshot.label,
+      status: 'pending',
+      promo_bonus: pendingPromoSnapshot ?? null,
+    }).select('id').single();
+    const topupId = (topupRow as { id?: string } | null)?.id ?? '';
+    if (insertErr || !topupId) { setProofUploading(false); setProofPreview(null); alert('Gagal membuat request topup. Coba lagi.'); return; }
+    setSavedTopupId(topupId);
+
     // upload ke storage
     const ext = file.name.split('.').pop();
-    const path = `topup-proofs/${savedTopupId || Date.now()}.${ext}`;
+    const path = `topup-proofs/${topupId}.${ext}`;
     const { error } = await supabase.storage.from('lesson-assets').upload(path, file, { upsert: true, contentType: file.type });
 
     if (error) { setProofUploading(false); return; }
@@ -2389,8 +2395,8 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
     const proofUrl = supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
 
     // update topup_request dengan proof_url
-    const shortId = savedTopupId.slice(0, 8);
-    await supabase.from('topup_requests').update({ proof_url: proofUrl }).eq('id', savedTopupId);
+    const shortId = topupId.slice(0, 8);
+    await supabase.from('topup_requests').update({ proof_url: proofUrl }).eq('id', topupId);
 
     // kirim foto ke Telegram
     try {
@@ -2401,7 +2407,7 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
       form.append('parse_mode', 'HTML');
       form.append('reply_markup', JSON.stringify({
         inline_keyboard: [[
-          { text: '✅ Approve', callback_data: `at:${savedTopupId}` },
+          { text: '✅ Approve', callback_data: `at:${topupId}` },
         ]],
       }));
       await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`, { method: 'POST', body: form });
