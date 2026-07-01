@@ -14290,3 +14290,5 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 .rewards-field { display: flex; flex-direction: column; gap: 3px; }
 .rewards-field label { font-size: 0.64rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .rewards-field .costs-modal-input { width: 68px; text-align: center; }
+
+.forum-edited-tag { font-size: 0.75rem; color: var(--muted); font-style: italic; }

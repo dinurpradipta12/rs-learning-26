@@ -509,6 +509,7 @@ type ForumThread = {
   createdAt: string;
   viewCount: number;
   replies: ForumReply[];
+  edited?: boolean;
 };
 
 type ProfileStatItem = {
@@ -845,6 +846,7 @@ async function fetchForumThreads(): Promise<ForumThread[]> {
     authorDisplayName: t.author_display_name,
     createdAt: t.created_at,
     viewCount: t.view_count,
+    edited: t.edited ?? false,
     replies: replyMap[t.id] ?? [],
   }));
 }
@@ -860,6 +862,7 @@ async function upsertForumThread(thread: ForumThread): Promise<void> {
     image_url: thread.imageUrl ?? null,
     view_count: thread.viewCount,
     created_at: thread.createdAt,
+    edited: thread.edited ?? false,
   });
 }
 
@@ -6204,6 +6207,31 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       };
 
       setReviewsByLesson(nextReviewsByLesson);
+
+      // Kirim review ke admin: notif in-app + Telegram (lengkap dengan rating bintang)
+      void (async () => {
+        const stars = '⭐'.repeat(nextReview.rating) + '☆'.repeat(Math.max(0, 5 - nextReview.rating));
+        const lessonTitle = selectedLesson.title;
+        const reviewerLabel = `${nextReview.name}${sessionUsername ? ` (@${sessionUsername})` : ''}`;
+        const { data: devs } = await supabase.from('app_users').select('username').in('role', ['developer', 'admin']);
+        for (const dev of devs ?? []) {
+          void insertNotification(
+            (dev as { username: string }).username,
+            'lesson_new',
+            `Review Baru: ${nextReview.rating}★`,
+            `${reviewerLabel} memberi ${nextReview.rating}★ untuk "${lessonTitle}"${nextReview.feedback ? `: "${nextReview.feedback}"` : ''}`,
+            '#materi',
+          );
+        }
+        void sendTelegram(
+          `📝 <b>Review Materi Baru</b>\n\n` +
+          `📚 Materi: <b>${lessonTitle}</b>\n` +
+          `${stars} (${nextReview.rating}/5)\n` +
+          `👤 ${reviewerLabel}\n` +
+          (nextReview.feedback ? `\n💬 "${nextReview.feedback}"` : '\n(tanpa komentar)')
+        );
+      })();
+
       // Bonus koin tulis review (dibatasi per hari)
       if (sessionUsername) {
         void awardCoinReward(sessionUsername, 'write_review').then((nb) => { if (nb != null) onCreditChange(nb); });
@@ -9843,7 +9871,7 @@ function ForumThreadDetail({
 
   const handleEditSave = () => {
     if (!editTitle.trim()) return;
-    const updated = { ...thread, title: editTitle.trim(), body: editBody.trim() };
+    const updated = { ...thread, title: editTitle.trim(), body: editBody.trim(), edited: true };
     onUpdate(updated);
     void upsertForumThread(updated);
     setIsEditing(false);
@@ -9986,6 +10014,7 @@ function ForumThreadDetail({
                   <div className="forum-op-meta">
                     <span className="forum-category-tag">{thread.category}</span>
                     <span>{timeAgo(thread.createdAt)}</span>
+                    {thread.edited && <span className="forum-edited-tag">· diedit</span>}
                   </div>
                 </div>
               </>
@@ -10189,16 +10218,8 @@ function ForumComposer({
   const doPost = async () => {
     setIsPosting(true);
     const isQnaSession = category === 'qna session';
-    const cost = isQnaSession ? 0 : featureCosts.post_thread;
-    if (cost > 0) {
-      const result = await deductCredits(session.username, cost, `Post thread: ${title.trim()}`, 'post_thread');
-      if (!result.ok) {
-        setIsPosting(false);
-        onInsufficientCredits?.('Post Thread / Diskusi', result.needed ?? cost, result.balance ?? 0);
-        return;
-      }
-      if (result.newBalance !== undefined) onCreditChange(result.newBalance);
-    }
+    // Buat thread sekarang GRATIS dan malah dapat bonus koin (lihat awardCoinReward
+    // 'create_thread' di bawah). Tidak ada pemotongan Ruang Coin lagi.
     const newThread: ForumThread = {
       id: `thread-${Date.now()}`,
       category,
@@ -10444,6 +10465,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
       authorDisplayName: t.author_display_name as string,
       createdAt: t.created_at as string,
       viewCount: (t.view_count as number) ?? 0,
+      edited: (t.edited as boolean) ?? false,
     });
     const mapReplyRow = (r: Record<string, unknown>): ForumReply => ({
       id: r.id as string,
