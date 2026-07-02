@@ -14369,5 +14369,6 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 .event-code-input { padding: 11px 16px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: #fff; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
 .event-code-input::placeholder { color: rgba(255,255,255,0.4); }
 .event-code-error { color: #fca5a5; font-size: 0.82rem; }
+.event-code-pay-coin-link { background: none; border: none; padding: 0; color: #facc15; font-size: 0.82rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .event-access-code { position: relative; font-size: 1.6rem; font-weight: 900; letter-spacing: 0.15em; color: var(--accent); background: var(--accent-soft); border: 2px dashed var(--accent); border-radius: 14px; padding: 18px; cursor: pointer; }
 .event-access-code-copy { display: block; font-size: 0.62rem; font-weight: 600; letter-spacing: normal; color: var(--muted); margin-top: 6px; text-transform: none; }

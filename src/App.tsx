@@ -6044,7 +6044,11 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeChecking, setCodeChecking] = useState(false);
-  const isCodeLocked = !!selectedLesson?.unlockEventId && !canEdit && !codeUnlockedLessons.has(selectedLesson.id);
+  const unlockCodeLesson = (lessonId: string) => {
+    const next = new Set(codeUnlockedLessons); next.add(lessonId);
+    setCodeUnlockedLessons(next);
+    try { localStorage.setItem(`event_code_unlocked_${sessionUsername}`, JSON.stringify([...next])); } catch { /* ignore */ }
+  };
   const submitAccessCode = async () => {
     if (!selectedLesson?.unlockEventId || !sessionUsername) return;
     setCodeChecking(true); setCodeError('');
@@ -6055,19 +6059,43 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       .eq('access_code', codeInput.trim().toUpperCase())
       .maybeSingle();
     if (data) {
-      const next = new Set(codeUnlockedLessons); next.add(selectedLesson.id);
-      setCodeUnlockedLessons(next);
-      try { localStorage.setItem(`event_code_unlocked_${sessionUsername}`, JSON.stringify([...next])); } catch { /* ignore */ }
+      unlockCodeLesson(selectedLesson.id);
       setCodeInput('');
     } else {
-      setCodeError('Kode tidak valid atau bukan untuk event ini. Pastikan kamu peserta event tsb.');
+      setCodeError('Kode ditolak, bayar dengan koin?');
     }
     setCodeChecking(false);
+  };
+  const payCodeLessonWithCoin = () => {
+    if (!selectedLesson) return;
+    const lessonId = selectedLesson.id;
+    const videoFree = userPerks.credit_exempt || userPerks.free_video;
+    if (videoFree || featureCosts.video_learning <= 0) {
+      unlockCodeLesson(lessonId);
+      return;
+    }
+    onRequestConfirm({
+      feature: 'Video Learning',
+      cost: featureCosts.video_learning,
+      onConfirm: () => {
+        void deductCredits(sessionUsername, featureCosts.video_learning, `Akses video: ${selectedLesson.title}`, 'video_learning').then((res) => {
+          if (!res.ok) {
+            onInsufficientCredits('Video Learning', res.needed ?? featureCosts.video_learning, res.balance ?? 0);
+          } else {
+            if (res.newBalance !== undefined) onCreditChange(res.newBalance);
+            markVideoPaid(lessonId);
+            unlockCodeLesson(lessonId);
+            void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: lessonId, video_title: selectedLesson.title });
+          }
+        });
+      },
+    });
   };
   const reviewTriggerRef = useRef<HTMLDivElement | null>(null);
   const reviewPopoverRef = useRef<HTMLDivElement | null>(null);
   const selectedLesson =
     materialLessons.find((lesson) => lesson.id === selectedLessonId) ?? materialLessons[0] ?? null;
+  const isCodeLocked = !!selectedLesson?.unlockEventId && !canEdit && !codeUnlockedLessons.has(selectedLesson.id);
   const selectedLessonIndex = selectedLesson
     ? materialLessons.findIndex((lesson) => lesson.id === selectedLesson.id)
     : -1;
@@ -6990,7 +7018,14 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                           {codeChecking ? '…' : 'Buka'}
                         </button>
                       </div>
-                      {codeError && <p className="event-code-error">{codeError}</p>}
+                      {codeError && (
+                        <p className="event-code-error">
+                          {codeError}{' '}
+                          <button type="button" className="event-code-pay-coin-link" onClick={() => { setCodeError(''); payCodeLessonWithCoin(); }}>
+                            Bayar dengan koin
+                          </button>
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (
