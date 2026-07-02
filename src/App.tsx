@@ -13010,6 +13010,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [referralSaving, setReferralSaving] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
+  // Semua transaksi (hanya kolom untuk hitung statistik) — TIDAK dibatasi 50 baris,
+  // supaya Est. Pendapatan / Coin Tersalurkan tidak menyusut saat transaksi baru masuk.
+  const [statTxns, setStatTxns] = useState<Array<{ amount: number; type: string; description: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(0);
@@ -13144,6 +13147,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
         createdAt: t.created_at,
       })),
     );
+
+    // Statistik pendapatan/coin dihitung dari SELURUH transaksi (bukan 50 terbaru).
+    const { data: statRows } = await supabase.from('credit_transactions').select('amount, type, description');
+    setStatTxns((statRows ?? []) as Array<{ amount: number; type: string; description: string }>);
 
     setLoading(false);
     const { data: courseRows } = await supabase.from('courses').select('key, title').order('sort_order', { ascending: true });
@@ -13334,6 +13341,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
       description: desc,
       createdAt: new Date().toISOString(),
     }, ...prev]);
+    setStatTxns((prev) => [{ amount, type: 'topup', description: desc }, ...prev]);
     setSaving(false);
     setShowAddCredits(false);
     setCustomCredits('');
@@ -13390,12 +13398,12 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     return d.startsWith('Bonus:') || d.startsWith('🎁 Bonus paket') || d.startsWith('Klaim akses fitur:');
   };
   const isNonRevenueTx = (t: { description: string }) => isReferralTx(t) || isBonusTx(t);
-  const paidTopups = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && !isNonRevenueTx(t));
-  const referralTxs = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && isReferralTx(t));
+  const paidTopups = statTxns.filter((t) => t.type === 'topup' && t.amount > 0 && !isNonRevenueTx(t));
+  const referralTxs = statTxns.filter((t) => t.type === 'topup' && t.amount > 0 && isReferralTx(t));
   const totalRevenue = paidTopups.reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalReferralCoins = referralTxs.reduce((s, t) => s + t.amount, 0);
-  const totalRevenueAll = transactions.filter((t) => t.type === 'topup' && t.amount > 0 && !isBonusTx(t)).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
-  const totalCreditsIssued = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const totalRevenueAll = statTxns.filter((t) => t.type === 'topup' && t.amount > 0 && !isBonusTx(t)).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
+  const totalCreditsIssued = statTxns.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const activeUsers = users.filter((u) => u.isActive).length;
   const filteredUsers = users.filter((u) => {
     const matchSearch = !userSearch.trim() || [u.username, u.displayName, u.email].some((v) => v?.toLowerCase().includes(userSearch.toLowerCase()));
