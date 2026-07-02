@@ -6662,14 +6662,15 @@ body.dark .cooldown-note { color: #f4a462; background: rgba(200,100,40,0.12); }
 
 .forum-composer {
   background: #ffffff;
-  border-radius: 22px;
+  border-radius: 18px;
   border: 1px solid var(--line);
-  padding: 22px 24px 16px;
+  padding: 16px 18px 12px;
   margin-bottom: 24px;
+  max-width: 620px;
   box-shadow: 0 4px 20px rgba(31, 28, 23, 0.05);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .forum-composer-top {
