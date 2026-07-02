@@ -264,6 +264,67 @@ function useTelegramPolling(active: boolean) {
   }, [active]);
 }
 
+// Ikon SVG UI (pengganti emoji). stroke pakai currentColor.
+type IcName =
+  | 'user' | 'telegram' | 'coin' | 'grad' | 'rocket' | 'party' | 'fire' | 'mic'
+  | 'calendar' | 'clock' | 'video' | 'film' | 'pin' | 'ticket' | 'lock' | 'search'
+  | 'trash' | 'file' | 'sheet' | 'zip' | 'doc' | 'link' | 'chart' | 'box' | 'copy'
+  | 'chat' | 'folder' | 'book' | 'inbox' | 'users' | 'bell' | 'image' | 'tag' | 'gift'
+  | 'megaphone' | 'check' | 'warning' | 'star' | 'plus' | 'edit' | 'chevron-down';
+function Ic({ name, size = 18 }: { name: IcName; size?: number }) {
+  const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const paths: Record<IcName, React.ReactNode> = {
+    user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+    telegram: <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>,
+    coin: <><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5A2.5 2.5 0 0 0 12 8c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2A2.5 2.5 0 0 1 9.5 14.5"/><line x1="12" y1="6" x2="12" y2="18"/></>,
+    grad: <><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></>,
+    rocket: <><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/></>,
+    party: <><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01M22 8h.01M15 2h.01M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12v0c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11v0c-.11.7-.72 1.22-1.43 1.22H17"/><path d="M11 2 9.66 2.6a2.6 2.6 0 0 0-1.52 2.9v0c.24 1.06-.54 2-1.62 2h-.44"/></>,
+    fire: <><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></>,
+    mic: <><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></>,
+    calendar: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+    clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+    video: <><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></>,
+    film: <><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></>,
+    pin: <><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></>,
+    ticket: <><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><line x1="13" y1="5" x2="13" y2="19"/></>,
+    lock: <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
+    search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></>,
+    file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
+    sheet: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></>,
+    zip: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M10 4v2M12 6v2M10 8v2M12 10v2"/></>,
+    doc: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></>,
+    link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>,
+    chart: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
+    box: <><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></>,
+    copy: <><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
+    chat: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>,
+    folder: <><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></>,
+    book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></>,
+    inbox: <><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></>,
+    users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
+    bell: <><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>,
+    image: <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></>,
+    tag: <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
+    gift: <><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></>,
+    megaphone: <><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></>,
+    check: <><polyline points="20 6 9 17 4 12"/></>,
+    warning: <><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+    star: <><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></>,
+    plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+    edit: <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
+    'chevron-down': <><polyline points="6 9 12 15 18 9"/></>,
+  };
+  return <svg {...p} style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>{paths[name]}</svg>;
+}
+const IcMic = () => <Ic name="mic" size={15} />;
+const IcSearch = () => <Ic name="search" size={13} />;
+const IcCheck = () => <Ic name="check" size={13} />;
+const IcThumb = () => (
+  <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+);
+
 function CoinIcon({ size = 16, animate = false }: { size?: number; animate?: boolean }) {
   const [anim, setAnim] = useState<'idle' | 'spin' | 'bounce'>('idle');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -5071,7 +5132,7 @@ function DashboardSection({ session }: { session: AppSession }) {
           {/* Streak */}
           {streak > 0 && (
             <div className="db-streak-block">
-              <span className="db-streak-fire">🔥</span>
+              <span className="db-streak-fire"><Ic name="fire" size={18} /></span>
               <div className="db-streak-text">
                 <strong>{streak} hari</strong>
                 <span>streak belajar</span>
@@ -5109,10 +5170,10 @@ function DashboardSection({ session }: { session: AppSession }) {
       {/* ── Journey / langkah awal (user baru) ── */}
       {(() => {
         const steps = [
-          { done: !!profileAvatarUrl, icon: '👤', title: 'Lengkapi profil & foto', desc: 'Upload foto & isi data diri kamu', href: '#profil' },
-          { done: journeyTelegram, icon: '📲', title: 'Hubungkan Telegram', desc: 'Terima notif kelas, event & topup', href: '#profil' },
-          { done: journeyTopup, icon: '🪙', title: 'Topup Ruang Coin pertama', desc: 'Buka fitur premium & dapat bonus koin', href: '#profil' },
-          { done: hasStartedLearning, icon: '🎓', title: 'Mulai belajar', desc: 'Selesaikan materi pertamamu', href: '#materi' },
+          { done: !!profileAvatarUrl, icon: 'user' as IcName, title: 'Lengkapi profil & foto', desc: 'Upload foto & isi data diri kamu', href: '#profil' },
+          { done: journeyTelegram, icon: 'telegram' as IcName, title: 'Hubungkan Telegram', desc: 'Terima notif kelas, event & topup', href: '#profil' },
+          { done: journeyTopup, icon: 'coin' as IcName, title: 'Topup Ruang Coin pertama', desc: 'Buka fitur premium & dapat bonus koin', href: '#profil' },
+          { done: hasStartedLearning, icon: 'grad' as IcName, title: 'Mulai belajar', desc: 'Selesaikan materi pertamamu', href: '#materi' },
         ];
         const doneCount = steps.filter((s) => s.done).length;
         if (journeyDismissed || doneCount === steps.length) return null;
@@ -5121,7 +5182,7 @@ function DashboardSection({ session }: { session: AppSession }) {
             <div className="db-journey-head">
               <div>
                 <p className="eyebrow">Langkah Awal Kamu</p>
-                <h3 className="db-journey-title">Selesaikan {steps.length} langkah ini biar makin optimal 🚀</h3>
+                <h3 className="db-journey-title">Selesaikan {steps.length} langkah ini biar makin optimal <Ic name="rocket" size={18} /></h3>
                 <p className="db-journey-reward-hint">Selesaikan semua → bonus <strong><CoinIcon size={12} /> +{JOURNEY_REWARD} koin</strong> otomatis!</p>
               </div>
               <div className="db-journey-progress">
@@ -5132,7 +5193,7 @@ function DashboardSection({ session }: { session: AppSession }) {
             <div className="db-journey-steps">
               {steps.map((s, i) => (
                 <a key={i} href={s.href} className={`db-journey-step${s.done ? ' done' : ''}`}>
-                  <span className="db-journey-step-icon">{s.done ? '✓' : s.icon}</span>
+                  <span className="db-journey-step-icon">{s.done ? <Ic name="check" size={16} /> : <Ic name={s.icon} size={16} />}</span>
                   <div className="db-journey-step-text">
                     <strong>{s.title}</strong>
                     <span>{s.desc}</span>
@@ -5146,7 +5207,7 @@ function DashboardSection({ session }: { session: AppSession }) {
 
       {journeyRewardToast && createPortal(
         <div className="journey-reward-toast" onClick={() => setJourneyRewardToast(false)}>
-          🎉 Semua langkah selesai! Kamu dapat <strong><CoinIcon size={14} /> +{JOURNEY_REWARD} koin</strong> bonus.
+          <Ic name="party" size={15} /> Semua langkah selesai! Kamu dapat <strong><CoinIcon size={14} /> +{JOURNEY_REWARD} koin</strong> bonus.
         </div>,
         document.body,
       )}
@@ -5219,7 +5280,7 @@ function DashboardSection({ session }: { session: AppSession }) {
                     {isClass && (
                       joined && hasZoom ? (
                         <button className="db-event-btn db-event-btn--zoom" onClick={() => copyZoomLink(ev)}>
-                          📋 Copy Link Zoom
+                          <Ic name="copy" size={14} /> Copy Link Zoom
                         </button>
                       ) : !joined ? (
                         <button
@@ -5253,7 +5314,7 @@ function DashboardSection({ session }: { session: AppSession }) {
             return activeQna ? (
               <a className="db-qna-card" href={`?thread=${activeQna.id}#community`}>
                 <div className="db-qna-card-top">
-                  <span className="db-qna-badge">🎙️ QNA Session Aktif</span>
+                  <span className="db-qna-badge"><Ic name="mic" size={13} /> QNA Session Aktif</span>
                   <span className="db-qna-count">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                     {activeQna.replies.length} pertanyaan terkumpul
@@ -10017,7 +10078,7 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
     {/* ── Delete Confirm Modal ── */}
     {deleteConfirmId && createPortal(<div className="aem-overlay" onClick={() => setDeleteConfirmId(null)}>
         <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-          <div className="delete-confirm-icon">🗑</div>
+          <div className="delete-confirm-icon"><Ic name="trash" size={26} /></div>
           <h3>hapus event ini?</h3>
           <p>Event yang dihapus tidak bisa dikembalikan.</p>
           <div className="delete-confirm-actions">
@@ -10109,7 +10170,7 @@ function ForumThreadCard({
   return (
     <article className={`forum-thread-card${isQnaSession ? ' forum-thread-card--qna' : ''}`} onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
       {isQnaSession && (
-        <div className="forum-qna-banner">🎙️ QNA Session — tanya jawab langsung dengan admin</div>
+        <div className="forum-qna-banner"><IcMic /> QNA Session — tanya jawab langsung dengan admin</div>
       )}
       <div className="forum-thread-card-author">
         <img src={authorAvatar} alt={thread.authorDisplayName} className="forum-avatar-xs" />
@@ -10121,7 +10182,7 @@ function ForumThreadCard({
           className="forum-category-tag"
           style={{ marginLeft: 'auto', ...(catMeta ? { background: catMeta.color + '22', color: catMeta.color, borderColor: catMeta.color + '55' } : {}) }}
         >
-          {catMeta ? `${catMeta.emoji} ${catMeta.label}` : thread.category}
+          {catMeta ? <>{thread.category === 'qna session' && <IcMic />} {catMeta.label}</> : thread.category}
         </span>
       </div>
       <h3 className="forum-thread-title">{thread.title}</h3>
@@ -10215,7 +10276,7 @@ function ForumReplyItem({
         <div className="forum-reply-item-header">
           <BadgeIcon tier={badgeMap[reply.authorUsername] ?? null} size={14} />
           <strong className="forum-reply-item-name">{replyDisplayName}</strong>
-          {reply.answered && <span className="forum-reply-answered-badge">✓ Terjawab</span>}
+          {reply.answered && <span className="forum-reply-answered-badge"><IcCheck /> Terjawab</span>}
         </div>
         <div className="forum-reply-item-text">
           {renderBody(reply.body)}
@@ -10223,7 +10284,7 @@ function ForumReplyItem({
         {reply.imageUrl && (
           <button type="button" className="forum-img-thumb-btn" onClick={() => onImageClick(reply.imageUrl!)}>
             <img src={reply.imageUrl} alt="attachment" className="forum-img-thumb" />
-            <span className="forum-img-thumb-overlay">🔍 lihat gambar</span>
+            <span className="forum-img-thumb-overlay"><IcSearch /> lihat gambar</span>
           </button>
         )}
         <div className="forum-reply-item-actions">
@@ -10231,7 +10292,7 @@ function ForumReplyItem({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </button>
           {reply.upvotes > 0 && (
-            <span className="forum-react-chip">👍 {reply.upvotes}</span>
+            <span className="forum-react-chip"><IcThumb /> {reply.upvotes}</span>
           )}
           <span className="forum-reply-sep" />
           <button type="button" className="forum-reply-inline-btn" onClick={() => onReplyTo(reply.id, reply.authorDisplayName)}>
@@ -10247,7 +10308,7 @@ function ForumReplyItem({
                 className={`forum-reply-inline-btn${reply.answered ? ' forum-reply-inline-btn--answered' : ''}`}
                 onClick={() => onMarkAnswered(reply.id)}
               >
-                {reply.answered ? '✓ Batalkan' : '✓ Tandai Terjawab'}
+                {reply.answered ? <><IcCheck /> Batalkan</> : <><IcCheck /> Tandai Terjawab</>}
               </button>
             </>
           )}
@@ -10566,7 +10627,7 @@ function ForumThreadDetail({
         {thread.imageUrl && (
           <button type="button" className="forum-img-thumb-btn" onClick={() => setLightboxUrl(thread.imageUrl!)}>
             <img src={thread.imageUrl} alt="attachment" className="forum-img-thumb" />
-            <span className="forum-img-thumb-overlay">🔍 lihat gambar</span>
+            <span className="forum-img-thumb-overlay"><IcSearch /> lihat gambar</span>
           </button>
         )}
         <div className="forum-op-stats">
@@ -10807,7 +10868,7 @@ function ForumComposer({
               onChange={(e) => setCategory(e.target.value)}
             >
               {availableCategories.map((cat) => (
-                <option key={cat} value={cat}>{cat === 'qna session' ? '🎙️ QNA Session' : cat}</option>
+                <option key={cat} value={cat}>{cat === 'qna session' ? 'QNA Session' : cat}</option>
               ))}
             </select>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="forum-composer-chevron">
@@ -11106,7 +11167,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
             className={`forum-filter-btn${filterCategory === cat ? ' active' : ''}${cat === 'qna session' ? ' forum-filter-btn--qna' : ''}`}
             onClick={() => setFilterCategory(cat)}
           >
-            {cat === 'qna session' ? '🎙️ QNA Session' : cat}
+            {cat === 'qna session' ? 'QNA Session' : cat}
           </button>
         ))}
       </div>
@@ -13049,7 +13110,7 @@ function BannerEditor() {
       {/* ── Header ── */}
       <div className="banner-editor-header">
         <div className="banner-editor-header-left">
-          <div className="banner-editor-icon">🖼️</div>
+          <div className="banner-editor-icon"><Ic name="image" size={22} /></div>
           <div>
             <h3 className="banner-editor-title">Banner Slider Dashboard</h3>
             <p className="banner-editor-hint">Tampil di atas halaman dashboard · Ukuran disarankan <strong>1200 × 260 px</strong> (rasio 1200:260)</p>
@@ -13071,7 +13132,7 @@ function BannerEditor() {
           </select>
         </div>
         <div className="banner-settings-item">
-          <span className="banner-settings-label">🖼 Total Slide</span>
+          <span className="banner-settings-label"><Ic name="image" size={14} /> Total Slide</span>
           <span className="banner-settings-value">{settings.slides.length} slide{settings.slides.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
@@ -13087,7 +13148,7 @@ function BannerEditor() {
               <div className="banner-slide-meta">
                 <span className="banner-slide-name">{s.title || `Slide ${i + 1}`}</span>
                 {s.linkUrl
-                  ? <span className="banner-slide-link">🔗 {s.linkUrl}</span>
+                  ? <span className="banner-slide-link"><Ic name="link" size={13} /> {s.linkUrl}</span>
                   : <span className="banner-slide-link banner-slide-link--empty">Tanpa link</span>}
               </div>
               <div className="banner-slide-actions">
@@ -13113,7 +13174,7 @@ function BannerEditor() {
             ? <img src={newPreview} alt="Preview" className="banner-add-preview" />
             : (
               <div className="banner-upload-placeholder">
-                <span className="banner-upload-icon">📁</span>
+                <span className="banner-upload-icon"><Ic name="folder" size={16} /></span>
                 <span className="banner-upload-text">Klik untuk pilih gambar banner</span>
                 <span className="banner-upload-sub">PNG, JPG, WebP · Maks. 5 MB</span>
               </div>
@@ -13160,7 +13221,7 @@ function HelpEditor() {
     <div className="help-editor">
       <div className="help-editor-header">
         <div className="help-editor-header-left">
-          <div className="help-editor-icon">💬</div>
+          <div className="help-editor-icon"><Ic name="chat" size={22} /></div>
           <div>
             <h3 className="help-editor-title">Tombol Bantuan (Help Button)</h3>
             <p className="help-editor-hint">Tombol ? di pojok kanan bawah — muncul otomatis jika minimal satu field diisi</p>
@@ -13205,7 +13266,7 @@ function HelpEditor() {
 
         <div className="help-editor-field">
           <label className="help-editor-label">
-            <span className="help-editor-label-icon">✏️</span>
+            <span className="help-editor-label-icon"><Ic name="edit" size={14} /></span>
             Pesan WhatsApp Default
             <span className="help-editor-label-sub">Teks awal saat user membuka WhatsApp</span>
           </label>
@@ -13836,7 +13897,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       <td className="admin-date-cell">{new Date(u.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                       <td>
                         {u.referralCode
-                          ? <span className="admin-referral-badge" title={`Daftar dengan kode ${u.referralCode}`}>🎟 {u.referralCode}</span>
+                          ? <span className="admin-referral-badge" title={`Daftar dengan kode ${u.referralCode}`}><Ic name="ticket" size={12} /> {u.referralCode}</span>
                           : <span className="perk-none">—</span>}
                       </td>
                       <td>
@@ -13844,20 +13905,20 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           const refActive = !u.referralPerksExpiresAt || new Date(u.referralPerksExpiresAt) > new Date();
                           const rp = refActive ? (u.referralPerks ?? {}) : {};
                           const expTxt = u.referralPerksExpiresAt ? ` (referral, s/d ${new Date(u.referralPerksExpiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })})` : ' (referral)';
-                          const featIcons: Array<[keyof UserPerks, string, string]> = [
-                            ['free_video', '🎬', 'Video'],
-                            ['free_thread', '💬', 'Thread'],
-                            ['free_booking', '📅', 'Booking'],
-                            ['free_asset', '📁', 'Asset'],
-                            ['free_event', '🎥', 'Event'],
+                          const featIcons: Array<[keyof UserPerks, IcName, string]> = [
+                            ['free_video', 'film', 'Video'],
+                            ['free_thread', 'chat', 'Thread'],
+                            ['free_booking', 'calendar', 'Booking'],
+                            ['free_asset', 'folder', 'Asset'],
+                            ['free_event', 'video', 'Event'],
                           ];
                           const hasAny = u.perks.credit_exempt || featIcons.some(([k]) => u.perks[k] || rp[k]);
                           return (
                             <div className="admin-user-perks">
-                              {u.perks.credit_exempt && <span className="perk-badge perk-exempt" title="Exempt semua Ruang Coin">✦</span>}
+                              {u.perks.credit_exempt && <span className="perk-badge perk-exempt" title="Exempt semua Ruang Coin"><Ic name="star" size={13} /></span>}
                               {featIcons.map(([k, icon, label]) => {
-                                if (u.perks[k]) return <span key={k} className="perk-badge perk-free" title={`${label} gratis`}>{icon}</span>;
-                                if (rp[k]) return <span key={k} className="perk-badge perk-referral" title={`${label} gratis${expTxt}`}>{icon}</span>;
+                                if (u.perks[k]) return <span key={k} className="perk-badge perk-free" title={`${label} gratis`}><Ic name={icon} size={13} /></span>;
+                                if (rp[k]) return <span key={k} className="perk-badge perk-referral" title={`${label} gratis${expTxt}`}><Ic name={icon} size={13} /></span>;
                                 return null;
                               })}
                               {!hasAny && <span className="perk-none">—</span>}
@@ -13907,7 +13968,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                     className="admin-inbox-clear-btn"
                     onClick={() => setShowResetTxModal(true)}
                   >
-                    🗑 Reset Angka
+                    <Ic name="trash" size={14} /> Reset Angka
                   </button>
                 )}
                 <button
@@ -13923,7 +13984,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   className="admin-settings-btn"
                   onClick={() => { void loadAdminSettings().then((s) => { setDraftRewards({ ...defaultCoinRewards, ...(s.coin_rewards ?? {}) }); setDraftDay7({ ...defaultCheckinDay7, ...(s.checkin_day7 ?? {}) }); }); setShowRewardsModal(true); }}
                 >
-                  🎁 Atur Bonus Koin
+                  <Ic name="gift" size={14} /> Atur Bonus Koin
                 </button>
               </div>
             </div>
@@ -13964,7 +14025,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           {showResetTxModal && createPortal(
             <div className="forum-modal-overlay confirm-overlay" onClick={() => !resettingTx && setShowResetTxModal(false)}>
               <div className="forum-modal confirm-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="confirm-icon">🗑</div>
+                <div className="confirm-icon"><Ic name="trash" size={26} /></div>
                 <h3 className="confirm-title">Reset Angka Transaksi?</h3>
                 <p className="confirm-desc">
                   Seluruh riwayat transaksi Ruang Coin akan dihapus permanen, dan angka <strong>Ruang Coin Tersalurkan</strong> serta <strong>Est. Pendapatan</strong> akan kembali ke 0.
@@ -14103,7 +14164,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
                 <div className="checkin-day7-config">
                   <div className="checkin-day7-head">
-                    <span className="costs-modal-icon">🎁</span>
+                    <span className="costs-modal-icon"><Ic name="gift" size={20} /></span>
                     <div className="costs-modal-info">
                       <strong>Bonus Check-in Hari ke-7</strong>
                       <span>Hadiah spesial saat user check-in 7 hari berturut-turut</span>
@@ -14169,16 +14230,16 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 </p>
                 <div className="perks-modal-list">
                   {([
-                    { key: 'credit_exempt' as keyof UserPerks, icon: '✦', label: 'Exempt Semua Ruang Coin', desc: 'Semua fitur gratis, tidak ada pemotongan Ruang Coin sama sekali' },
-                    { key: 'free_video' as keyof UserPerks, icon: '🎬', label: 'Video Learning Gratis', desc: 'Akses semua video tanpa potong Ruang Coin' },
-                    { key: 'free_thread' as keyof UserPerks, icon: '💬', label: 'Post Thread Gratis', desc: 'Buat thread & diskusi tanpa potong Ruang Coin' },
-                    { key: 'free_booking' as keyof UserPerks, icon: '📅', label: 'Book Sesi 1:1 Gratis', desc: 'Booking sesi 1:1 tanpa potong Ruang Coin' },
-                    { key: 'free_asset' as keyof UserPerks, icon: '📁', label: 'Asset Manager Gratis', desc: 'Buka semua asset tanpa potong Ruang Coin' },
-                    { key: 'free_event' as keyof UserPerks, icon: '🎥', label: 'Join Event Gratis', desc: 'Akses semua event/kelas tanpa potong Ruang Coin' },
+                    { key: 'credit_exempt' as keyof UserPerks, icon: 'star' as IcName, label: 'Exempt Semua Ruang Coin', desc: 'Semua fitur gratis, tidak ada pemotongan Ruang Coin sama sekali' },
+                    { key: 'free_video' as keyof UserPerks, icon: 'film' as IcName, label: 'Video Learning Gratis', desc: 'Akses semua video tanpa potong Ruang Coin' },
+                    { key: 'free_thread' as keyof UserPerks, icon: 'chat' as IcName, label: 'Post Thread Gratis', desc: 'Buat thread & diskusi tanpa potong Ruang Coin' },
+                    { key: 'free_booking' as keyof UserPerks, icon: 'calendar' as IcName, label: 'Book Sesi 1:1 Gratis', desc: 'Booking sesi 1:1 tanpa potong Ruang Coin' },
+                    { key: 'free_asset' as keyof UserPerks, icon: 'folder' as IcName, label: 'Asset Manager Gratis', desc: 'Buka semua asset tanpa potong Ruang Coin' },
+                    { key: 'free_event' as keyof UserPerks, icon: 'video' as IcName, label: 'Join Event Gratis', desc: 'Akses semua event/kelas tanpa potong Ruang Coin' },
                   ] as const).map(({ key, icon, label, desc }) => (
                     <label key={key} className="perks-modal-row">
                       <div className="perks-modal-row-left">
-                        <span className="costs-modal-icon">{icon}</span>
+                        <span className="costs-modal-icon"><Ic name={icon} size={16} /></span>
                         <div className="costs-modal-info">
                           <span className="costs-modal-label">{label}</span>
                           <span className="costs-modal-sublabel">{desc}</span>
@@ -14211,16 +14272,16 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 </p>
                 <div className="perks-modal-list">
                   {([
-                    { key: 'credit_exempt' as keyof UserPerks, icon: '✦', label: 'Exempt Semua Ruang Coin', desc: 'Semua fitur gratis, tidak ada pemotongan Ruang Coin' },
-                    { key: 'free_video' as keyof UserPerks, icon: '🎬', label: 'Video Learning Gratis', desc: 'Akses semua video tanpa potong Ruang Coin' },
-                    { key: 'free_thread' as keyof UserPerks, icon: '💬', label: 'Post Thread Gratis', desc: 'Buat thread & diskusi tanpa potong Ruang Coin' },
-                    { key: 'free_booking' as keyof UserPerks, icon: '📅', label: 'Book Sesi 1:1 Gratis', desc: 'Booking sesi 1:1 tanpa potong Ruang Coin' },
-                    { key: 'free_asset' as keyof UserPerks, icon: '📁', label: 'Asset Manager Gratis', desc: 'Buka semua asset tanpa potong Ruang Coin' },
-                    { key: 'free_event' as keyof UserPerks, icon: '🎥', label: 'Join Event Gratis', desc: 'Akses semua event/kelas tanpa potong Ruang Coin' },
+                    { key: 'credit_exempt' as keyof UserPerks, icon: 'star' as IcName, label: 'Exempt Semua Ruang Coin', desc: 'Semua fitur gratis, tidak ada pemotongan Ruang Coin' },
+                    { key: 'free_video' as keyof UserPerks, icon: 'film' as IcName, label: 'Video Learning Gratis', desc: 'Akses semua video tanpa potong Ruang Coin' },
+                    { key: 'free_thread' as keyof UserPerks, icon: 'chat' as IcName, label: 'Post Thread Gratis', desc: 'Buat thread & diskusi tanpa potong Ruang Coin' },
+                    { key: 'free_booking' as keyof UserPerks, icon: 'calendar' as IcName, label: 'Book Sesi 1:1 Gratis', desc: 'Booking sesi 1:1 tanpa potong Ruang Coin' },
+                    { key: 'free_asset' as keyof UserPerks, icon: 'folder' as IcName, label: 'Asset Manager Gratis', desc: 'Buka semua asset tanpa potong Ruang Coin' },
+                    { key: 'free_event' as keyof UserPerks, icon: 'video' as IcName, label: 'Join Event Gratis', desc: 'Akses semua event/kelas tanpa potong Ruang Coin' },
                   ] as const).map(({ key, icon, label, desc }) => (
                     <label key={key} className="perks-modal-row">
                       <div className="perks-modal-row-left">
-                        <span className="costs-modal-icon">{icon}</span>
+                        <span className="costs-modal-icon"><Ic name={icon} size={16} /></span>
                         <div className="costs-modal-info">
                           <span className="costs-modal-label">{label}</span>
                           <span className="costs-modal-sublabel">{desc}</span>
@@ -14302,7 +14363,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   <p className="admin-section-label" style={{ margin: 0 }}>Riwayat Topup Terbaru</p>
                   {transactions.some((t) => t.type === 'topup') && (
                     <button type="button" className="admin-inbox-clear-btn" onClick={() => setShowResetTxModal(true)}>
-                      🗑 Reset Angka
+                      <Ic name="trash" size={14} /> Reset Angka
                     </button>
                   )}
                 </div>
@@ -14422,7 +14483,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       className={`referral-type-btn${(referralDraft.type ?? 'coin') === t ? ' active' : ''}`}
                       onClick={() => setReferralDraft((p) => ({ ...p, type: t, credits: t === 'feature' ? 0 : p.credits, features: t === 'coin' ? [] : p.features }))}
                     >
-                      {t === 'coin' ? <><CoinIcon size={13} /> Ruang Coin</> : '🎁 Akses Fitur'}
+                      {t === 'coin' ? <><CoinIcon size={13} /> Ruang Coin</> : <><Ic name="gift" size={13} /> Akses Fitur</>}
                     </button>
                   ))}
                 </div>
@@ -15643,7 +15704,7 @@ function InboxPage() {
       {clearTarget && createPortal(
         <div className="forum-modal-overlay confirm-overlay" onClick={() => !clearing && setClearTarget(null)}>
           <div className="forum-modal confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="confirm-icon">🗑</div>
+            <div className="confirm-icon"><Ic name="trash" size={26} /></div>
             <h3 className="confirm-title">Kosongkan Riwayat?</h3>
             <p className="confirm-desc">
               Semua riwayat {clearTarget === 'booking' ? 'booking 1:1' : 'request topup'} yang sudah diproses akan dihapus permanen. Item yang masih menunggu konfirmasi tidak akan terhapus.
@@ -16913,7 +16974,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   };
 
   const typeLabel: Record<HubEvent['type'], string> = { zoom: 'Zoom', video: 'Video Kelas', other: 'Lainnya' };
-  const typeIcon: Record<HubEvent['type'], string> = { zoom: '📹', video: '🎬', other: '📌' };
+  const typeIcon = (t: HubEvent['type'], size = 15) => <Ic name={t === 'zoom' ? 'video' : t === 'video' ? 'film' : 'pin'} size={size} />;
 
   const now = new Date();
   const activeEvents = events.filter((e) => e.isActive !== false);
@@ -16927,7 +16988,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
         <div className="checkin-overlay" onClick={() => setJoinedCode(null)}>
           <div className="checkin-modal" style={{ maxWidth: 400, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
             <button type="button" className="checkin-close" onClick={() => setJoinedCode(null)}>✕</button>
-            <div style={{ fontSize: '2.4rem', marginBottom: 8 }}>🎫</div>
+            <div style={{ marginBottom: 8, color: 'var(--accent)' }}><Ic name="ticket" size={40} /></div>
             <h3 className="checkin-title" style={{ textAlign: 'center' }}>Kamu Terdaftar!</h3>
             <p className="checkin-sub" style={{ marginBottom: 16 }}>Simpan kode akses ini untuk membuka video rekaman <strong>{joinedCode.title}</strong>:</p>
             <div className="event-access-code" onClick={() => void navigator.clipboard?.writeText(joinedCode.code)}>{joinedCode.code}<span className="event-access-code-copy">klik untuk salin</span></div>
@@ -16988,14 +17049,14 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                     <div className="event-participants-cover">
                       {meta?.cover
                         ? <img src={meta.cover} alt={g.title} />
-                        : <span className="event-participants-cover-ph">{typeIcon[meta?.type ?? 'other']}</span>}
+                        : <span className="event-participants-cover-ph">{typeIcon(meta?.type ?? "other")}</span>}
                     </div>
                     <div className="event-participants-headinfo">
                       <strong className="event-participants-title">{g.title}</strong>
-                      {g.date && <span className="event-participants-date">📅 {new Date(g.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>}
+                      {g.date && <span className="event-participants-date"><Ic name="calendar" size={12} /> {new Date(g.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>}
                     </div>
                     <span className="event-participants-count">{g.rows.length} peserta</span>
-                    <span className={`event-participants-chevron${isOpen ? ' open' : ''}`}>⌄</span>
+                    <span className={`event-participants-chevron${isOpen ? ' open' : ''}`}><Ic name="chevron-down" size={16} /></span>
                   </button>
                   {isOpen && (
                     <div className="event-participants-list">
@@ -17006,7 +17067,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                             <span className="event-participant-username">@{p.username}</span>
                           </div>
                           <div className="event-participant-meta">
-                            {p.access_code && <span className="event-participant-code" title="Kode akses rekaman">🎫 {p.access_code}</span>}
+                            {p.access_code && <span className="event-participant-code" title="Kode akses rekaman"><Ic name="ticket" size={12} /> {p.access_code}</span>}
                             <span className="event-participant-time">{new Date(p.joined_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         </div>
@@ -17027,7 +17088,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                       <div className={`events-list-cover type-${ev.type}`}>
                         {ev.coverUrl
                           ? <img src={ev.coverUrl} alt={ev.title} />
-                          : <span className="events-list-cover-ph">{typeIcon[ev.type]}</span>}
+                          : <span className="events-list-cover-ph">{typeIcon(ev.type)}</span>}
                       </div>
                       <div className="events-list-body">
                         <div className="events-list-title-row">
@@ -17036,8 +17097,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                           <span className={`admin-status-badge ${ev.isActive === false ? 'inactive' : 'active'}`}>{ev.isActive === false ? 'Nonaktif' : 'Aktif'}</span>
                         </div>
                         <div className="events-list-meta">
-                          <span>{typeIcon[ev.type]} {typeLabel[ev.type]}</span>
-                          <span>📅 {new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</span>
+                          <span>{typeIcon(ev.type)} {typeLabel[ev.type]}</span>
+                          <span><Ic name="calendar" size={12} /> {new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</span>
                           <span>{ev.coinCost === 0 ? <span className="events-free-badge">Gratis</span> : <span className="admin-credits-cell"><CoinIcon size={12} /> {ev.coinCost}</span>}</span>
                         </div>
                         {ev.description && <p className="events-list-desc">{ev.description}</p>}
@@ -17063,14 +17124,14 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                 <div key={ev.id} className={`event-card${joined ? ' joined' : ''}`}>
                   {ev.coverUrl && <img src={ev.coverUrl} alt={ev.title} className="event-card-cover" />}
                   <div className="event-card-type-row">
-                    <span className="event-card-type">{typeIcon[ev.type]} {typeLabel[ev.type]}</span>
+                    <span className="event-card-type">{typeIcon(ev.type)} {typeLabel[ev.type]}</span>
                     {joined && <span className="event-joined-badge">✓ Terdaftar</span>}
                   </div>
                   <h4 className="event-card-title">{ev.title}</h4>
                   {ev.description && <p className="event-card-desc">{ev.description}</p>}
                   <div className="event-card-date">
-                    📅 {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                    {ev.time && <> · 🕐 {ev.time}</>}
+                    <Ic name="calendar" size={13} /> {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    {ev.time && <> · <Ic name="clock" size={13} /> {ev.time}</>}
                   </div>
                   <span className={`event-link-capsule${ev.link ? ' available' : ' pending'}`}>
                     {ev.link
@@ -17081,21 +17142,21 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                     <div className="event-access-code-row">
                       <div className="event-access-code-box">
                         <span className="event-access-code-label">Kode akses rekaman</span>
-                        <strong className="event-access-code-value">🎫 {myAccessCodes[ev.id]}</strong>
+                        <strong className="event-access-code-value"><Ic name="ticket" size={14} /> {myAccessCodes[ev.id]}</strong>
                       </div>
                       <button type="button" className="event-access-code-copy-btn" onClick={() => copyAccessCode(myAccessCodes[ev.id])}>
-                        {copiedCode === myAccessCodes[ev.id] ? '✓ Tersalin' : '📋 Salin'}
+                        {copiedCode === myAccessCodes[ev.id] ? <><Ic name="check" size={13} /> Tersalin</> : <><Ic name="copy" size={13} /> Salin</>}
                       </button>
                     </div>
                   ) : joined && explicitlyJoined(ev) ? (
                     <button type="button" className="event-claim-code-btn" disabled={claimingCode === ev.id} onClick={() => void claimAccessCode(ev)}>
-                      {claimingCode === ev.id ? 'Memproses…' : '🎫 Ambil Kode Akses Rekaman'}
+                      {claimingCode === ev.id ? 'Memproses…' : <><Ic name="ticket" size={13} /> Ambil Kode Akses Rekaman</>}
                     </button>
                   ) : null}
                   <div className="event-card-footer">
                     {joined ? (
                       ev.link
-                        ? <a href={ev.link} target="_blank" rel="noopener noreferrer" className="button primary event-join-btn">🔗 Buka Link</a>
+                        ? <a href={ev.link} target="_blank" rel="noopener noreferrer" className="button primary event-join-btn"><Ic name="link" size={14} /> Buka Link</a>
                         : <span className="event-joined-label">✓ Terdaftar — link menyusul</span>
                     ) : (
                       <button
@@ -17149,7 +17210,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                     <div key={ev.id} className="event-card past">
                       {ev.coverUrl && <img src={ev.coverUrl} alt={ev.title} className="event-card-cover" />}
                       <div className="event-card-type-row">
-                        <span className="event-card-type">{typeIcon[ev.type]} {typeLabel[ev.type]}</span>
+                        <span className="event-card-type">{typeIcon(ev.type)} {typeLabel[ev.type]}</span>
                         <span className="event-past-badge">Sudah Berlalu</span>
                       </div>
                       <h4 className="event-card-title">{ev.title}</h4>
@@ -17160,7 +17221,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                       </div>
                       <div className="event-card-footer">
                         {joined && ev.link
-                          ? <a href={ev.link} target="_blank" rel="noopener noreferrer" className="button secondary event-join-btn">🔗 Rekaman / Link</a>
+                          ? <a href={ev.link} target="_blank" rel="noopener noreferrer" className="button secondary event-join-btn"><Ic name="link" size={14} /> Rekaman / Link</a>
                           : <span className="event-past-label">Tidak ada rekaman</span>}
                       </div>
                     </div>
@@ -17188,7 +17249,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             <div style={{ padding: '0 0 16px' }}>
               <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 6 }}>{joinTarget.title}</p>
               <p style={{ color: 'var(--muted)', fontSize: '0.88rem', marginBottom: 16 }}>
-                📅 {new Date(joinTarget.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                <Ic name="calendar" size={13} /> {new Date(joinTarget.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
                 {joinTarget.time && ` · ${joinTarget.time}`}
               </p>
               {joinTarget.coinCost > 0 && !userPerks.credit_exempt && !userPerks.free_event ? (
