@@ -8065,7 +8065,7 @@ body.dark .forum-reply-bar-inner {
   gap: 6px;
 }
 .admin-stat-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.admin-stat-value { font-size: 1.6rem; font-weight: 700; color: var(--fg); }
+.admin-stat-value { font-size: 1.35rem; font-weight: 700; color: var(--fg); white-space: nowrap; }
 .admin-stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: -2px; }
 .admin-stat-card--topup { border-color: #0ea5e944; background: rgba(14,165,233,0.05); }
 .admin-stat-card--topup .admin-stat-value { color: #0284c7; }
