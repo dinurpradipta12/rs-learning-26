@@ -10689,6 +10689,8 @@ function ForumComposer({
             <strong className="forum-composer-name">{displayName}</strong>
           </div>
           <span className="forum-composer-role">@{displayName.toLowerCase().replace(/\s+/g, '')} · {jobTitle}</span>
+        </div>
+        <div className="forum-composer-top-right">
           <div className="forum-composer-category-row">
             <select
               className="forum-composer-category-select"
@@ -10703,10 +10705,10 @@ function ForumComposer({
               <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
+          {isFocused && (
+            <button type="button" className="forum-composer-close" onClick={() => { setIsFocused(false); setTitle(''); setBody(''); setImageUrl(''); }}>✕</button>
+          )}
         </div>
-        {isFocused && (
-          <button type="button" className="forum-composer-close" onClick={() => { setIsFocused(false); setTitle(''); setBody(''); setImageUrl(''); }}>✕</button>
-        )}
       </div>
 
       {isFocused && (

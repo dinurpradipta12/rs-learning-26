@@ -6697,11 +6697,17 @@ body.dark .cooldown-note { color: #f4a462; background: rgba(200,100,40,0.12); }
   color: var(--muted);
 }
 
+.forum-composer-top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .forum-composer-category-row {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
   padding: 4px 10px 4px 12px;
   border: 1px solid var(--line);
   border-radius: 999px;
