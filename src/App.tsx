@@ -1247,6 +1247,7 @@ type Lesson = {
   videoUrl: string;
   stats: string[];
   assets: LessonAsset[];
+  unlockEventId?: string; // rekaman khusus peserta event tsb (buka pakai kode akses)
 };
 
 type LessonRow = {
@@ -1258,6 +1259,7 @@ type LessonRow = {
   meta: string;
   description: string;
   video_url: string;
+  unlock_event_id?: string | null;
 };
 
 type LessonAssetRow = {
@@ -1300,6 +1302,7 @@ type LessonEditorDraft = {
   videoUrl: string;
   statsText: string;
   assets: LessonAssetDraftItem[];
+  unlockEventId: string;
 };
 
 type AssessmentQuestion = {
@@ -1862,6 +1865,7 @@ function mapLessonRowsToLessons(lessonRows: LessonRow[], assetRows: LessonAssetR
       description: lessonRow.description,
       videoUrl: lessonRow.video_url,
       stats: [],
+      unlockEventId: lessonRow.unlock_event_id ?? undefined,
       assets: assetsByLesson.get(lessonRow.lesson_key)?.sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) ?? [],
     }));
 }
@@ -1998,6 +2002,7 @@ function createEmptyLessonDraft(): LessonEditorDraft {
     videoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     statsText: '',
     assets: [],
+    unlockEventId: '',
   };
 }
 
@@ -6032,6 +6037,33 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isEmbedLoaded, setIsEmbedLoaded] = useState(false);
+  // Kode akses event untuk buka rekaman
+  const [codeUnlockedLessons, setCodeUnlockedLessons] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(`event_code_unlocked_${sessionUsername}`) ?? '[]')); } catch { return new Set(); }
+  });
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [codeChecking, setCodeChecking] = useState(false);
+  const isCodeLocked = !!selectedLesson?.unlockEventId && !canEdit && !codeUnlockedLessons.has(selectedLesson.id);
+  const submitAccessCode = async () => {
+    if (!selectedLesson?.unlockEventId || !sessionUsername) return;
+    setCodeChecking(true); setCodeError('');
+    const { data } = await supabase.from('event_participants')
+      .select('id')
+      .eq('event_id', selectedLesson.unlockEventId)
+      .eq('username', sessionUsername)
+      .eq('access_code', codeInput.trim().toUpperCase())
+      .maybeSingle();
+    if (data) {
+      const next = new Set(codeUnlockedLessons); next.add(selectedLesson.id);
+      setCodeUnlockedLessons(next);
+      try { localStorage.setItem(`event_code_unlocked_${sessionUsername}`, JSON.stringify([...next])); } catch { /* ignore */ }
+      setCodeInput('');
+    } else {
+      setCodeError('Kode tidak valid atau bukan untuk event ini. Pastikan kamu peserta event tsb.');
+    }
+    setCodeChecking(false);
+  };
   const reviewTriggerRef = useRef<HTMLDivElement | null>(null);
   const reviewPopoverRef = useRef<HTMLDivElement | null>(null);
   const selectedLesson =
@@ -6438,6 +6470,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       description: draft.description.trim() || 'deskripsi materi',
       videoUrl: draft.videoUrl.trim() || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
       stats: stats.length > 0 ? stats : ['no stats'],
+      unlockEventId: draft.unlockEventId || undefined,
       assets,
     };
   };
@@ -6452,6 +6485,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       meta: lesson.meta,
       description: lesson.description,
       video_url: lesson.videoUrl,
+      unlock_event_id: lesson.unlockEventId ?? null,
     });
 
     if (lessonError) {
@@ -6547,6 +6581,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       description: lesson.description,
       videoUrl: lesson.videoUrl,
       statsText: lesson.stats.join('\n'),
+      unlockEventId: lesson.unlockEventId ?? '',
       assets: lesson.assets.map((asset) => ({
         id: `asset-item-${asset.title}-${asset.sortOrder ?? 0}`,
         title: asset.title,
@@ -6696,6 +6731,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           meta: lesson.meta,
           description: lesson.description,
           video_url: lesson.videoUrl,
+          unlock_event_id: lesson.unlockEventId ?? null,
         })),
         { onConflict: 'lesson_key' },
       );
@@ -6936,6 +6972,28 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                 {isTheaterMode && (
                   <button type="button" className="video-close" onClick={() => setIsTheaterMode(false)}>×</button>
                 )}
+                {isCodeLocked ? (
+                  <div className="video-stage">
+                    <div className="event-code-gate">
+                      <div className="event-code-gate-icon">🎫</div>
+                      <h3>Rekaman Khusus Peserta Event</h3>
+                      <p>Masukkan <strong>kode akses</strong> yang kamu dapat saat ikut event ini untuk membuka video (tanpa potong koin).</p>
+                      <div className="event-code-gate-row">
+                        <input
+                          className="event-code-input"
+                          placeholder="RSM-XXXXXX"
+                          value={codeInput}
+                          onChange={(e) => { setCodeInput(e.target.value); setCodeError(''); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') void submitAccessCode(); }}
+                        />
+                        <button type="button" className="button primary" disabled={!codeInput.trim() || codeChecking} onClick={() => void submitAccessCode()}>
+                          {codeChecking ? '…' : 'Buka'}
+                        </button>
+                      </div>
+                      {codeError && <p className="event-code-error">{codeError}</p>}
+                    </div>
+                  </div>
+                ) : (
                 <div className={`video-stage ${selectedLessonMedia?.kind === 'youtube' ? 'embed' : ''}`}>
                   {selectedLessonMedia?.kind === 'youtube' ? (
                     <div className="video-embed-wrap">
@@ -7081,6 +7139,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                     </div>
                   )}
                 </div>
+                )}
               </div>
 
               {/* Action bar */}
@@ -7614,6 +7673,9 @@ function LessonEditorDrawer({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const [eventOptions, setEventOptions] = useState<{ id: string; title: string; date: string }[]>([]);
+  useEffect(() => { void loadHubEvents().then((evs) => setEventOptions(evs.map((e) => ({ id: e.id, title: e.title, date: e.date })))); }, []);
+
   if (typeof document === 'undefined') {
     return null;
   }
@@ -7719,6 +7781,19 @@ function LessonEditorDrawer({
               onChange={(event) => onChangeDraft((current) => ({ ...current, videoUrl: event.target.value }))}
               placeholder="https://..."
             />
+          </label>
+          <label>
+            kunci rekaman (khusus peserta event)
+            <select
+              value={draft.unlockEventId}
+              onChange={(event) => onChangeDraft((current) => ({ ...current, unlockEventId: event.target.value }))}
+            >
+              <option value="">— Umum (buka pakai koin biasa) —</option>
+              {eventOptions.map((e) => (
+                <option key={e.id} value={e.id}>{e.title} · {new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</option>
+              ))}
+            </select>
+            <span className="lesson-form-hint">Jika dipilih, video hanya bisa dibuka peserta event tsb dengan kode akses (tanpa potong koin).</span>
           </label>
           <label>
             stats
@@ -16310,6 +16385,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [joinTarget, setJoinTarget] = useState<HubEvent | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [joinedCode, setJoinedCode] = useState<{ title: string; code: string } | null>(null);
   const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
   const [adminTab, setAdminTab] = useState<'events' | 'peserta'>('events');
   const [participants, setParticipants] = useState<Array<{ event_id: string; username: string; display_name: string | null; event_title: string | null; event_date: string | null; joined_at: string }>>([]);
@@ -16456,14 +16532,18 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     }
     localStorage.setItem(joinedKey(joinTarget.id), '1');
     setJoinedIds((prev) => new Set([...prev, joinTarget.id]));
-    // Catat peserta ke database agar admin bisa melihat siapa saja yang ikut
+    // Catat peserta + generate kode akses unik (untuk buka rekaman event ini).
+    const existingCode = (await supabase.from('event_participants').select('access_code').eq('event_id', joinTarget.id).eq('username', session.username).maybeSingle()).data?.access_code;
+    const accessCode = existingCode || `RSM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     void supabase.from('event_participants').upsert({
       event_id: joinTarget.id,
       username: session.username,
       display_name: session.displayName,
       event_title: joinTarget.title,
       event_date: joinTarget.date,
+      access_code: accessCode,
     }, { onConflict: 'event_id,username' });
+    setJoinedCode({ title: joinTarget.title, code: accessCode });
     void sendTelegram(`🎫 <b>User Baru Join Event</b>\n\n👤 @${session.username}\n🎯 Event: ${joinTarget.title}\n🗓 Tanggal: ${joinTarget.date}${joinTarget.time ? ` pukul ${joinTarget.time.slice(0, 5)}` : ''}\n💰 Biaya: ${joinTarget.coinCost === 0 ? 'Gratis' : `${joinTarget.coinCost} Ruang Coin`}`);
     // Schedule Telegram reminders for user (H-1, H-3 jam, H-30 menit)
     void scheduleEventReminders(session.username, joinTarget);
@@ -16482,6 +16562,20 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   return (
     <div className="events-page">
       {confirmModal}
+      {joinedCode && createPortal(
+        <div className="checkin-overlay" onClick={() => setJoinedCode(null)}>
+          <div className="checkin-modal" style={{ maxWidth: 400, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="checkin-close" onClick={() => setJoinedCode(null)}>✕</button>
+            <div style={{ fontSize: '2.4rem', marginBottom: 8 }}>🎫</div>
+            <h3 className="checkin-title" style={{ textAlign: 'center' }}>Kamu Terdaftar!</h3>
+            <p className="checkin-sub" style={{ marginBottom: 16 }}>Simpan kode akses ini untuk membuka video rekaman <strong>{joinedCode.title}</strong>:</p>
+            <div className="event-access-code" onClick={() => void navigator.clipboard?.writeText(joinedCode.code)}>{joinedCode.code}<span className="event-access-code-copy">klik untuk salin</span></div>
+            <p className="checkin-sub" style={{ fontSize: '0.78rem', marginTop: 12 }}>Kode ini unik untukmu. Jangan dibagikan ke orang lain.</p>
+            <button type="button" className="checkin-btn" style={{ marginTop: 16 }} onClick={() => setJoinedCode(null)}>Saya mengerti</button>
+          </div>
+        </div>,
+        document.body,
+      )}
       <div className="events-header">
         <div>
           <h2 className="events-title">Events & Kelas</h2>

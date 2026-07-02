@@ -14358,3 +14358,16 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 
 .forum-action-reward { display: inline-flex; align-items: center; gap: 3px; font-size: 0.74rem; font-weight: 800; color: #16a34a; background: rgba(22,163,74,0.12); border-radius: 999px; padding: 3px 10px; }
 .forum-action-reward.inline { margin-left: 8px; padding: 1px 8px; font-size: 0.68rem; }
+
+/* ── Lesson form hint & event code gate ── */
+.lesson-form-hint { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 4px; font-weight: 400; }
+.event-code-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 40px 24px; height: 100%; }
+.event-code-gate-icon { font-size: 2.6rem; }
+.event-code-gate h3 { font-size: 1.15rem; font-weight: 800; color: #fff; margin: 0; }
+.event-code-gate p { font-size: 0.88rem; color: rgba(255,255,255,0.8); margin: 0; max-width: 380px; line-height: 1.5; }
+.event-code-gate-row { display: flex; gap: 8px; margin-top: 10px; }
+.event-code-input { padding: 11px 16px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: #fff; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
+.event-code-input::placeholder { color: rgba(255,255,255,0.4); }
+.event-code-error { color: #fca5a5; font-size: 0.82rem; }
+.event-access-code { position: relative; font-size: 1.6rem; font-weight: 900; letter-spacing: 0.15em; color: var(--accent); background: var(--accent-soft); border: 2px dashed var(--accent); border-radius: 14px; padding: 18px; cursor: pointer; }
+.event-access-code-copy { display: block; font-size: 0.62rem; font-weight: 600; letter-spacing: normal; color: var(--muted); margin-top: 6px; text-transform: none; }
