@@ -27,6 +27,12 @@ for all
 using (false)
 with check (false);
 
+-- Index fungsional agar pencarian username (yang dibungkus lower(trim(...)))
+-- memakai index, bukan full-table scan. Tanpa ini, bcrypt crypt() dijalankan
+-- untuk banyak baris → statement timeout ("Server sedang sibuk").
+create index if not exists app_users_lower_username_idx
+  on public.app_users (lower(trim(username)));
+
 drop function if exists public.authenticate_app_user(text, text);
 create or replace function public.authenticate_app_user(p_username text, p_password text)
 returns table (
@@ -36,22 +42,34 @@ returns table (
   role text,
   created_at timestamptz
 )
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public, extensions
 as $$
-  select
-    u.id,
-    u.username,
-    u.display_name,
-    u.role,
-    u.created_at
+declare
+  rec public.app_users%rowtype;
+begin
+  -- Ambil 1 baris user via index dulu (murah), baru verifikasi bcrypt SEKALI.
+  select * into rec
   from public.app_users u
   where u.is_active
     and lower(trim(u.username)) = lower(trim(p_username))
-    and u.password_hash = extensions.crypt(p_password, u.password_hash)
   limit 1;
+
+  if not found then
+    return;
+  end if;
+
+  if rec.password_hash = extensions.crypt(p_password, rec.password_hash) then
+    id := rec.id;
+    username := rec.username;
+    display_name := rec.display_name;
+    role := rec.role;
+    created_at := rec.created_at;
+    return next;
+  end if;
+end;
 $$;
 
 grant execute on function public.authenticate_app_user(text, text) to anon, authenticated;
