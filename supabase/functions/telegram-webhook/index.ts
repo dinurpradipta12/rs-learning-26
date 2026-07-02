@@ -405,6 +405,7 @@ async function handleCallback(data: string, callbackId: string, chatId: number, 
     if (action === 'at') {
       const { data: req, error } = await supabase.from('topup_requests').select('*').eq('id', fullId).eq('status', 'pending').maybeSingle();
       if (error || !req) { await tgEditButtons(chatId, messageId, '⚠️ Tidak ditemukan'); return; }
+      if (!req.proof_url) { await tgEditButtons(chatId, messageId, '⚠️ Belum ada bukti transaksi — tidak bisa disetujui'); return; }
       const { data: cr } = await supabase.from('user_credits').select('balance').eq('username', req.username).maybeSingle();
       const current = (cr as { balance?: number } | null)?.balance ?? 0;
       const newBal = current + req.credits;

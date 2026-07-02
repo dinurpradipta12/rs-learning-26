@@ -152,6 +152,7 @@ async function processTelegramCommand(text: string): Promise<string | null> {
     const { data: rows } = await supabase.from('topup_requests').select('*').ilike('id', `${shortId}%`).eq('status', 'pending').limit(1);
     const req = rows?.[0];
     if (!req) return `❌ Request topup <code>${shortId}</code> tidak ditemukan atau sudah diproses.`;
+    if (!req.proof_url) return `❌ Topup <code>${shortId}</code> belum ada bukti transaksi. Topup tanpa bukti tidak dapat disetujui.`;
     const { data: creditRow } = await supabase.from('user_credits').select('balance').eq('username', req.username).maybeSingle();
     const current = (creditRow as { balance?: number } | null)?.balance ?? 0;
     await Promise.all([
@@ -14956,6 +14957,11 @@ function InboxPage() {
   };
 
   const handleApproveTopup = async (req: TopupRequest) => {
+    // Wajib ada bukti transaksi sebelum topup bisa disetujui.
+    if (!req.proof_url) {
+      window.alert('Tidak bisa menyetujui: request ini belum ada bukti transaksi. Topup tanpa bukti tidak dapat diterima.');
+      return;
+    }
     setTopupActionId(req.id);
     const { data: existing } = await supabase.from('user_credits').select('balance').eq('username', req.username).maybeSingle();
     const current = existing?.balance ?? 0;
@@ -15334,8 +15340,8 @@ function InboxPage() {
                         </div>
                       ) : (
                         <div className="admin-inbox-actions">
-                          <button type="button" className="admin-inbox-approve" disabled={topupActionId === r.id} onClick={() => void handleApproveTopup(r)}>
-                            {topupActionId === r.id ? 'Memproses…' : <><span>✓ Approve & Tambah </span><CoinIcon size={12} />{r.credits} ke @{r.username}</>}
+                          <button type="button" className="admin-inbox-approve" disabled={topupActionId === r.id || !r.proof_url} title={!r.proof_url ? 'Belum ada bukti transaksi — tidak bisa disetujui' : undefined} onClick={() => void handleApproveTopup(r)}>
+                            {topupActionId === r.id ? 'Memproses…' : !r.proof_url ? '⚠ Menunggu bukti transaksi' : <><span>✓ Approve & Tambah </span><CoinIcon size={12} />{r.credits} ke @{r.username}</>}
                           </button>
                           <button type="button" className="admin-inbox-reject" disabled={topupActionId === r.id} onClick={() => setRejectTargetId(r.id)}>
                             ✕ Tolak
