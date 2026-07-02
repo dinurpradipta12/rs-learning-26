@@ -2117,6 +2117,13 @@ function NotificationBell({ username }: { username: string }) {
     if (data) setAllNotifs(data as NotifRow[]);
   };
 
+  const clearAllNotifs = async () => {
+    if (allNotifs.length === 0) return;
+    setAllNotifs([]);
+    setNotifs([]);
+    await supabase.from('notifications').delete().eq('recipient_username', username);
+  };
+
   const openDrawer = () => { setOpen(false); setDrawerOpen(true); void loadAllNotifs(); };
 
   const notifCategory = (n: NotifRow): 'topup' | 'review' | 'lainnya' => {
@@ -2211,7 +2218,12 @@ function NotificationBell({ username }: { username: string }) {
           <aside className="notif-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="notif-drawer-head">
               <strong>Semua Notifikasi</strong>
-              <button type="button" className="notif-drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Tutup">×</button>
+              <div className="notif-drawer-head-actions">
+                {allNotifs.length > 0 && (
+                  <button type="button" className="notif-drawer-clear" onClick={() => void clearAllNotifs()}>Hapus semua</button>
+                )}
+                <button type="button" className="notif-drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Tutup">×</button>
+              </div>
             </div>
             <div className="notif-drawer-filters">
               {([['semua', 'Semua'], ['topup', 'Topup'], ['review', 'Review'], ['lainnya', 'Lainnya']] as const).map(([key, label]) => (
