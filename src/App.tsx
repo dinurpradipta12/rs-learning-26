@@ -16478,6 +16478,32 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const joinedKey = (id: string) => `event_joined_${session?.username ?? 'guest'}_${id}`;
   const [joinedIds, setJoinedIds] = useState<Set<string>>(() => new Set());
   const isJoined = (e: HubEvent) => canManage || userPerks.credit_exempt || userPerks.free_event || e.coinCost === 0 || joinedIds.has(e.id) || !!localStorage.getItem(joinedKey(e.id));
+  // Kode akses per event (untuk buka rekaman tanpa koin) milik user yang login.
+  const [myAccessCodes, setMyAccessCodes] = useState<Record<string, string>>({});
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const copyAccessCode = (code: string) => {
+    void navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1800);
+  };
+
+  useEffect(() => {
+    if (!session?.username || canManage) return;
+    void supabase.from('event_participants')
+      .select('event_id, access_code')
+      .eq('username', session.username)
+      .then(({ data }) => {
+        if (!data) return;
+        const map: Record<string, string> = {};
+        const ids = new Set<string>();
+        for (const row of data as Array<{ event_id: string; access_code: string | null }>) {
+          ids.add(row.event_id);
+          if (row.access_code) map[row.event_id] = row.access_code;
+        }
+        setMyAccessCodes(map);
+        setJoinedIds((prev) => new Set([...prev, ...ids]));
+      });
+  }, [session?.username, canManage]);
 
   useEffect(() => {
     void loadHubEvents().then((evs) => {
@@ -16787,6 +16813,17 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                       ? <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link Tersedia</>
                       : <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Link Menyusul</>}
                   </span>
+                  {joined && myAccessCodes[ev.id] && (
+                    <div className="event-access-code-row">
+                      <div className="event-access-code-box">
+                        <span className="event-access-code-label">Kode akses rekaman</span>
+                        <strong className="event-access-code-value">🎫 {myAccessCodes[ev.id]}</strong>
+                      </div>
+                      <button type="button" className="event-access-code-copy-btn" onClick={() => copyAccessCode(myAccessCodes[ev.id])}>
+                        {copiedCode === myAccessCodes[ev.id] ? '✓ Tersalin' : '📋 Salin'}
+                      </button>
+                    </div>
+                  )}
                   <div className="event-card-footer">
                     {joined ? (
                       ev.link
