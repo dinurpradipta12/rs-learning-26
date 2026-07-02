@@ -2585,8 +2585,18 @@ body.dark .course-card-badge-capsule .ccbc-action { background: #fff !important;
 .lms-review-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: rgba(var(--accent-rgb), 0.15); color: var(--accent); font-size: 0.72rem; font-weight: 800; margin-left: 2px; }
 .lms-review-see-all { margin-top: 14px; width: 100%; padding: 11px 16px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--accent); font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: background 0.15s ease; }
 .lms-review-see-all:hover { background: rgba(var(--accent-rgb), 0.08); }
-.lms-all-reviews-modal { max-width: 620px; width: 100%; display: flex; flex-direction: column; max-height: 82vh; }
+.lms-all-reviews-modal { max-width: 760px; width: 100%; display: flex; flex-direction: column; max-height: 82vh; }
 .lms-all-reviews-body { overflow-y: auto; padding-top: 4px; }
+.lms-review-summary { display: flex; align-items: center; gap: 24px; padding: 16px 4px 20px; margin-bottom: 12px; border-bottom: 1.5px solid var(--line); }
+.lms-review-summary-score { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
+.lms-review-summary-avg { font-size: 3rem; font-weight: 800; line-height: 1; color: var(--text); }
+.lms-review-summary-stars { color: #f5a623; font-size: 1.05rem; letter-spacing: 1px; }
+.lms-review-summary-count { font-size: 0.8rem; color: var(--muted); }
+.lms-review-summary-bars { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.lms-review-bar-row { display: flex; align-items: center; gap: 10px; }
+.lms-review-bar-label { width: 10px; font-size: 0.85rem; color: var(--muted); text-align: right; }
+.lms-review-bar-track { flex: 1; height: 11px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.lms-review-bar-fill { height: 100%; border-radius: 999px; background: #f5a623; transition: width 0.3s ease; }
 .lms-review-item {
   padding: 16px;
   border: 1px solid var(--line);

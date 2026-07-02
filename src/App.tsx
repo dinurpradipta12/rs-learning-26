@@ -7432,6 +7432,31 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                   <button type="button" className="modal-close" onClick={() => setIsAllReviewsOpen(false)}>×</button>
                 </div>
                 <div className="lms-all-reviews-body">
+                  {(() => {
+                    const total = selectedLessonReviews.length;
+                    const avg = total ? selectedLessonReviews.reduce((s, r) => s + r.rating, 0) / total : 0;
+                    const dist = [5, 4, 3, 2, 1].map((star) => ({ star, count: selectedLessonReviews.filter((r) => r.rating === star).length }));
+                    const fullStars = Math.round(avg);
+                    return (
+                      <div className="lms-review-summary">
+                        <div className="lms-review-summary-score">
+                          <strong className="lms-review-summary-avg">{avg.toFixed(1)}</strong>
+                          <span className="lms-review-summary-stars">{'★'.repeat(fullStars)}{'☆'.repeat(5 - fullStars)}</span>
+                          <span className="lms-review-summary-count">{total} ulasan</span>
+                        </div>
+                        <div className="lms-review-summary-bars">
+                          {dist.map(({ star, count }) => (
+                            <div className="lms-review-bar-row" key={star}>
+                              <span className="lms-review-bar-label">{star}</span>
+                              <div className="lms-review-bar-track">
+                                <div className="lms-review-bar-fill" style={{ width: `${total ? (count / total) * 100 : 0}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="lms-review-list">
                     {selectedLessonReviews.map((review, index) => renderReviewItem(review, index))}
                   </div>
