@@ -11576,6 +11576,8 @@ function RevenueDashboard({ rows, packages }: { rows: Array<{ amount_rp: number;
   const [target, setTarget] = useState<number>(() => Number(localStorage.getItem('revenue_target') || 0));
   const [targetInput, setTargetInput] = useState('');
   const [editingTarget, setEditingTarget] = useState(false);
+  const [hoverDay, setHoverDay] = useState<number | null>(null);
+  const lineRef = useRef<SVGSVGElement>(null);
 
   const now = new Date();
   const ymOf = (d: Date) => d.getFullYear() * 12 + d.getMonth();
@@ -11615,9 +11617,21 @@ function RevenueDashboard({ rows, packages }: { rows: Array<{ amount_rp: number;
   }
   let cum = 0; const cumSeries = daily.map((v) => (cum += v));
   const maxCum = Math.max(cum, effectiveTarget, 1);
-  const W = 560, H = 120;
-  const linePts = cumSeries.map((v, i) => `${(i / Math.max(daysInMonth - 1, 1)) * W},${H - (v / maxCum) * H}`).join(' ');
-  const targetY = H - (effectiveTarget / maxCum) * H;
+  // Chart kumulatif bergaya Monitor DB (grid + area gradient + hover).
+  const CW = 800, CH = 200, cpadL = 56, cpadR = 14, cpadT = 16, cpadB = 26;
+  const cToX = (i: number) => cpadL + (i / Math.max(daysInMonth - 1, 1)) * (CW - cpadL - cpadR);
+  const cToY = (v: number) => cpadT + (1 - v / maxCum) * (CH - cpadT - cpadB);
+  const cLine = cumSeries.map((v, i) => `${i === 0 ? 'M' : 'L'}${cToX(i).toFixed(1)},${cToY(v).toFixed(1)}`).join(' ');
+  const cArea = `${cLine} L${cToX(daysInMonth - 1).toFixed(1)},${CH - cpadB} L${cToX(0).toFixed(1)},${CH - cpadB} Z`;
+  const cYTicks = Array.from({ length: 5 }, (_, i) => (i / 4) * maxCum);
+  const hoverI = hoverDay ?? daysInMonth - 1;
+  const handleLineMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = lineRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const relX = (e.clientX - rect.left) * (CW / rect.width);
+    const idx = Math.round(((relX - cpadL) / (CW - cpadL - cpadR)) * (daysInMonth - 1));
+    setHoverDay(Math.max(0, Math.min(daysInMonth - 1, idx)));
+  };
 
   const saveTarget = () => {
     const v = Math.max(0, Math.round(Number(targetInput.replace(/[^0-9]/g, '')) || 0));
@@ -11698,13 +11712,42 @@ function RevenueDashboard({ rows, packages }: { rows: Array<{ amount_rp: number;
 
       <div className="rev-chart-box rev-chart-box--wide">
         <p className="rev-chart-title">Kumulatif Pendapatan — {monthLabelFull(curYM)}</p>
-        <svg className="rev-line-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-          {effectiveTarget <= maxCum && <line x1={0} y1={targetY} x2={W} y2={targetY} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" />}
-          <polyline points={linePts} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinejoin="round" />
-        </svg>
-        <div className="rev-line-legend">
-          <span><i style={{ background: 'var(--accent)' }} /> Kumulatif ({formatRupiah(cum)})</span>
-          <span><i style={{ background: '#f59e0b' }} /> Target ({formatRupiah(effectiveTarget)})</span>
+        <div className="dbmon2-chart-wrap">
+          <div className="dbmon2-chart-tooltip">
+            <span className="dbmon2-chart-tooltip-time">Tgl {hoverI + 1}</span>
+            <span className="dbmon2-chart-tooltip-item"><span className="dbmon2-chart-tooltip-dot" style={{ background: 'var(--accent)' }} /><span style={{ color: 'var(--accent)' }}>Kumulatif:</span> <span>{formatRupiah(cumSeries[hoverI] ?? 0)}</span></span>
+            <span className="dbmon2-chart-tooltip-item"><span className="dbmon2-chart-tooltip-dot" style={{ background: '#f59e0b' }} /><span style={{ color: '#f59e0b' }}>Target:</span> <span>{formatRupiah(effectiveTarget)}</span></span>
+          </div>
+          <svg ref={lineRef} viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="xMidYMid meet" className="dbmon2-chart-svg" onMouseMove={handleLineMove} onMouseLeave={() => setHoverDay(null)}>
+            <defs>
+              <linearGradient id="rev-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+            {cYTicks.map((v, i) => {
+              const y = cToY(v);
+              return (
+                <g key={i}>
+                  <line x1={cpadL} x2={CW - cpadR} y1={y} y2={y} stroke="var(--line)" strokeWidth="0.5" strokeDasharray="3 4" />
+                  <text x={cpadL - 6} y={y + 3} fontSize="9" fill="var(--muted)" textAnchor="end">{formatRupiahShort(v)}</text>
+                </g>
+              );
+            })}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              if (i % 4 !== 0 && i !== daysInMonth - 1) return null;
+              return <text key={i} x={cToX(i)} y={CH - 6} fontSize="9" fill="var(--muted)" textAnchor="middle">{i + 1}</text>;
+            })}
+            {effectiveTarget <= maxCum && <line x1={cpadL} x2={CW - cpadR} y1={cToY(effectiveTarget)} y2={cToY(effectiveTarget)} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="5 4" />}
+            <path d={cArea} fill="url(#rev-grad)" />
+            <path d={cLine} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <line x1={cToX(hoverI)} x2={cToX(hoverI)} y1={cpadT} y2={CH - cpadB} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
+            <circle cx={cToX(hoverI)} cy={cToY(cumSeries[hoverI] ?? 0)} r="4" fill="var(--accent)" stroke="var(--card)" strokeWidth="2" />
+          </svg>
+          <div className="dbmon2-chart-legend">
+            <span className="dbmon2-legend-item"><span className="dbmon2-chart-tooltip-dot" style={{ background: 'var(--accent)' }} /> Kumulatif ({formatRupiah(cum)})</span>
+            <span className="dbmon2-legend-item"><span className="dbmon2-chart-tooltip-dot" style={{ background: '#f59e0b' }} /> Target ({formatRupiah(effectiveTarget)})</span>
+          </div>
         </div>
       </div>
     </div>
