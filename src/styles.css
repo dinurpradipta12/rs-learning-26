@@ -8335,6 +8335,51 @@ body.dark .referral-preview-box {
   background: rgba(22,127,114,0.06);
 }
 .admin-revenue-total strong { font-size: 1.2rem; color: #167f72; }
+
+/* ── Revenue reporting dashboard ── */
+.rev-dash { display: flex; flex-direction: column; gap: 16px; }
+.rev-dash-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.rev-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.rev-card--primary { background: linear-gradient(135deg, rgba(var(--accent-rgb),0.14), rgba(var(--accent-rgb),0.04)); border-color: rgba(var(--accent-rgb),0.3); }
+.rev-card--target { background: rgba(245,158,11,0.06); border-color: #f59e0b44; }
+.rev-card-label { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+.rev-card-value { font-size: 1.5rem; font-weight: 800; color: var(--text); white-space: nowrap; }
+.rev-card--primary .rev-card-value { color: var(--accent); }
+.rev-card-sub { font-size: 0.74rem; color: var(--muted); }
+.rev-card-delta { font-size: 0.76rem; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
+.rev-card-delta.up { color: #16a34a; }
+.rev-card-delta.down { color: #dc2626; }
+.rev-target-head { display: flex; align-items: center; justify-content: space-between; }
+.rev-target-edit { border: none; background: transparent; color: var(--muted); cursor: pointer; padding: 2px; }
+.rev-target-edit-row { display: flex; gap: 6px; margin-top: 4px; }
+.rev-target-input { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--bg); font: inherit; font-size: 0.85rem; }
+.rev-progress { height: 8px; border-radius: 999px; background: rgba(0,0,0,0.08); overflow: hidden; margin-top: 4px; }
+.rev-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #f59e0b, #f97316); transition: width 0.4s ease; }
+
+.rev-dash-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.rev-chart-box { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+.rev-chart-box--wide { grid-column: 1 / -1; }
+.rev-chart-title { font-size: 0.85rem; font-weight: 700; color: var(--text); margin: 0 0 14px; }
+.rev-empty { font-size: 0.85rem; color: var(--muted); padding: 20px 0; text-align: center; }
+.rev-bars { display: flex; align-items: flex-end; gap: 10px; height: 150px; }
+.rev-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+.rev-bar { width: 60%; min-height: 3px; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, var(--accent), rgba(var(--accent-rgb),0.5)); transition: height 0.4s ease; }
+.rev-bar-val { font-size: 0.62rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.rev-bar-label { font-size: 0.72rem; color: var(--muted); }
+.rev-pkg-list { display: flex; flex-direction: column; gap: 10px; }
+.rev-pkg-row { display: flex; align-items: center; gap: 10px; }
+.rev-pkg-name { width: 92px; flex-shrink: 0; font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.rev-pkg-track { flex: 1; height: 12px; border-radius: 999px; background: rgba(0,0,0,0.06); overflow: hidden; }
+.rev-pkg-fill { height: 100%; border-radius: 999px; min-width: 2px; transition: width 0.4s ease; }
+.rev-pkg-amt { flex-shrink: 0; font-size: 0.8rem; font-weight: 700; color: var(--text); display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.rev-pkg-amt em { font-style: normal; font-size: 0.68rem; font-weight: 500; color: var(--muted); }
+.rev-line-svg { width: 100%; height: 120px; display: block; }
+.rev-line-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 0.74rem; color: var(--muted); }
+.rev-line-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+@media (max-width: 1000px) {
+  .rev-dash-cards { grid-template-columns: repeat(2, 1fr); }
+  .rev-dash-charts { grid-template-columns: 1fr; }
+}
 .admin-section-label { font-size: 0.82rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
 
 .admin-inbox-section-head {

@@ -11566,6 +11566,150 @@ async function validateReferralCode(code: string): Promise<ReferralCode | null> 
 function formatRupiah(n: number) {
   return 'Rp ' + n.toLocaleString('id-ID');
 }
+function formatRupiahShort(n: number) {
+  if (n >= 1_000_000) return 'Rp' + (n / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + 'jt';
+  if (n >= 1_000) return 'Rp' + Math.round(n / 1_000) + 'rb';
+  return 'Rp' + n;
+}
+
+function RevenueDashboard({ rows, packages }: { rows: Array<{ amount_rp: number; credits: number; package_label: string; created_at: string }>; packages: CreditPackage[] }) {
+  const [target, setTarget] = useState<number>(() => Number(localStorage.getItem('revenue_target') || 0));
+  const [targetInput, setTargetInput] = useState('');
+  const [editingTarget, setEditingTarget] = useState(false);
+
+  const now = new Date();
+  const ymOf = (d: Date) => d.getFullYear() * 12 + d.getMonth();
+  const curYM = ymOf(now);
+  const monthLabel = (ym: number) => new Date(Math.floor(ym / 12), ym % 12, 1).toLocaleDateString('id-ID', { month: 'short' });
+  const monthLabelFull = (ym: number) => new Date(Math.floor(ym / 12), ym % 12, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const sumForYM = (ym: number) => rows.filter((r) => ymOf(new Date(r.created_at)) === ym).reduce((s, r) => s + (Number(r.amount_rp) || 0), 0);
+  const countForYM = (ym: number) => rows.filter((r) => ymOf(new Date(r.created_at)) === ym).length;
+
+  const thisMonth = sumForYM(curYM);
+  const lastMonth = sumForYM(curYM - 1);
+  const delta = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : (thisMonth > 0 ? 100 : 0);
+  const effectiveTarget = target > 0 ? target : Math.max(lastMonth, 500_000);
+  const achieved = effectiveTarget > 0 ? (thisMonth / effectiveTarget) * 100 : 0;
+  const allTime = rows.reduce((s, r) => s + (Number(r.amount_rp) || 0), 0);
+
+  // 6 bulan terakhir
+  const months = [5, 4, 3, 2, 1, 0].map((o) => ({ ym: curYM - o, value: sumForYM(curYM - o), count: countForYM(curYM - o) }));
+  const maxMonth = Math.max(...months.map((m) => m.value), 1);
+
+  // rincian per paket (bulan ini)
+  const pkgAgg = packages.map((p) => {
+    const rs = rows.filter((r) => ymOf(new Date(r.created_at)) === curYM && (r.package_label === p.label));
+    return { label: p.label, count: rs.length, revenue: rs.reduce((s, r) => s + (Number(r.amount_rp) || 0), 0) };
+  });
+  const customRs = rows.filter((r) => ymOf(new Date(r.created_at)) === curYM && !packages.some((p) => p.label === r.package_label));
+  if (customRs.length) pkgAgg.push({ label: 'Custom/Lainnya', count: customRs.length, revenue: customRs.reduce((s, r) => s + (Number(r.amount_rp) || 0), 0) });
+  const maxPkg = Math.max(...pkgAgg.map((p) => p.revenue), 1);
+  const pkgColors = ['#6d28d9', '#2563eb', '#0ea5e9', '#16a34a', '#f59e0b'];
+
+  // kumulatif harian bulan ini
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daily = Array.from({ length: daysInMonth }, () => 0);
+  for (const r of rows) {
+    const d = new Date(r.created_at);
+    if (ymOf(d) === curYM) daily[d.getDate() - 1] += Number(r.amount_rp) || 0;
+  }
+  let cum = 0; const cumSeries = daily.map((v) => (cum += v));
+  const maxCum = Math.max(cum, effectiveTarget, 1);
+  const W = 560, H = 120;
+  const linePts = cumSeries.map((v, i) => `${(i / Math.max(daysInMonth - 1, 1)) * W},${H - (v / maxCum) * H}`).join(' ');
+  const targetY = H - (effectiveTarget / maxCum) * H;
+
+  const saveTarget = () => {
+    const v = Math.max(0, Math.round(Number(targetInput.replace(/[^0-9]/g, '')) || 0));
+    setTarget(v); localStorage.setItem('revenue_target', String(v)); setEditingTarget(false);
+  };
+
+  return (
+    <div className="rev-dash">
+      <div className="rev-dash-cards">
+        <div className="rev-card rev-card--primary">
+          <span className="rev-card-label">Pendapatan Bulan Ini</span>
+          <strong className="rev-card-value">{formatRupiah(thisMonth)}</strong>
+          <span className={`rev-card-delta ${delta >= 0 ? 'up' : 'down'}`}>
+            {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(0)}% vs bulan lalu
+          </span>
+        </div>
+        <div className="rev-card">
+          <span className="rev-card-label">Bulan Kemarin</span>
+          <strong className="rev-card-value">{formatRupiah(lastMonth)}</strong>
+          <span className="rev-card-sub">{monthLabelFull(curYM - 1)}</span>
+        </div>
+        <div className="rev-card">
+          <span className="rev-card-label">Total Sepanjang Waktu</span>
+          <strong className="rev-card-value">{formatRupiah(allTime)}</strong>
+          <span className="rev-card-sub">{rows.length}× topup</span>
+        </div>
+        <div className="rev-card rev-card--target">
+          <div className="rev-target-head">
+            <span className="rev-card-label">Target Bulan Ini</span>
+            <button type="button" className="rev-target-edit" onClick={() => { setEditingTarget((v) => !v); setTargetInput(String(effectiveTarget)); }}><Ic name="edit" size={13} /></button>
+          </div>
+          {editingTarget ? (
+            <div className="rev-target-edit-row">
+              <input className="rev-target-input" value={targetInput} onChange={(e) => setTargetInput(e.target.value)} placeholder="cth 2000000" />
+              <button type="button" className="button primary" onClick={saveTarget}>Simpan</button>
+            </div>
+          ) : (
+            <>
+              <strong className="rev-card-value">{formatRupiah(effectiveTarget)}</strong>
+              <div className="rev-progress"><div className="rev-progress-fill" style={{ width: `${Math.min(100, achieved)}%` }} /></div>
+              <span className="rev-card-sub">{achieved.toFixed(0)}% tercapai{target === 0 ? ' (auto: bulan lalu)' : ''}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="rev-dash-charts">
+        <div className="rev-chart-box">
+          <p className="rev-chart-title">Tren 6 Bulan</p>
+          <div className="rev-bars">
+            {months.map((m) => (
+              <div key={m.ym} className="rev-bar-col" title={`${monthLabelFull(m.ym)}: ${formatRupiah(m.value)} (${m.count}×)`}>
+                <span className="rev-bar-val">{m.value > 0 ? formatRupiahShort(m.value) : ''}</span>
+                <div className="rev-bar" style={{ height: `${(m.value / maxMonth) * 100}%` }} />
+                <span className="rev-bar-label">{monthLabel(m.ym)}{m.ym === curYM ? '*' : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rev-chart-box">
+          <p className="rev-chart-title">Pendapatan per Paket (bulan ini)</p>
+          {pkgAgg.every((p) => p.revenue === 0) ? (
+            <p className="rev-empty">Belum ada topup bulan ini.</p>
+          ) : (
+            <div className="rev-pkg-list">
+              {pkgAgg.map((p, i) => (
+                <div key={p.label} className="rev-pkg-row">
+                  <span className="rev-pkg-name">{p.label}</span>
+                  <div className="rev-pkg-track"><div className="rev-pkg-fill" style={{ width: `${(p.revenue / maxPkg) * 100}%`, background: pkgColors[i % pkgColors.length] }} /></div>
+                  <span className="rev-pkg-amt">{formatRupiah(p.revenue)}<em>{p.count}×</em></span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="rev-chart-box rev-chart-box--wide">
+        <p className="rev-chart-title">Kumulatif Pendapatan — {monthLabelFull(curYM)}</p>
+        <svg className="rev-line-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          {effectiveTarget <= maxCum && <line x1={0} y1={targetY} x2={W} y2={targetY} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 4" />}
+          <polyline points={linePts} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinejoin="round" />
+        </svg>
+        <div className="rev-line-legend">
+          <span><i style={{ background: 'var(--accent)' }} /> Kumulatif ({formatRupiah(cum)})</span>
+          <span><i style={{ background: '#f59e0b' }} /> Target ({formatRupiah(effectiveTarget)})</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const REFERRAL_FEATURE_LABELS: Record<string, string> = {
   free_video: '🎬 Video Learning',
@@ -13316,6 +13460,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   // Total Rupiah nyata dari topup yang di-approve (pakai amount_rp yang tersimpan
   // saat transaksi — mengikuti harga/promo saat itu, tidak berubah retroaktif).
   const [realTopupRevenue, setRealTopupRevenue] = useState(0);
+  const [approvedTopups, setApprovedTopups] = useState<Array<{ amount_rp: number; credits: number; package_label: string; created_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(0);
@@ -13456,8 +13601,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setStatTxns((statRows ?? []) as Array<{ amount: number; type: string; description: string }>);
 
     // Pendapatan asli = jumlah amount_rp topup yang sudah di-approve (harga saat itu).
-    const { data: approvedTopups } = await supabase.from('topup_requests').select('amount_rp').eq('status', 'approved');
-    setRealTopupRevenue((approvedTopups ?? []).reduce((s, r) => s + (Number((r as { amount_rp?: number }).amount_rp) || 0), 0));
+    const { data: approvedRows } = await supabase.from('topup_requests').select('amount_rp, credits, package_label, created_at').eq('status', 'approved').order('created_at', { ascending: true });
+    const rows = (approvedRows ?? []) as Array<{ amount_rp: number; credits: number; package_label: string; created_at: string }>;
+    setApprovedTopups(rows);
+    setRealTopupRevenue(rows.reduce((s, r) => s + (Number(r.amount_rp) || 0), 0));
 
     setLoading(false);
     const { data: courseRows } = await supabase.from('courses').select('key, title').order('sort_order', { ascending: true });
@@ -13473,6 +13620,17 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     const channel = supabase
       .channel('admin-app-users')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, () => {
+        void loadData();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, []);
+
+  // Realtime: refresh laporan pendapatan saat ada perubahan topup (approve/tolak/baru).
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-topup-requests')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'topup_requests' }, () => {
         void loadData();
       })
       .subscribe();
@@ -14323,7 +14481,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           {/* Revenue Tab */}
           {activeTab === 'revenue' && (
             <div className="admin-revenue">
-              <div className="admin-revenue-header">
+              <RevenueDashboard rows={approvedTopups} packages={packages} />
+              <div className="admin-revenue-header" style={{ marginTop: 28 }}>
                 <p className="admin-section-label" style={{ margin: 0 }}>Paket Ruang Coin</p>
                 <button type="button" className="admin-settings-btn" onClick={() => { setDraftPackages(packages); setDraftPayment(paymentInfo); setDraftCoinRate(CREDIT_RATE); setShowSettings(true); }}>
                   ⚙ Pengaturan Paket &amp; Pembayaran
