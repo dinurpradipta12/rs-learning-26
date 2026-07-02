@@ -7153,7 +7153,7 @@ body.dark .forum-filter-btn--qna { color: #fbbf24; }
 .forum-detail {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 160px);
+  height: calc(100vh - 96px);
   min-height: 400px;
   overflow: hidden;
 }
