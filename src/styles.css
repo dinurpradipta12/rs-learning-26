@@ -7153,9 +7153,6 @@ body.dark .forum-filter-btn--qna { color: #fbbf24; }
 .forum-detail {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 160px);
-  min-height: 400px;
-  overflow: hidden;
 }
 
 .forum-detail-top {
@@ -7480,13 +7477,10 @@ body.dark .forum-action-menu .forum-action-delete:hover {
 }
 
 .forum-replies-section {
-  flex: 1;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 12px 0 8px;
-  scrollbar-width: thin;
 }
 
 .forum-replies-heading {
