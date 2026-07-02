@@ -2176,7 +2176,7 @@ function PromoContent({ promo, onCta, onDismiss, isPreview }: {
   onDismiss?: () => void;
   isPreview?: boolean;
 }) {
-  const tc = promo.textColor ?? '#ffffff';
+  const tc = effectivePromoTextColor(promo);
   const bc = promo.btnColor ?? '#6c47ff';
   const btc = promo.btnTextColor ?? '#ffffff';
   const ps = isPreview ? { pointerEvents: 'none' as const } : {};
@@ -11179,6 +11179,29 @@ function applyPromoTemplate(promo: PromoPopup, tpl: NonNullable<PromoPopup['styl
 function promoBg(p: PromoPopup): string {
   if (p.useGradient) return `linear-gradient(${p.bgAngle ?? 135}deg, ${p.bgFrom ?? '#f0e6ff'}, ${p.bgTo ?? '#b28aff'})`;
   return p.bgColor ?? '#ffffff';
+}
+
+// Luminance relatif (0–1) dari warna hex.
+function hexLuminance(hex: string): number {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  if (!m) return 1;
+  const [r, g, b] = [m[1], m[2], m[3]].map((h) => {
+    const c = parseInt(h, 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// Warna teks efektif: kalau kontras dengan background terlalu rendah
+// (mis. teks gelap di atas background gelap), pakai putih/hitam yang terbaca.
+function effectivePromoTextColor(p: PromoPopup): string {
+  const configured = p.textColor ?? '#1a1a1a';
+  const bgHex = p.useGradient ? (p.bgFrom ?? '#f0e6ff') : (p.bgColor ?? '#ffffff');
+  const bgLum = hexLuminance(bgHex);
+  const textLum = hexLuminance(configured);
+  const ratio = (Math.max(bgLum, textLum) + 0.05) / (Math.min(bgLum, textLum) + 0.05);
+  if (ratio >= 2.2) return configured; // kontras cukup → hormati pilihan admin
+  return bgLum > 0.5 ? '#1a1a1a' : '#ffffff';
 }
 
 // ── Bonus Ruang Coin (earn koin dari aksi) ───────────────────
