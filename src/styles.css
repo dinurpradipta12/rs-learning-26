@@ -9228,6 +9228,21 @@ body.dark .event-edit-left { border-right-color: rgba(255,255,255,0.08); }
   transition: background 0.15s ease;
 }
 .event-access-code-copy-btn:hover { background: rgba(var(--accent-rgb), 0.12); }
+.event-claim-code-btn {
+  margin-top: 8px;
+  width: 100%;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px dashed rgba(var(--accent-rgb), 0.4);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.event-claim-code-btn:hover:not(:disabled) { background: rgba(var(--accent-rgb), 0.15); }
+.event-claim-code-btn:disabled { opacity: 0.6; cursor: default; }
 .event-card-footer { margin-top: auto; padding-top: 8px; }
 .event-join-btn { width: 100%; justify-content: center; font-size: 0.88rem; padding: 9px 16px; }
 .event-joined-label { font-size: 0.85rem; color: #22a35a; font-weight: 600; }

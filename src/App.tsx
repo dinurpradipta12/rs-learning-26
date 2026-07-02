@@ -16499,6 +16499,26 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     setCopiedCode(code);
     setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1800);
   };
+  // User yang sudah join secara eksplisit (bukan sekadar event gratis).
+  const explicitlyJoined = (e: HubEvent) => joinedIds.has(e.id) || !!localStorage.getItem(joinedKey(e.id));
+  const [claimingCode, setClaimingCode] = useState<string | null>(null);
+  // Backfill kode akses untuk user yang sudah join sebelum kode tercatat di DB.
+  const claimAccessCode = async (ev: HubEvent) => {
+    if (!session?.username) return;
+    setClaimingCode(ev.id);
+    const existing = (await supabase.from('event_participants').select('access_code').eq('event_id', ev.id).eq('username', session.username).maybeSingle()).data?.access_code;
+    const accessCode = existing || `RSM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const { error } = await supabase.from('event_participants').upsert({
+      event_id: ev.id,
+      username: session.username,
+      display_name: session.displayName,
+      event_title: ev.title,
+      event_date: ev.date,
+      access_code: accessCode,
+    }, { onConflict: 'event_id,username' });
+    if (!error) setMyAccessCodes((prev) => ({ ...prev, [ev.id]: accessCode }));
+    setClaimingCode(null);
+  };
 
   useEffect(() => {
     if (!session?.username || canManage) return;
@@ -16826,7 +16846,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                       ? <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link Tersedia</>
                       : <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Link Menyusul</>}
                   </span>
-                  {joined && myAccessCodes[ev.id] && (
+                  {joined && myAccessCodes[ev.id] ? (
                     <div className="event-access-code-row">
                       <div className="event-access-code-box">
                         <span className="event-access-code-label">Kode akses rekaman</span>
@@ -16836,7 +16856,11 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                         {copiedCode === myAccessCodes[ev.id] ? '✓ Tersalin' : '📋 Salin'}
                       </button>
                     </div>
-                  )}
+                  ) : joined && explicitlyJoined(ev) ? (
+                    <button type="button" className="event-claim-code-btn" disabled={claimingCode === ev.id} onClick={() => void claimAccessCode(ev)}>
+                      {claimingCode === ev.id ? 'Memproses…' : '🎫 Ambil Kode Akses Rekaman'}
+                    </button>
+                  ) : null}
                   <div className="event-card-footer">
                     {joined ? (
                       ev.link
