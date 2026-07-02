@@ -6264,10 +6264,10 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           type="button"
           className={`lms-review-like${reviewLikes[review.id]?.liked ? ' liked' : ''}`}
           onClick={() => void toggleReviewLike(review.id!)}
+          aria-label="Suka"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill={reviewLikes[review.id]?.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-          {(reviewLikes[review.id]?.count ?? 0) > 0 && <span>{reviewLikes[review.id]?.count}</span>}
-          <span className="lms-review-like-label">Suka</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill={reviewLikes[review.id]?.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span className="lms-review-like-count">{reviewLikes[review.id]?.count ?? 0}</span>
         </button>
       )}
     </div>

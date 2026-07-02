@@ -14585,10 +14585,10 @@ body.dark .referral-claim-modal { background: #12162b; }
 .journey-reward-toast strong { display: inline-flex; align-items: center; gap: 4px; }
 
 .lms-review-reward { display: inline-flex; align-items: center; gap: 3px; margin-left: 7px; font-size: 0.72rem; font-weight: 800; color: #16a34a; background: rgba(22,163,74,0.12); border-radius: 999px; padding: 2px 8px; }
-.lms-review-like { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: transparent; color: var(--muted); font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-.lms-review-like:hover { border-color: var(--accent); color: var(--accent); }
-.lms-review-like.liked { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.lms-review-like-label { font-weight: 700; }
+.lms-review-like { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; margin-top: 8px; padding: 2px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.15s; }
+.lms-review-like:hover { color: #e0245e; }
+.lms-review-like.liked { color: #e0245e; }
+.lms-review-like-count { font-size: 0.72rem; font-weight: 600; line-height: 1; }
 
 .forum-action-reward { display: inline-flex; align-items: center; gap: 3px; font-size: 0.74rem; font-weight: 800; color: #16a34a; background: rgba(22,163,74,0.12); border-radius: 999px; padding: 3px 10px; }
 .forum-action-reward.inline { margin-left: 8px; padding: 1px 8px; font-size: 0.68rem; }
