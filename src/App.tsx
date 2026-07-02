@@ -3605,15 +3605,15 @@ function AssetMonitor() {
       })).sort((a, b) => b.total_plays - a.total_plays);
       setVideoViewUsers(videoUserList);
 
-      const allUsernames = new Set([...Object.keys(spendMap), ...Object.keys(topupRpMap), ...Object.keys(balanceMap)]);
-      const spenderList: SpendUser[] = [...allUsernames].map((u) => ({
+      // Hanya user yang PERNAH memakai (spend) coin yang masuk list.
+      const spenderList: SpendUser[] = Object.keys(spendMap).map((u) => ({
         username: u,
         display_name: nameMap[u] ?? u,
         total_coin_spent: spendMap[u] ?? 0,
         total_rp_spent: topupRpMap[u] ?? 0,
         topup_count: topupCountMap[u] ?? 0,
         remaining_coin: balanceMap[u] ?? 0,
-      })).sort((a, b) => b.total_rp_spent - a.total_rp_spent || b.remaining_coin - a.remaining_coin);
+      })).sort((a, b) => b.total_coin_spent - a.total_coin_spent);
       setSpenders(spenderList);
       setLoading(false);
     })();
