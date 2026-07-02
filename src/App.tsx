@@ -2042,6 +2042,9 @@ type NotifRow = { id: string; type: NotifType; title: string; body: string; link
 function NotificationBell({ username }: { username: string }) {
   const [open, setOpen] = useState(false);
   const [notifs, setNotifs] = useState<NotifRow[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [allNotifs, setAllNotifs] = useState<NotifRow[]>([]);
+  const [drawerFilter, setDrawerFilter] = useState<'semua' | 'topup' | 'review' | 'lainnya'>('semua');
   const panelRef = useRef<HTMLDivElement>(null);
 
   const loadNotifs = async () => {
@@ -2085,11 +2088,16 @@ function NotificationBell({ username }: { username: string }) {
     await supabase.from('notifications').update({ is_read: true }).in('id', ids);
   };
 
+  const deleteNotif = async (id: string) => {
+    setNotifs((prev) => prev.filter((n) => n.id !== id));
+    setAllNotifs((prev) => prev.filter((n) => n.id !== id));
+    await supabase.from('notifications').delete().eq('id', id);
+  };
+
   const clearOne = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    setNotifs((prev) => prev.filter((n) => n.id !== id));
-    await supabase.from('notifications').delete().eq('id', id);
+    await deleteNotif(id);
   };
 
   const clearAll = async () => {
@@ -2098,6 +2106,43 @@ function NotificationBell({ username }: { username: string }) {
     setNotifs([]);
     await supabase.from('notifications').delete().in('id', ids);
   };
+
+  const loadAllNotifs = async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('recipient_username', username)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (data) setAllNotifs(data as NotifRow[]);
+  };
+
+  const openDrawer = () => { setOpen(false); setDrawerOpen(true); void loadAllNotifs(); };
+
+  const notifCategory = (n: NotifRow): 'topup' | 'review' | 'lainnya' => {
+    if (n.type === 'credits_added' || /topup|coin/i.test(n.title)) return 'topup';
+    if (/^review/i.test(n.title)) return 'review';
+    return 'lainnya';
+  };
+
+  const dayLabel = (iso: string): string => {
+    const d = new Date(iso);
+    const now = new Date();
+    const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diffDays = Math.round((startOf(now) - startOf(d)) / 86400000);
+    if (diffDays <= 0) return 'Hari ini';
+    if (diffDays === 1) return 'Kemarin';
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  const filteredNotifs = allNotifs.filter((n) => drawerFilter === 'semua' || notifCategory(n) === drawerFilter);
+  const groupedNotifs: [string, NotifRow[]][] = [];
+  for (const n of filteredNotifs) {
+    const label = dayLabel(n.created_at);
+    const last = groupedNotifs[groupedNotifs.length - 1];
+    if (last && last[0] === label) last[1].push(n);
+    else groupedNotifs.push([label, [n]]);
+  }
 
   const handleOpen = () => {
     setOpen((v) => !v);
@@ -2157,7 +2202,46 @@ function NotificationBell({ username }: { username: string }) {
               </div>
             ))}
           </div>
+          <button type="button" className="notif-see-all" onClick={openDrawer}>Lihat semua notifikasi</button>
         </div>
+      )}
+
+      {drawerOpen && createPortal(
+        <div className="notif-drawer-overlay" onClick={() => setDrawerOpen(false)}>
+          <aside className="notif-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="notif-drawer-head">
+              <strong>Semua Notifikasi</strong>
+              <button type="button" className="notif-drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Tutup">×</button>
+            </div>
+            <div className="notif-drawer-filters">
+              {([['semua', 'Semua'], ['topup', 'Topup'], ['review', 'Review'], ['lainnya', 'Lainnya']] as const).map(([key, label]) => (
+                <button key={key} type="button" className={`notif-filter-chip${drawerFilter === key ? ' active' : ''}`} onClick={() => setDrawerFilter(key)}>{label}</button>
+              ))}
+            </div>
+            <div className="notif-drawer-list">
+              {filteredNotifs.length === 0 && <p className="notif-empty">Tidak ada notifikasi.</p>}
+              {groupedNotifs.map(([label, items]) => (
+                <div key={label} className="notif-drawer-group">
+                  <p className="notif-drawer-daylabel">{label}</p>
+                  {items.map((n) => (
+                    <div key={n.id} className={`notif-drawer-item ${n.is_read ? 'read' : 'unread'}`}>
+                      <a href={n.link ?? '#'} className="notif-drawer-item-link" onClick={() => setDrawerOpen(false)}>
+                        <span className="notif-item-icon">{notifIcon[n.type] ?? '🔔'}</span>
+                        <div className="notif-item-body">
+                          <strong>{n.title}</strong>
+                          <p>{n.body}</p>
+                          <time>{timeAgo(n.created_at)}</time>
+                        </div>
+                      </a>
+                      <button type="button" className="notif-delete-btn" aria-label="Hapus notifikasi" onClick={() => void deleteNotif(n.id)}>×</button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>,
+        document.body,
       )}
     </div>
   );
