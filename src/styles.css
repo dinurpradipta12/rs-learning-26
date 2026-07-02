@@ -7710,13 +7710,16 @@ body.dark .forum-card-last-reply { background: rgba(255,255,255,0.04); }
 /* ── Reply Bar (thin pill style, pinned at bottom of detail flex) ─────── */
 
 .forum-reply-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 0 4px;
+  padding: 12px 0 8px;
   border-top: 1px solid var(--line);
-  background: transparent;
+  background: var(--bg);
 }
 
 .forum-reply-bar-avatar {
