@@ -1833,7 +1833,9 @@ body.dark .notif-drawer { background: #12162b; }
 .notif-item-icon {
   font-size: 1.2rem;
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 2px;
+  color: var(--accent);
+  display: inline-flex;
 }
 
 .notif-item-body {

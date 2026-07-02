@@ -2156,12 +2156,22 @@ function NotificationBell({ username }: { username: string }) {
     if (!open) void markAllRead();
   };
 
-  const notifIcon: Record<NotifType, string> = {
-    booking_approved: '✅',
-    booking_rejected: '❌',
-    lesson_new: '🎓',
-    credits_added: '💰',
-    thread_reply: '💬',
+  const notifIcon = (type: NotifType) => {
+    const p = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+    switch (type) {
+      case 'booking_approved':
+        return <svg {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+      case 'booking_rejected':
+        return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+      case 'lesson_new':
+        return <svg {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>;
+      case 'credits_added':
+        return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2.5 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.5 2.5 0 0 1-2.5-1.5"/><line x1="12" y1="6" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="18"/></svg>;
+      case 'thread_reply':
+        return <svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
+      default:
+        return <svg {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
+    }
   };
 
   return (
@@ -2193,7 +2203,7 @@ function NotificationBell({ username }: { username: string }) {
                   className="notif-item"
                   onClick={() => setOpen(false)}
                 >
-                  <span className="notif-item-icon">{notifIcon[n.type] ?? '🔔'}</span>
+                  <span className="notif-item-icon">{notifIcon(n.type)}</span>
                   <div className="notif-item-body">
                     <strong>{n.title}</strong>
                     <p>{n.body}</p>
@@ -2238,7 +2248,7 @@ function NotificationBell({ username }: { username: string }) {
                   {items.map((n) => (
                     <div key={n.id} className={`notif-drawer-item ${n.is_read ? 'read' : 'unread'}`}>
                       <a href={n.link ?? '#'} className="notif-drawer-item-link" onClick={() => setDrawerOpen(false)}>
-                        <span className="notif-item-icon">{notifIcon[n.type] ?? '🔔'}</span>
+                        <span className="notif-item-icon">{notifIcon(n.type)}</span>
                         <div className="notif-item-body">
                           <strong>{n.title}</strong>
                           <p>{n.body}</p>
