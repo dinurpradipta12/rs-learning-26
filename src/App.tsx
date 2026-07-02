@@ -5996,6 +5996,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const notesSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reviewsByLesson, setReviewsByLesson] = useState<Record<string, Review[]>>({});
   const [isReviewsLoading, setIsReviewsLoading] = useState(true);
+  const [isAllReviewsOpen, setIsAllReviewsOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [popoverPlacement, setPopoverPlacement] = useState<'down' | 'up'>('down');
   const [reviewName, setReviewName] = useState(sessionDisplayName || sessionUsername);
@@ -6144,6 +6145,33 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       : Math.round((completedLessons.size / materialLessons.length) * 100);
   const quizUnlocked = allLessonsCompleted && moduleComplete === true;
   const selectedLessonReviews = selectedLesson ? reviewsByLesson[selectedLesson.id] ?? [] : [];
+
+  const renderReviewItem = (review: Review, index: number) => (
+    <div className="lms-review-item" key={`${review.name}-${index}`}>
+      <div className="lms-review-header">
+        {review.avatarUrl
+          ? <img src={review.avatarUrl} alt={review.name} className="lms-review-avatar lms-review-avatar-img" />
+          : <div className="lms-review-avatar">{review.name.charAt(0).toUpperCase()}</div>
+        }
+        <div>
+          <strong>{review.name}</strong>
+          <span className="lms-review-stars">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+        </div>
+      </div>
+      <p>{review.feedback}</p>
+      {review.id && (
+        <button
+          type="button"
+          className={`lms-review-like${reviewLikes[review.id]?.liked ? ' liked' : ''}`}
+          onClick={() => void toggleReviewLike(review.id!)}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill={reviewLikes[review.id]?.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+          {(reviewLikes[review.id]?.count ?? 0) > 0 && <span>{reviewLikes[review.id]?.count}</span>}
+          <span className="lms-review-like-label">Suka</span>
+        </button>
+      )}
+    </div>
+  );
 
   // Load likes untuk review di lesson yang dibuka
   useEffect(() => {
@@ -7269,7 +7297,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                         className={`lms-tab ${activeTab === key ? 'active' : ''}`}
                         onClick={() => setActiveTab(key)}
                       >
-                        {tab === 'materi' ? 'File & Asset' : tab === 'catatan' ? <>Catatan {hasNote ? <span className="lms-note-dot" /> : null}</> : 'Reviews'}
+                        {tab === 'materi' ? 'File & Asset' : tab === 'catatan' ? <>Catatan {hasNote ? <span className="lms-note-dot" /> : null}</> : <>Reviews {selectedLessonReviews.length > 0 && <span className="lms-review-count">{selectedLessonReviews.length}</span>}</>}
                       </button>
                     );
                   })}
@@ -7368,34 +7396,16 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                   ) : selectedLessonReviews.length === 0 ? (
                     <p className="lms-no-files">Belum ada review untuk lesson ini.</p>
                   ) : (
-                    <div className="lms-review-list">
-                      {selectedLessonReviews.map((review, index) => (
-                        <div className="lms-review-item" key={`${review.name}-${index}`}>
-                          <div className="lms-review-header">
-                            {review.avatarUrl
-                              ? <img src={review.avatarUrl} alt={review.name} className="lms-review-avatar lms-review-avatar-img" />
-                              : <div className="lms-review-avatar">{review.name.charAt(0).toUpperCase()}</div>
-                            }
-                            <div>
-                              <strong>{review.name}</strong>
-                              <span className="lms-review-stars">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
-                            </div>
-                          </div>
-                          <p>{review.feedback}</p>
-                          {review.id && (
-                            <button
-                              type="button"
-                              className={`lms-review-like${reviewLikes[review.id]?.liked ? ' liked' : ''}`}
-                              onClick={() => void toggleReviewLike(review.id!)}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill={reviewLikes[review.id]?.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-                              {(reviewLikes[review.id]?.count ?? 0) > 0 && <span>{reviewLikes[review.id]?.count}</span>}
-                              <span className="lms-review-like-label">Suka</span>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <>
+                      <div className="lms-review-list">
+                        {selectedLessonReviews.slice(0, 3).map((review, index) => renderReviewItem(review, index))}
+                      </div>
+                      {selectedLessonReviews.length > 3 && (
+                        <button type="button" className="lms-review-see-all" onClick={() => setIsAllReviewsOpen(true)}>
+                          Lihat review lainnya ({selectedLessonReviews.length - 3})
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -7413,6 +7423,23 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
             </div>
           )}
         </article>
+
+          {isAllReviewsOpen && createPortal(
+            <div className="admin-modal-overlay" onClick={() => setIsAllReviewsOpen(false)}>
+              <div className="admin-modal lms-all-reviews-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="review-modal-head">
+                  <div><p className="eyebrow">review kelas</p><h3>Semua Review ({selectedLessonReviews.length})</h3></div>
+                  <button type="button" className="modal-close" onClick={() => setIsAllReviewsOpen(false)}>×</button>
+                </div>
+                <div className="lms-all-reviews-body">
+                  <div className="lms-review-list">
+                    {selectedLessonReviews.map((review, index) => renderReviewItem(review, index))}
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
 
           <LmsSidebar
             learningProgress={learningProgress}
