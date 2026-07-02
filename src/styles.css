@@ -2585,7 +2585,7 @@ body.dark .course-card-badge-capsule .ccbc-action { background: #fff !important;
 .lms-review-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: rgba(var(--accent-rgb), 0.15); color: var(--accent); font-size: 0.72rem; font-weight: 800; margin-left: 2px; }
 .lms-review-see-all { margin-top: 14px; width: 100%; padding: 11px 16px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--accent); font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: background 0.15s ease; }
 .lms-review-see-all:hover { background: rgba(var(--accent-rgb), 0.08); }
-.lms-all-reviews-modal { max-width: 920px; width: 100%; display: flex; flex-direction: column; max-height: 82vh; }
+.admin-modal.lms-all-reviews-modal { max-width: 920px; width: 100%; display: flex; flex-direction: column; max-height: 82vh; }
 .lms-review-jobtitle { display: block; font-size: 0.75rem; font-weight: 600; color: var(--accent); margin: 1px 0; }
 .lms-review-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 14px; }
 .lms-review-filter-chip { font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--card); border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; transition: all 0.15s ease; }

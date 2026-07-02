@@ -6318,8 +6318,10 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           if (p.avatar_path) {
             avatarMap[p.username] = profileAvatarPublicUrl(p.avatar_path);
           }
-          if (p.job_title && p.job_title.trim()) {
-            jobTitleMap[p.username] = p.job_title.trim();
+          const jt = (p.job_title ?? '').trim();
+          // Jangan tampilkan role sistem generik — hanya profesi asli.
+          if (jt && !['student', 'developer', 'admin', 'user'].includes(jt.toLowerCase())) {
+            jobTitleMap[p.username] = jt;
           }
         }
       }
