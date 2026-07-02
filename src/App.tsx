@@ -10727,7 +10727,7 @@ function ForumComposer({
           className="forum-composer-textarea"
           placeholder="ada pertanyaan atau insight yang mau dibagikan?"
           value={body}
-          rows={isFocused ? 4 : 2}
+          rows={isFocused ? 3 : 1}
           onChange={(e) => setBody(e.target.value)}
           onFocus={() => setIsFocused(true)}
         />
