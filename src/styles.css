@@ -8052,7 +8052,7 @@ body.dark .forum-reply-bar-inner {
 /* Stats */
 .admin-stats-row {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 14px;
 }
 .admin-stat-card {
@@ -8067,6 +8067,8 @@ body.dark .forum-reply-bar-inner {
 .admin-stat-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .admin-stat-value { font-size: 1.6rem; font-weight: 700; color: var(--fg); }
 .admin-stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: -2px; }
+.admin-stat-card--topup { border-color: #0ea5e944; background: rgba(14,165,233,0.05); }
+.admin-stat-card--topup .admin-stat-value { color: #0284c7; }
 .admin-stat-card--referral { border-color: #f59e0b44; background: rgba(245,158,11,0.05); }
 .admin-stat-card--referral .admin-stat-value { color: #d97706; }
 .admin-stat-card--revenue { border-color: #16a34a44; background: rgba(22,163,74,0.05); }

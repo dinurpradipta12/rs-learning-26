@@ -13313,6 +13313,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   // Semua transaksi (hanya kolom untuk hitung statistik) — TIDAK dibatasi 50 baris,
   // supaya Est. Pendapatan / Coin Tersalurkan tidak menyusut saat transaksi baru masuk.
   const [statTxns, setStatTxns] = useState<Array<{ amount: number; type: string; description: string }>>([]);
+  // Total Rupiah nyata dari topup yang di-approve (pakai amount_rp yang tersimpan
+  // saat transaksi — mengikuti harga/promo saat itu, tidak berubah retroaktif).
+  const [realTopupRevenue, setRealTopupRevenue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(0);
@@ -13451,6 +13454,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     // Statistik pendapatan/coin dihitung dari SELURUH transaksi (bukan 50 terbaru).
     const { data: statRows } = await supabase.from('credit_transactions').select('amount, type, description');
     setStatTxns((statRows ?? []) as Array<{ amount: number; type: string; description: string }>);
+
+    // Pendapatan asli = jumlah amount_rp topup yang sudah di-approve (harga saat itu).
+    const { data: approvedTopups } = await supabase.from('topup_requests').select('amount_rp').eq('status', 'approved');
+    setRealTopupRevenue((approvedTopups ?? []).reduce((s, r) => s + (Number((r as { amount_rp?: number }).amount_rp) || 0), 0));
 
     setLoading(false);
     const { data: courseRows } = await supabase.from('courses').select('key, title').order('sort_order', { ascending: true });
@@ -13700,10 +13707,14 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const isNonRevenueTx = (t: { description: string }) => isReferralTx(t) || isBonusTx(t);
   const paidTopups = statTxns.filter((t) => t.type === 'topup' && t.amount > 0 && !isNonRevenueTx(t));
   const referralTxs = statTxns.filter((t) => t.type === 'topup' && t.amount > 0 && isReferralTx(t));
-  const totalRevenue = paidTopups.reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalReferralCoins = referralTxs.reduce((s, t) => s + t.amount, 0);
-  const totalRevenueAll = statTxns.filter((t) => t.type === 'topup' && t.amount > 0 && !isBonusTx(t)).reduce((sum, t) => sum + t.amount * CREDIT_RATE, 0);
   const totalCreditsIssued = statTxns.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  // Coin via Topup = seluruh coin tersalurkan dikurangi coin dari referral/bonus.
+  const totalTopupCoins = totalCreditsIssued - totalReferralCoins;
+  // Pendapatan asli = Rupiah nyata topup yang di-approve (mengikuti harga/promo saat transaksi).
+  const totalRevenue = realTopupRevenue;
+  // Pendapatan total = pendapatan asli + estimasi nilai coin referral (rate default).
+  const totalRevenueAll = totalRevenue + totalReferralCoins * CREDIT_RATE;
   const activeUsers = users.filter((u) => u.isActive).length;
   const filteredUsers = users.filter((u) => {
     const matchSearch = !userSearch.trim() || [u.username, u.displayName, u.email].some((v) => v?.toLowerCase().includes(userSearch.toLowerCase()));
@@ -13787,15 +13798,20 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
           <span className="admin-stat-label">Coin Tersalurkan</span>
           <span className="admin-stat-value">{totalCreditsIssued.toLocaleString('id-ID')}</span>
         </div>
+        <div className="admin-stat-card admin-stat-card--topup">
+          <span className="admin-stat-label">Coin via Topup</span>
+          <span className="admin-stat-value">{totalTopupCoins.toLocaleString('id-ID')}</span>
+          <span className="admin-stat-sub">coin tersalurkan − referral</span>
+        </div>
         <div className="admin-stat-card admin-stat-card--referral">
           <span className="admin-stat-label">Coin via Referral</span>
           <span className="admin-stat-value">{totalReferralCoins.toLocaleString('id-ID')}</span>
           <span className="admin-stat-sub">tidak dihitung pendapatan</span>
         </div>
         <div className="admin-stat-card admin-stat-card--revenue">
-          <span className="admin-stat-label">Est. Pendapatan Asli</span>
+          <span className="admin-stat-label">Pendapatan Asli</span>
           <span className="admin-stat-value">{formatRupiah(totalRevenue)}</span>
-          <span className="admin-stat-sub">topup berbayar saja</span>
+          <span className="admin-stat-sub">harga topup nyata (termasuk promo)</span>
         </div>
         <div className="admin-stat-card admin-stat-card--total-rev">
           <span className="admin-stat-label">Est. Pendapatan Total</span>
@@ -14355,7 +14371,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 </div>
               </div>
               <div className="admin-revenue-total">
-                <span>Est. Pendapatan Asli <span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--muted)' }}>(coin referral tidak dihitung)</span></span>
+                <span>Pendapatan Asli <span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--muted)' }}>(harga topup nyata, termasuk promo)</span></span>
                 <strong>{formatRupiah(totalRevenue)}</strong>
               </div>
               <div className="admin-table-wrap" style={{ marginTop: 24 }}>
