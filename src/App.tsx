@@ -7021,29 +7021,42 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                 {isCodeLocked ? (
                   <div className="video-stage">
                     <div className="event-code-gate">
-                      <div className="event-code-gate-icon">🎫</div>
+                      <div className="event-code-gate-icon">🔒</div>
                       <h3>Rekaman Khusus Peserta Event</h3>
-                      <p>Masukkan <strong>kode akses</strong> yang kamu dapat saat ikut event ini untuk membuka video (tanpa potong koin).</p>
-                      <div className="event-code-gate-row">
-                        <input
-                          className="event-code-input"
-                          placeholder="RSM-XXXXXX"
-                          value={codeInput}
-                          onChange={(e) => { setCodeInput(e.target.value); setCodeError(''); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter') void submitAccessCode(); }}
-                        />
-                        <button type="button" className="button primary" disabled={!codeInput.trim() || codeChecking} onClick={() => void submitAccessCode()}>
-                          {codeChecking ? '…' : 'Buka'}
-                        </button>
-                      </div>
-                      {codeError && (
-                        <p className="event-code-error">
-                          {codeError}{' '}
-                          <button type="button" className="event-code-pay-coin-link" onClick={() => { setCodeError(''); payCodeLessonWithCoin(); }}>
-                            Bayar dengan koin
+                      <p>Video ini terkunci. Pilih salah satu cara untuk membukanya:</p>
+                      <div className="event-code-gate-methods">
+                        {/* Metode 1: kode akses (untuk peserta event) */}
+                        <div className="event-code-method">
+                          <span className="event-code-method-badge">🎫 Ikut event?</span>
+                          <p className="event-code-method-desc">Masukkan kode akses rekaman yang kamu dapat saat join event — <strong>tanpa potong koin</strong>.</p>
+                          <div className="event-code-gate-row">
+                            <input
+                              className="event-code-input"
+                              placeholder="RSM-XXXXXX"
+                              value={codeInput}
+                              onChange={(e) => { setCodeInput(e.target.value); setCodeError(''); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') void submitAccessCode(); }}
+                            />
+                            <button type="button" className="button primary" disabled={!codeInput.trim() || codeChecking} onClick={() => void submitAccessCode()}>
+                              {codeChecking ? '…' : 'Buka'}
+                            </button>
+                          </div>
+                          {codeError && <p className="event-code-error">{codeError}</p>}
+                        </div>
+
+                        <div className="event-code-gate-divider"><span>atau</span></div>
+
+                        {/* Metode 2: bayar dengan koin (untuk non-peserta) */}
+                        <div className="event-code-method">
+                          <span className="event-code-method-badge">🪙 Tidak ikut event?</span>
+                          <p className="event-code-method-desc">Buka rekaman dengan Ruang Coin.</p>
+                          <button type="button" className="button secondary event-code-pay-btn" onClick={() => payCodeLessonWithCoin()}>
+                            {(userPerks.credit_exempt || userPerks.free_video || featureCosts.video_learning <= 0)
+                              ? 'Buka Gratis'
+                              : <>Bayar <CoinIcon size={13} /> {featureCosts.video_learning} Ruang Coin</>}
                           </button>
-                        </p>
-                      )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : (
