@@ -4604,6 +4604,24 @@ function DashboardSection({ session }: { session: AppSession }) {
   const [completedCount, setCompletedCount] = useState(0);
   const [nextLesson, setNextLesson] = useState<{ id: string; title: string } | null>(null);
 
+  // Materi yang ditandai selesai tersimpan juga di localStorage oleh LMS
+  // (key: lesson_progress_<username>_<courseKey>). Dipakai agar journey step
+  // "Mulai belajar" tetap ✓ walau sinkronisasi DB tertunda/gagal.
+  const localCompletedCount = useMemo(() => {
+    try {
+      const prefix = `lesson_progress_${session.username}_`;
+      let total = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(prefix)) continue;
+        const arr = JSON.parse(localStorage.getItem(k) ?? '[]');
+        if (Array.isArray(arr)) total += arr.length;
+      }
+      return total;
+    } catch { return 0; }
+  }, [session.username]);
+  const hasStartedLearning = completedCount > 0 || localCompletedCount > 0;
+
   // ── streak ──
   const [streak, setStreak] = useState(0);
 
@@ -4630,7 +4648,7 @@ function DashboardSection({ session }: { session: AppSession }) {
   // Bonus +5 koin sekali saat semua 4 langkah journey selesai.
   const JOURNEY_REWARD = 5;
   useEffect(() => {
-    const allDone = !!profileAvatarUrl && journeyTelegram && journeyTopup && completedCount > 0;
+    const allDone = !!profileAvatarUrl && journeyTelegram && journeyTopup && hasStartedLearning;
     if (!allDone || journeyRewardChecked) return;
     setJourneyRewardChecked(true);
     void (async () => {
@@ -4647,7 +4665,7 @@ function DashboardSection({ session }: { session: AppSession }) {
       setJourneyRewardToast(true);
       setTimeout(() => setJourneyRewardToast(false), 6000);
     })();
-  }, [profileAvatarUrl, journeyTelegram, journeyTopup, completedCount, journeyRewardChecked, session.username]);
+  }, [profileAvatarUrl, journeyTelegram, journeyTopup, hasStartedLearning, journeyRewardChecked, session.username]);
 
   // ── mini calendar month ──
   const [miniCalDate, setMiniCalDate] = useState(() => new Date());
@@ -4985,7 +5003,7 @@ function DashboardSection({ session }: { session: AppSession }) {
           { done: !!profileAvatarUrl, icon: '👤', title: 'Lengkapi profil & foto', desc: 'Upload foto & isi data diri kamu', href: '#profil' },
           { done: journeyTelegram, icon: '📲', title: 'Hubungkan Telegram', desc: 'Terima notif kelas, event & topup', href: '#profil' },
           { done: journeyTopup, icon: '🪙', title: 'Topup Ruang Coin pertama', desc: 'Buka fitur premium & dapat bonus koin', href: '#profil' },
-          { done: completedCount > 0, icon: '🎓', title: 'Mulai belajar', desc: 'Selesaikan materi pertamamu', href: '#materi' },
+          { done: hasStartedLearning, icon: '🎓', title: 'Mulai belajar', desc: 'Selesaikan materi pertamamu', href: '#materi' },
         ];
         const doneCount = steps.filter((s) => s.done).length;
         if (journeyDismissed || doneCount === steps.length) return null;
@@ -16570,7 +16588,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     // Catat peserta + generate kode akses unik (untuk buka rekaman event ini).
     const existingCode = (await supabase.from('event_participants').select('access_code').eq('event_id', joinTarget.id).eq('username', session.username).maybeSingle()).data?.access_code;
     const accessCode = existingCode || `RSM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    void supabase.from('event_participants').upsert({
+    const { error: participantError } = await supabase.from('event_participants').upsert({
       event_id: joinTarget.id,
       username: session.username,
       display_name: session.displayName,
@@ -16578,6 +16596,9 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       event_date: joinTarget.date,
       access_code: accessCode,
     }, { onConflict: 'event_id,username' });
+    if (participantError) {
+      console.warn('supabase save failed for event_participants', participantError);
+    }
     setJoinedCode({ title: joinTarget.title, code: accessCode });
     void sendTelegram(`🎫 <b>User Baru Join Event</b>\n\n👤 @${session.username}\n🎯 Event: ${joinTarget.title}\n🗓 Tanggal: ${joinTarget.date}${joinTarget.time ? ` pukul ${joinTarget.time.slice(0, 5)}` : ''}\n💰 Biaya: ${joinTarget.coinCost === 0 ? 'Gratis' : `${joinTarget.coinCost} Ruang Coin`}`);
     // Schedule Telegram reminders for user (H-1, H-3 jam, H-30 menit)
