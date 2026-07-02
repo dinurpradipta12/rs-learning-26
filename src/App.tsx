@@ -10378,6 +10378,7 @@ function ForumThreadDetail({
         )}
       </div>
 
+      <div className="forum-detail-scroll">
       <article className="forum-op forum-op--sticky">
         <div className="forum-op-header">
           {(() => {
@@ -10494,6 +10495,8 @@ function ForumThreadDetail({
             onMarkAnswered={handleMarkAnswered}
           />
         ))}
+      </div>
+
       </div>
 
       {/* ── Pinned reply bar ── */}

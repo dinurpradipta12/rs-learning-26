@@ -7153,6 +7153,19 @@ body.dark .forum-filter-btn--qna { color: #fbbf24; }
 .forum-detail {
   display: flex;
   flex-direction: column;
+  height: calc(100vh - 160px);
+  min-height: 400px;
+  overflow: hidden;
+}
+
+.forum-detail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
 }
 
 .forum-detail-top {
@@ -7710,9 +7723,6 @@ body.dark .forum-card-last-reply { background: rgba(255,255,255,0.04); }
 /* ── Reply Bar (thin pill style, pinned at bottom of detail flex) ─────── */
 
 .forum-reply-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
