@@ -6178,7 +6178,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
     const [{ data: lessonRows, error: lessonError }, { data: assetRows, error: assetError }] = await Promise.all([
       supabase
         .from('lessons')
-        .select('lesson_key, course_key, sort_order, title, duration, meta, description, video_url')
+        .select('lesson_key, course_key, sort_order, title, duration, meta, description, video_url, unlock_event_id')
         .eq('course_key', courseKey)
         .order('sort_order', { ascending: true }),
       supabase
