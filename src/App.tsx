@@ -6066,6 +6066,9 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
     const next = new Set(codeUnlockedLessons); next.add(lessonId);
     setCodeUnlockedLessons(next);
     try { localStorage.setItem(`event_code_unlocked_${sessionUsername}`, JSON.stringify([...next])); } catch { /* ignore */ }
+    // Buka video sepenuhnya: tandai "paid" lokal supaya tidak kena paywall koin lagi.
+    markVideoPaid(lessonId);
+    setYoutubeUnlocked(true);
   };
   const submitAccessCode = async () => {
     if (!selectedLesson?.unlockEventId || !sessionUsername) return;
@@ -6367,10 +6370,10 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
 
   useEffect(() => {
     setIsEmbedLoaded(false);
-    // if this lesson was already paid (persisted in localStorage), unlock immediately
-    const alreadyPaid = selectedLesson ? chargedVideos.current.has(selectedLesson.id) : false;
+    // if this lesson was already paid, or unlocked via event access code, unlock immediately
+    const alreadyPaid = selectedLesson ? (chargedVideos.current.has(selectedLesson.id) || codeUnlockedLessons.has(selectedLesson.id)) : false;
     setYoutubeUnlocked(alreadyPaid);
-  }, [selectedLesson?.id, selectedLesson?.videoUrl, selectedLessonMedia?.kind]);
+  }, [selectedLesson?.id, selectedLesson?.videoUrl, selectedLessonMedia?.kind, codeUnlockedLessons]);
 
   const handleReviewSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
