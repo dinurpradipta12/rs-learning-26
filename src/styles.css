@@ -14426,7 +14426,7 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 
 /* ── Lesson form hint & event code gate ── */
 .lesson-form-hint { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 4px; font-weight: 400; }
-.event-code-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 40px 24px; height: 100%; }
+.event-code-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 40px 24px; height: 100%; width: 100%; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
 .event-code-gate-icon { font-size: 2.6rem; }
 .event-code-gate h3 { font-size: 1.15rem; font-weight: 800; color: #fff; margin: 0; }
 .event-code-gate p { font-size: 0.88rem; color: rgba(255,255,255,0.8); margin: 0; max-width: 380px; line-height: 1.5; }
