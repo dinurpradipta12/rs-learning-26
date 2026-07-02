@@ -16449,9 +16449,10 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [joinedCode, setJoinedCode] = useState<{ title: string; code: string } | null>(null);
   const { confirm: confirmDialog, modal: confirmModal } = useConfirm();
   const [adminTab, setAdminTab] = useState<'events' | 'peserta'>('events');
-  const [participants, setParticipants] = useState<Array<{ event_id: string; username: string; display_name: string | null; event_title: string | null; event_date: string | null; joined_at: string }>>([]);
+  const [participants, setParticipants] = useState<Array<{ event_id: string; username: string; display_name: string | null; event_title: string | null; event_date: string | null; access_code: string | null; joined_at: string }>>([]);
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [participantsError, setParticipantsError] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const loadParticipants = async () => {
     setParticipantsLoading(true);
@@ -16673,36 +16674,58 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             <div className="events-empty" style={{ color: '#dc2626' }}>⚠️ {participantsError}</div>
           ) : (() => {
             // Kelompokkan peserta per event
-            const groups = new Map<string, { title: string; date: string; rows: typeof participants }>();
+            const coverMap: Record<string, { cover?: string; type: HubEvent['type'] }> = {};
+            for (const ev of events) coverMap[ev.id] = { cover: ev.coverUrl, type: ev.type };
+            const groups = new Map<string, { eventId: string; title: string; date: string; rows: typeof participants }>();
             for (const p of participants) {
               const key = p.event_id;
-              if (!groups.has(key)) groups.set(key, { title: p.event_title || 'Event', date: p.event_date || '', rows: [] });
+              if (!groups.has(key)) groups.set(key, { eventId: key, title: p.event_title || 'Event', date: p.event_date || '', rows: [] });
               groups.get(key)!.rows.push(p);
             }
             const groupList = [...groups.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
             if (groupList.length === 0) return <div className="events-empty">Belum ada peserta yang bergabung ke event manapun.</div>;
-            return groupList.map((g, i) => (
-              <div className="event-participants-group" key={i}>
-                <div className="event-participants-head">
-                  <div>
-                    <strong className="event-participants-title">{g.title}</strong>
-                    {g.date && <span className="event-participants-date">📅 {new Date(g.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>}
-                  </div>
-                  <span className="event-participants-count">{g.rows.length} peserta</span>
-                </div>
-                <div className="event-participants-list">
-                  {g.rows.map((p, j) => (
-                    <div className="event-participant-row" key={j}>
-                      <div className="event-participant-info">
-                        <strong>{p.display_name || p.username}</strong>
-                        <span className="event-participant-username">@{p.username}</span>
-                      </div>
-                      <span className="event-participant-time">{new Date(p.joined_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            return groupList.map((g) => {
+              const isOpen = expandedGroups.has(g.eventId);
+              const meta = coverMap[g.eventId];
+              const toggle = () => setExpandedGroups((prev) => {
+                const next = new Set(prev);
+                if (next.has(g.eventId)) next.delete(g.eventId); else next.add(g.eventId);
+                return next;
+              });
+              return (
+                <div className={`event-participants-group${isOpen ? ' open' : ''}`} key={g.eventId}>
+                  <button type="button" className="event-participants-head" onClick={toggle} aria-expanded={isOpen}>
+                    <div className="event-participants-cover">
+                      {meta?.cover
+                        ? <img src={meta.cover} alt={g.title} />
+                        : <span className="event-participants-cover-ph">{typeIcon[meta?.type ?? 'other']}</span>}
                     </div>
-                  ))}
+                    <div className="event-participants-headinfo">
+                      <strong className="event-participants-title">{g.title}</strong>
+                      {g.date && <span className="event-participants-date">📅 {new Date(g.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>}
+                    </div>
+                    <span className="event-participants-count">{g.rows.length} peserta</span>
+                    <span className={`event-participants-chevron${isOpen ? ' open' : ''}`}>⌄</span>
+                  </button>
+                  {isOpen && (
+                    <div className="event-participants-list">
+                      {g.rows.map((p, j) => (
+                        <div className="event-participant-row" key={j}>
+                          <div className="event-participant-info">
+                            <strong>{p.display_name || p.username}</strong>
+                            <span className="event-participant-username">@{p.username}</span>
+                          </div>
+                          <div className="event-participant-meta">
+                            {p.access_code && <span className="event-participant-code" title="Kode akses rekaman">🎫 {p.access_code}</span>}
+                            <span className="event-participant-time">{new Date(p.joined_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ));
+              );
+            });
           })()}
         </div>
       ) : (

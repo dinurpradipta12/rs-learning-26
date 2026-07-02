@@ -14141,14 +14141,42 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 .event-participants-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 20px;
   background: rgba(var(--accent-rgb), 0.05);
-  border-bottom: 1.5px solid var(--line);
+  border: none;
+  border-bottom: 1.5px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
 }
+.event-participants-head:hover { background: rgba(var(--accent-rgb), 0.09); }
+.event-participants-group.open .event-participants-head { border-bottom-color: var(--line); }
+.event-participants-cover {
+  flex-shrink: 0;
+  width: 56px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(var(--accent-rgb), 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.event-participants-cover img { width: 100%; height: 100%; object-fit: cover; }
+.event-participants-cover-ph { font-size: 1.3rem; }
+.event-participants-headinfo { flex: 1; min-width: 0; }
 .event-participants-title { display: block; font-size: 1rem; color: var(--text); }
 .event-participants-date { font-size: 0.8rem; color: var(--muted); }
+.event-participants-chevron {
+  flex-shrink: 0;
+  font-size: 1.2rem;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  line-height: 1;
+}
+.event-participants-chevron.open { transform: rotate(180deg); }
 .event-participants-count {
   flex-shrink: 0;
   font-size: 0.78rem;
@@ -14171,6 +14199,17 @@ body.dark .topup-proof-thumb { background: rgba(255,255,255,0.04); }
 .event-participant-info { display: flex; flex-direction: column; gap: 1px; }
 .event-participant-info strong { font-size: 0.9rem; color: var(--text); }
 .event-participant-username { font-size: 0.76rem; color: var(--muted); }
+.event-participant-meta { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.event-participant-code {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
 .event-participant-time { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .events-empty { padding: 40px 20px; text-align: center; color: var(--muted); }
 
