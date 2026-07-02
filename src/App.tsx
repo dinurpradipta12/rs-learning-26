@@ -3523,7 +3523,7 @@ type TodayStats = { newUsers: number; transactions: number; bookings: number; to
 
 // ── Asset & Spending Monitor ────────────────────────────────────
 type AssetStat = { asset_key: string; title: string; type: string; unlock_count: number };
-type SpendUser = { username: string; display_name: string; total_coin_spent: number; total_rp_spent: number; topup_count: number };
+type SpendUser = { username: string; display_name: string; total_coin_spent: number; total_rp_spent: number; topup_count: number; remaining_coin: number };
 type VideoViewUser = { username: string; display_name: string; total_plays: number; last_viewed: string };
 
 function AssetMonitor() {
@@ -3548,6 +3548,9 @@ function AssetMonitor() {
         supabase.from('user_profiles').select('username, name'),
         supabase.from('video_views').select('username, video_title, viewed_at').order('viewed_at', { ascending: false }),
       ]);
+      const { data: creditRows } = await supabase.from('user_credits').select('username, balance');
+      const balanceMap: Record<string, number> = {};
+      for (const c of (creditRows ?? []) as { username: string; balance: number }[]) balanceMap[c.username] = c.balance ?? 0;
 
       // Asset stats
       const unlockCountMap: Record<string, number> = {};
@@ -3602,14 +3605,15 @@ function AssetMonitor() {
       })).sort((a, b) => b.total_plays - a.total_plays);
       setVideoViewUsers(videoUserList);
 
-      const allUsernames = new Set([...Object.keys(spendMap), ...Object.keys(topupRpMap)]);
+      const allUsernames = new Set([...Object.keys(spendMap), ...Object.keys(topupRpMap), ...Object.keys(balanceMap)]);
       const spenderList: SpendUser[] = [...allUsernames].map((u) => ({
         username: u,
         display_name: nameMap[u] ?? u,
         total_coin_spent: spendMap[u] ?? 0,
         total_rp_spent: topupRpMap[u] ?? 0,
         topup_count: topupCountMap[u] ?? 0,
-      })).sort((a, b) => b.total_rp_spent - a.total_rp_spent);
+        remaining_coin: balanceMap[u] ?? 0,
+      })).sort((a, b) => b.total_rp_spent - a.total_rp_spent || b.remaining_coin - a.remaining_coin);
       setSpenders(spenderList);
       setLoading(false);
     })();
@@ -3688,12 +3692,13 @@ function AssetMonitor() {
                 <th>#</th>
                 <th>User</th>
                 <th>Coin Dipakai</th>
+                <th>Sisa Coin</th>
                 <th>Total Topup (Rp)</th>
                 <th>Jml Topup</th>
               </tr>
             </thead>
             <tbody>
-              {spenders.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data</td></tr>}
+              {spenders.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>Belum ada data</td></tr>}
               {spenders.map((u, i) => (
                 <tr key={u.username}>
                   <td style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{i + 1}</td>
@@ -3704,6 +3709,11 @@ function AssetMonitor() {
                   <td>
                     <span className={`amc-count${u.total_coin_spent > 0 ? ' has-data' : ''}`}>
                       {u.total_coin_spent > 0 ? `${u.total_coin_spent.toLocaleString('id-ID')} coin` : '—'}
+                    </span>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 700, color: u.remaining_coin > 0 ? 'var(--accent)' : 'var(--muted)' }}>
+                      {u.remaining_coin.toLocaleString('id-ID')} coin
                     </span>
                   </td>
                   <td style={{ color: '#059669', fontWeight: 600 }}>
@@ -6962,6 +6972,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                                       } else {
                                         if (res.newBalance !== undefined) onCreditChange(res.newBalance);
                                         setYoutubeUnlocked(true);
+                                        void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: selectedLesson.id, video_title: selectedLesson.title });
                                       }
                                     });
                                 },
