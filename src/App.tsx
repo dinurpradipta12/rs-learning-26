@@ -1180,8 +1180,10 @@ type Review = {
   name: string;
   username?: string | null;
   avatarUrl?: string | null;
+  jobTitle?: string | null;
   rating: number;
   feedback: string;
+  createdAt?: string;
 };
 
 type ReviewRow = {
@@ -5997,6 +5999,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [reviewsByLesson, setReviewsByLesson] = useState<Record<string, Review[]>>({});
   const [isReviewsLoading, setIsReviewsLoading] = useState(true);
   const [isAllReviewsOpen, setIsAllReviewsOpen] = useState(false);
+  const [reviewSort, setReviewSort] = useState<'relevant' | 'newest' | 'highest' | 'lowest'>('relevant');
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [popoverPlacement, setPopoverPlacement] = useState<'down' | 'up'>('down');
   const [reviewName, setReviewName] = useState(sessionDisplayName || sessionUsername);
@@ -6155,6 +6158,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
         }
         <div>
           <strong>{review.name}</strong>
+          {review.jobTitle && <span className="lms-review-jobtitle">{review.jobTitle}</span>}
           <span className="lms-review-stars">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
         </div>
       </div>
@@ -6304,14 +6308,18 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       // fetch avatar paths for reviewers that have a username
       const usernames = [...new Set(rows.map((r) => r.reviewer_username).filter(Boolean))] as string[];
       let avatarMap: Record<string, string> = {};
+      const jobTitleMap: Record<string, string> = {};
       if (usernames.length > 0) {
         const { data: profiles } = await supabase
           .from('user_profiles')
-          .select('username, avatar_path')
+          .select('username, avatar_path, job_title')
           .in('username', usernames);
-        for (const p of (profiles ?? []) as { username: string; avatar_path: string | null }[]) {
+        for (const p of (profiles ?? []) as { username: string; avatar_path: string | null; job_title: string | null }[]) {
           if (p.avatar_path) {
             avatarMap[p.username] = profileAvatarPublicUrl(p.avatar_path);
+          }
+          if (p.job_title && p.job_title.trim()) {
+            jobTitleMap[p.username] = p.job_title.trim();
           }
         }
       }
@@ -6323,8 +6331,10 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           name: reviewRow.reviewer_name,
           username: reviewRow.reviewer_username,
           avatarUrl: reviewRow.reviewer_username ? (avatarMap[reviewRow.reviewer_username] ?? null) : null,
+          jobTitle: reviewRow.reviewer_username ? (jobTitleMap[reviewRow.reviewer_username] ?? null) : null,
           rating: reviewRow.rating,
           feedback: reviewRow.feedback,
+          createdAt: reviewRow.created_at,
         });
         accumulator[reviewRow.lesson_key] = lessonReviews;
         return accumulator;
@@ -7457,8 +7467,32 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                       </div>
                     );
                   })()}
+                  <div className="lms-review-filters">
+                    {([
+                      ['relevant', 'Most relevant'],
+                      ['newest', 'Terbaru'],
+                      ['highest', 'Rating tertinggi'],
+                      ['lowest', 'Rating terendah'],
+                    ] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`lms-review-filter-chip${reviewSort === key ? ' active' : ''}`}
+                        onClick={() => setReviewSort(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="lms-review-list">
-                    {selectedLessonReviews.map((review, index) => renderReviewItem(review, index))}
+                    {[...selectedLessonReviews].sort((a, b) => {
+                      if (reviewSort === 'newest') return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+                      if (reviewSort === 'highest') return b.rating - a.rating;
+                      if (reviewSort === 'lowest') return a.rating - b.rating;
+                      // most relevant: rating tinggi + banyak like diprioritaskan
+                      const score = (r: Review) => (r.id ? (reviewLikes[r.id]?.count ?? 0) : 0) * 2 + r.rating;
+                      return score(b) - score(a);
+                    }).map((review, index) => renderReviewItem(review, index))}
                   </div>
                 </div>
               </div>
