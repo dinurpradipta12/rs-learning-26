@@ -16451,10 +16451,16 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [adminTab, setAdminTab] = useState<'events' | 'peserta'>('events');
   const [participants, setParticipants] = useState<Array<{ event_id: string; username: string; display_name: string | null; event_title: string | null; event_date: string | null; joined_at: string }>>([]);
   const [participantsLoading, setParticipantsLoading] = useState(false);
+  const [participantsError, setParticipantsError] = useState('');
 
   const loadParticipants = async () => {
     setParticipantsLoading(true);
-    const { data } = await supabase.from('event_participants').select('*').order('joined_at', { ascending: false });
+    setParticipantsError('');
+    const { data, error } = await supabase.from('event_participants').select('*').order('joined_at', { ascending: false });
+    if (error) {
+      console.warn('supabase load failed for event_participants', error);
+      setParticipantsError(error.message || 'Gagal memuat peserta. Pastikan tabel event_participants & policy-nya sudah dibuat di Supabase.');
+    }
     setParticipants((data ?? []) as typeof participants);
     setParticipantsLoading(false);
   };
@@ -16663,6 +16669,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
         <div className="events-participants">
           {participantsLoading ? (
             <div className="events-loading">Memuat peserta…</div>
+          ) : participantsError ? (
+            <div className="events-empty" style={{ color: '#dc2626' }}>⚠️ {participantsError}</div>
           ) : (() => {
             // Kelompokkan peserta per event
             const groups = new Map<string, { title: string; date: string; rows: typeof participants }>();
