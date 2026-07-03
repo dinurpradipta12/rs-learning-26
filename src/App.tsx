@@ -1426,6 +1426,7 @@ type AssessmentResult = {
 };
 
 function getPage(hash: string) {
+  if (hash.startsWith('#event/')) return 'eventshare';
   if (hash.startsWith('#profil')) return 'profil';
   if (hash === '#materi') return 'materi';
   if (hash === '#calendar') return 'calendar';
@@ -3195,7 +3196,32 @@ function App() {
     }
   }, [session, initialThreadId]);
 
+  // Link share event: kalau sudah login, arahkan ke Events + tandai intent join.
+  // Juga setelah login/daftar dengan intent join dari halaman share publik.
+  useEffect(() => {
+    if (!session) return;
+    if (hash.startsWith('#event/')) {
+      sessionStorage.setItem('pending_join_event', hash.slice('#event/'.length));
+      window.location.hash = '#events';
+      return;
+    }
+    if (sessionStorage.getItem('pending_join_event') && page !== 'events') {
+      window.location.hash = '#events';
+    }
+  }, [session, hash, page]);
+
   if (!session) {
+    // Link share event: tampilkan halaman publik event (tanpa perlu login).
+    if (page === 'eventshare') {
+      return (
+        <div className="shell landing-shell">
+          <div className="ambient ambient-a" />
+          <div className="ambient ambient-b" />
+          <EventSharePage eventId={hash.slice('#event/'.length)} />
+          <UpdateToast />
+        </div>
+      );
+    }
     // Landing untuk pengunjung di root/home; login untuk #login atau deep-link.
     // Kalau membuka link thread (?thread=), arahkan ke login dulu.
     const showLogin = hash === '#login' || page !== 'dashboard' || !!initialThreadId;
@@ -17060,6 +17086,62 @@ async function saveHubEvents(events: HubEvent[]): Promise<void> {
   await supabase.from('learning_hub_content').upsert({ content_key: hubEventsKey, content_group: 'admin', content: events, updated_at: new Date().toISOString() });
 }
 
+// Halaman publik dari link share event (bisa dibuka tanpa login).
+function EventSharePage({ eventId }: { eventId: string }) {
+  const [ev, setEv] = useState<HubEvent | null | undefined>(undefined);
+  const typeLabel: Record<HubEvent['type'], string> = { zoom: 'Zoom', video: 'Video Kelas', other: 'Lainnya' };
+
+  useEffect(() => {
+    void loadHubEvents().then((list) => setEv(list.find((e) => e.id === eventId) ?? null));
+  }, [eventId]);
+
+  const goAuth = (mode: 'sign-in' | 'sign-up') => {
+    sessionStorage.setItem('pending_join_event', eventId);
+    if (mode === 'sign-up') sessionStorage.setItem('landing_register', '1');
+    else sessionStorage.removeItem('landing_register');
+    window.location.hash = '#login';
+  };
+
+  return (
+    <div className="event-share-shell">
+      <div className="event-share-card">
+        <div className="event-share-brand"><img src={logo1} alt="Ruang Sosmed" /></div>
+        {ev === undefined ? (
+          <p className="event-share-loading">Memuat event…</p>
+        ) : !ev || ev.isActive === false ? (
+          <div className="event-share-empty">
+            <div className="event-share-empty-icon"><Ic name="calendar" size={40} /></div>
+            <h2>Event tidak tersedia</h2>
+            <p>Link event ini sudah tidak aktif atau telah dihapus.</p>
+            <a className="button primary" href="#login" onClick={() => { window.location.hash = '#login'; }}>Masuk ke Ruang Sosmed</a>
+          </div>
+        ) : (
+          <>
+            {ev.coverUrl && <img src={ev.coverUrl} alt={ev.title} className="event-share-cover" />}
+            <div className="event-share-body">
+              <span className="event-share-tag">{typeLabel[ev.type]}</span>
+              <h1 className="event-share-title">{ev.title}</h1>
+              <div className="event-share-meta">
+                <span><Ic name="calendar" size={14} /> {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                {ev.time && <span><Ic name="clock" size={14} /> {ev.time}</span>}
+              </div>
+              {ev.description && <p className="event-share-desc">{ev.description}</p>}
+              <div className="event-share-cost">
+                {ev.coinCost === 0
+                  ? <span className="event-share-free">Gratis</span>
+                  : <span className="event-share-coin"><CoinIcon size={18} /> {ev.coinCost} Ruang Coin</span>}
+              </div>
+              <button type="button" className="button primary event-share-join" onClick={() => goAuth('sign-in')}>Ikut Event Ini</button>
+              <p className="event-share-alt">Belum punya akun? <button type="button" className="event-share-link" onClick={() => goAuth('sign-up')}>Daftar sekarang</button></p>
+              <p className="event-share-note">Kamu akan diminta login/daftar dulu, lalu popup konfirmasi ikut event langsung muncul.</p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCreditChange, onInsufficientCredits }: {
   canManage: boolean;
   session: AppSession | null;
@@ -17074,6 +17156,13 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [joinTarget, setJoinTarget] = useState<HubEvent | null>(null);
+  const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
+  const copyShareLink = (id: string) => {
+    const url = `${window.location.origin}/#event/${id}`;
+    void navigator.clipboard.writeText(url);
+    setCopiedShareId(id);
+    setTimeout(() => setCopiedShareId((c) => (c === id ? null : c)), 1800);
+  };
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState('');
   const [joinedCode, setJoinedCode] = useState<{ title: string; code: string } | null>(null);
@@ -17159,6 +17248,13 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     void loadHubEvents().then((evs) => {
       setEvents(evs);
       setLoading(false);
+      // Handoff dari link share event: buka popup konfirmasi ikut event.
+      const pendingJoinId = sessionStorage.getItem('pending_join_event');
+      if (pendingJoinId) {
+        sessionStorage.removeItem('pending_join_event');
+        const target = evs.find((e) => e.id === pendingJoinId && e.isActive !== false);
+        if (target && !canManage) { setJoinTarget(target); setJoinError(''); }
+      }
       // Handoff dari halaman Kalender: buka edit event yang diklik.
       if (canManage) {
         const editId = sessionStorage.getItem('edit_hub_event_id');
@@ -17429,6 +17525,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                         {ev.description && <p className="events-list-desc">{ev.description}</p>}
                       </div>
                       <div className="events-list-actions">
+                        <button type="button" className="admin-action-btn" onClick={() => copyShareLink(ev.id)} title="Salin link share event">{copiedShareId === ev.id ? <><Ic name="check" size={12} /> Tersalin</> : <><Ic name="link" size={12} /> Salin Link</>}</button>
                         <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
                         <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog('Hapus event ini? Tindakan tidak bisa dibatalkan.').then((ok) => { if (ok) void handleDelete(idx); })}>hapus</button>
                         {ev.recurrenceGroupId && (

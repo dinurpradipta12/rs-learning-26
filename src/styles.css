@@ -14754,3 +14754,30 @@ body.dark .referral-claim-modal { background: #12162b; }
 @media (display-mode: window-controls-overlay) and (pointer: coarse) and (min-width: 700px) {
   :root { zoom: 0.85; }
 }
+
+/* ── Halaman publik share event ── */
+.event-share-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; z-index: 1; }
+.event-share-card { width: 100%; max-width: 460px; background: #fff; border-radius: 22px; box-shadow: 0 24px 70px rgba(0,0,0,0.18); overflow: hidden; }
+body.dark .event-share-card { background: #12162b; }
+.event-share-brand { padding: 18px 22px 0; }
+.event-share-brand img { height: 30px; width: auto; }
+.event-share-cover { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; margin-top: 14px; }
+.event-share-body { padding: 20px 24px 26px; display: flex; flex-direction: column; gap: 10px; }
+.event-share-tag { align-self: flex-start; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); background: rgba(var(--accent-rgb),0.12); border-radius: 999px; padding: 4px 12px; }
+.event-share-title { font-size: 1.4rem; font-weight: 800; line-height: 1.25; margin: 0; color: var(--text); }
+.event-share-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.85rem; color: var(--muted); }
+.event-share-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.event-share-desc { font-size: 0.9rem; line-height: 1.6; color: var(--text); margin: 4px 0; white-space: pre-wrap; }
+.event-share-cost { margin: 6px 0; }
+.event-share-free { font-size: 1rem; font-weight: 800; color: #16a34a; }
+.event-share-coin { display: inline-flex; align-items: center; gap: 7px; font-size: 1.05rem; font-weight: 800; color: var(--accent); }
+.event-share-join { width: 100%; justify-content: center; font-size: 0.95rem; padding: 13px; margin-top: 4px; }
+.event-share-alt { text-align: center; font-size: 0.85rem; color: var(--muted); margin: 4px 0 0; }
+.event-share-link { background: none; border: none; padding: 0; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; }
+.event-share-note { text-align: center; font-size: 0.74rem; color: var(--muted); margin: 6px 0 0; line-height: 1.5; }
+.event-share-loading { padding: 60px 24px; text-align: center; color: var(--muted); }
+.event-share-empty { padding: 40px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.event-share-empty-icon { color: var(--muted); }
+.event-share-empty h2 { margin: 0; font-size: 1.2rem; }
+.event-share-empty p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.event-share-empty .button { margin-top: 8px; }
