@@ -26,6 +26,42 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const threadId = url.searchParams.get('thread');
   const eventId = url.searchParams.get('event');
+  const lessonId = url.searchParams.get('lesson');
+
+  // ── Preview PNG untuk lesson/materi (?lesson=<id>) ──
+  if (lessonId) {
+    let lTitle = 'Video Materi';
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/lessons?lesson_key=eq.${encodeURIComponent(lessonId)}&select=title&limit=1`,
+        { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } },
+      );
+      const rows = await res.json();
+      if (Array.isArray(rows) && rows[0]) lTitle = rows[0].title || lTitle;
+    } catch { /* default */ }
+    const t = escapeHtml(lTitle.length > 110 ? lTitle.slice(0, 107) + '…' : lTitle);
+    const lHtml = `
+      <div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;padding:72px;background:linear-gradient(135deg,#111827 0%,#1f2937 55%,#374151 100%);font-family:Manrope;">
+        <div style="display:flex;color:#ffffff;font-size:30px;font-weight:800;letter-spacing:2px;">RUANG SOSMED ID</div>
+        <div style="display:flex;flex-direction:column;">
+          <div style="display:flex;color:#93c5fd;font-size:26px;font-weight:500;margin-bottom:18px;">🔒 VIDEO MATERI</div>
+          <div style="display:flex;color:#ffffff;font-size:60px;font-weight:800;line-height:1.15;">${t}</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;color:#e5e7eb;font-size:28px;font-weight:500;">Daftar / login untuk menonton</div>
+          <div style="display:flex;color:#93c5fd;font-size:24px;font-weight:500;">ruangsosmedid.com</div>
+        </div>
+      </div>`;
+    const [b, r] = await Promise.all([fetchFont(FONT_URL_BOLD), fetchFont(FONT_URL_REG)]);
+    return new ImageResponse(lHtml, {
+      width: 1200, height: 630,
+      fonts: [
+        { name: 'Manrope', data: b, weight: 800, style: 'normal' },
+        { name: 'Manrope', data: r, weight: 500, style: 'normal' },
+      ],
+      headers: { 'cache-control': 'public, max-age=86400' },
+    });
+  }
 
   // ── Preview PNG untuk event (?event=<id>) ──
   if (eventId) {

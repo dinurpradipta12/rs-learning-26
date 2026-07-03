@@ -1427,6 +1427,7 @@ type AssessmentResult = {
 
 function getPage(hash: string) {
   if (hash.startsWith('#event/')) return 'eventshare';
+  if (hash.startsWith('#lesson/')) return 'lessonshare';
   if (hash.startsWith('#profil')) return 'profil';
   if (hash === '#materi') return 'materi';
   if (hash === '#calendar') return 'calendar';
@@ -2856,6 +2857,7 @@ function App() {
   });
   const [initialThreadId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('thread'));
   const [initialEventId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('event'));
+  const [initialLessonId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('lesson'));
   const [session, setSession] = useState<AppSession | null>(() => readStoredSession());
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [showReferralClaim, setShowReferralClaim] = useState(false);
@@ -3201,6 +3203,22 @@ function App() {
   // Juga setelah login/daftar dengan intent join dari halaman share publik.
   useEffect(() => {
     if (!session) return;
+    // Link share lesson (?lesson=<id> atau #lesson/<id>): buka course-nya lalu
+    // pilih lesson tsb. course_key diambil dari DB.
+    const lessonShareId = initialLessonId || (hash.startsWith('#lesson/') ? hash.slice('#lesson/'.length) : '');
+    if (lessonShareId) {
+      window.history.replaceState({}, '', window.location.pathname);
+      void supabase.from('lessons').select('course_key').eq('lesson_key', lessonShareId).maybeSingle().then(({ data }) => {
+        const ck = (data as { course_key?: string } | null)?.course_key;
+        if (ck) {
+          sessionStorage.setItem('pending_open_lesson', lessonShareId);
+          window.location.hash = `#materi/${ck}`;
+        } else {
+          window.location.hash = '#materi';
+        }
+      });
+      return;
+    }
     // Link share event via query param (?event=<id>) — dipakai agar preview OG jalan.
     if (initialEventId) {
       sessionStorage.setItem('pending_join_event', initialEventId);
@@ -3216,7 +3234,7 @@ function App() {
     if (sessionStorage.getItem('pending_join_event') && page !== 'events') {
       window.location.hash = '#events';
     }
-  }, [session, hash, page, initialEventId]);
+  }, [session, hash, page, initialEventId, initialLessonId]);
 
   if (!session) {
     // Link share event: tampilkan halaman publik event (tanpa perlu login).
@@ -3227,6 +3245,17 @@ function App() {
           <div className="ambient ambient-a" />
           <div className="ambient ambient-b" />
           <EventSharePage eventId={initialEventId || hash.slice('#event/'.length)} />
+          <UpdateToast />
+        </div>
+      );
+    }
+    // Link share lesson: halaman teaser publik.
+    if ((page === 'lessonshare' || initialLessonId) && hash !== '#login') {
+      return (
+        <div className="shell landing-shell">
+          <div className="ambient ambient-a" />
+          <div className="ambient ambient-b" />
+          <LessonSharePage lessonId={initialLessonId || hash.slice('#lesson/'.length)} />
           <UpdateToast />
         </div>
       );
@@ -6503,11 +6532,16 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
 
     const nextLessons = mapLessonRowsToLessons((lessonRows ?? []) as LessonRow[], (assetRows ?? []) as LessonAssetRow[]);
     setMaterialLessons(nextLessons);
+    // Buka lesson tertentu dari link share (?lesson=<id>) setelah login.
+    const pendingLesson = sessionStorage.getItem('pending_open_lesson');
     setSelectedLessonId((currentLessonId) => {
       if (nextLessons.length === 0) {
         return '';
       }
-
+      if (pendingLesson && nextLessons.some((lesson) => lesson.id === pendingLesson)) {
+        sessionStorage.removeItem('pending_open_lesson');
+        return pendingLesson;
+      }
       const hasCurrentLesson = nextLessons.some((lesson) => lesson.id === currentLessonId);
       return hasCurrentLesson ? currentLessonId : nextLessons[0]?.id ?? '';
     });
@@ -7938,6 +7972,13 @@ function LmsSidebar({
     lessonIndex === 0 || completedLessons.has(materialLessons[lessonIndex - 1].id);
   const canManageAssessment = canEdit && isEditMode;
 
+  const [copiedLessonId, setCopiedLessonId] = useState<string | null>(null);
+  const copyLessonLink = (id: string) => {
+    void navigator.clipboard.writeText(`${window.location.origin}/?lesson=${id}`);
+    setCopiedLessonId(id);
+    setTimeout(() => setCopiedLessonId((c) => (c === id ? null : c)), 1800);
+  };
+
   return (
     <aside className="lms-sidebar">
       <div className="lms-sidebar-header">
@@ -8003,6 +8044,7 @@ function LmsSidebar({
                 )}
                 {canEdit && isEditMode && (
                   <div className="lms-lesson-edit-bar">
+                    <button type="button" onClick={() => copyLessonLink(lesson.id)} title="Salin link share materi ini">{copiedLessonId === lesson.id ? '✓ tersalin' : '🔗 link'}</button>
                     <button type="button" onClick={() => onEditLesson(lesson)}>edit</button>
                     <button type="button" onClick={() => onMoveLesson(lesson.id, 'up')} disabled={index === 0}>↑</button>
                     <button type="button" onClick={() => onMoveLesson(lesson.id, 'down')} disabled={index === materialLessons.length - 1}>↓</button>
@@ -17143,6 +17185,68 @@ function EventSharePage({ eventId }: { eventId: string }) {
               <button type="button" className="button primary event-share-join" onClick={() => goAuth('sign-in')}>Ikut Event Ini</button>
               <p className="event-share-alt">Belum punya akun? <button type="button" className="event-share-link" onClick={() => goAuth('sign-up')}>Daftar sekarang</button></p>
               <p className="event-share-note">Kamu akan diminta login/daftar dulu, lalu popup konfirmasi ikut event langsung muncul.</p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Halaman teaser publik dari link share lesson (bisa dibuka tanpa login).
+function LessonSharePage({ lessonId }: { lessonId: string }) {
+  const [lesson, setLesson] = useState<{ title: string; description: string; duration: string; video_url: string; course_key?: string } | null | undefined>(undefined);
+  const [courseTitle, setCourseTitle] = useState('');
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from('lessons').select('title, description, duration, video_url, course_key').eq('lesson_key', lessonId).maybeSingle();
+      const row = data as { title: string; description: string; duration: string; video_url: string; course_key?: string } | null;
+      setLesson(row ?? null);
+      if (row?.course_key) {
+        const { data: c } = await supabase.from('courses').select('title').eq('key', row.course_key).maybeSingle();
+        setCourseTitle((c as { title?: string } | null)?.title ?? '');
+      }
+    })();
+  }, [lessonId]);
+
+  const goAuth = (mode: 'sign-in' | 'sign-up') => {
+    sessionStorage.setItem('pending_open_lesson', lessonId);
+    if (mode === 'sign-up') sessionStorage.setItem('landing_register', '1');
+    else sessionStorage.removeItem('landing_register');
+    window.location.hash = '#login';
+  };
+
+  const media = lesson ? resolveLessonMedia(lesson.video_url) : null;
+  const thumb = media && media.kind === 'youtube' ? `https://img.youtube.com/vi/${media.videoId}/maxresdefault.jpg` : '';
+
+  return (
+    <div className="event-share-shell">
+      <div className="event-share-card">
+        <div className="event-share-brand"><img src={logo1} alt="Ruang Sosmed" /></div>
+        {lesson === undefined ? (
+          <p className="event-share-loading">Memuat materi…</p>
+        ) : !lesson ? (
+          <div className="event-share-empty">
+            <div className="event-share-empty-icon"><Ic name="film" size={40} /></div>
+            <h2>Materi tidak ditemukan</h2>
+            <p>Link ini tidak valid atau materi sudah dihapus.</p>
+            <a className="button primary" href="#login" onClick={() => { window.location.hash = '#login'; }}>Masuk ke Ruang Sosmed</a>
+          </div>
+        ) : (
+          <>
+            <div className="lesson-share-thumb">
+              {thumb ? <img src={thumb} alt={lesson.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <div className="lesson-share-thumb-ph"><Ic name="film" size={40} /></div>}
+              <div className="lesson-share-lock"><Ic name="lock" size={22} /> <span>Materi Terkunci</span></div>
+            </div>
+            <div className="event-share-body">
+              <span className="event-share-tag">Video Materi{courseTitle ? ` · ${courseTitle}` : ''}</span>
+              <h1 className="event-share-title">{lesson.title}</h1>
+              {lesson.duration && <div className="event-share-meta"><span><Ic name="clock" size={14} /> {lesson.duration}</span></div>}
+              {lesson.description && <p className="event-share-desc">{lesson.description}</p>}
+              <button type="button" className="button primary event-share-join" onClick={() => goAuth('sign-up')}>Daftar &amp; Tonton Materi Ini</button>
+              <p className="event-share-alt">Sudah punya akun? <button type="button" className="event-share-link" onClick={() => goAuth('sign-in')}>Login</button></p>
+              <p className="event-share-note">Buat akun / login dulu, lalu kamu langsung diarahkan ke materi ini di Learning Center.</p>
             </div>
           </>
         )}

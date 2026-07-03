@@ -14796,3 +14796,9 @@ body.dark .event-share-card { background: #12162b; }
 .event-share-empty h2 { margin: 0; font-size: 1.2rem; }
 .event-share-empty p { margin: 0; color: var(--muted); font-size: 0.9rem; }
 .event-share-empty .button { margin-top: 8px; }
+
+/* Teaser thumbnail untuk halaman share lesson */
+.lesson-share-thumb { position: relative; width: 100%; aspect-ratio: 16/9; background: #0f172a; overflow: hidden; margin-top: 14px; }
+.lesson-share-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lesson-share-thumb-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5); }
+.lesson-share-lock { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(15,23,42,0.55); color: #fff; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; }

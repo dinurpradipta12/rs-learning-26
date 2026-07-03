@@ -9,6 +9,14 @@ const DEFAULT_IMAGE = 'https://ruangsosmedid.com/og-image.png';
 
 const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
 const setContent = (value) => ({ element(el) { el.setAttribute('content', value); } });
+function ytVideoId(rawUrl) {
+  try {
+    const u = new URL((rawUrl || '').trim());
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1) || '';
+    if (u.hostname.includes('youtube.com')) return u.searchParams.get('v') || (u.pathname.startsWith('/embed/') ? u.pathname.slice(7) : '');
+  } catch { /* bukan youtube */ }
+  return '';
+}
 
 function rewriteMeta(response, { title, desc, image, pageUrl }) {
   return new HTMLRewriter()
@@ -29,10 +37,46 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const threadId = url.searchParams.get('thread');
   const eventId = url.searchParams.get('event');
+  const lessonId = url.searchParams.get('lesson');
 
   const response = await next();
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('text/html')) return response;
+
+  // ── Preview lesson/materi (?lesson=<id>) ──
+  if (lessonId) {
+    let lesson;
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/lessons?lesson_key=eq.${encodeURIComponent(lessonId)}&select=title,description,video_url,course_key&limit=1`,
+        { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } },
+      );
+      const rows = await res.json();
+      lesson = Array.isArray(rows) ? rows[0] : null;
+    } catch {
+      return response;
+    }
+    if (!lesson) return response;
+
+    const ytId = ytVideoId(lesson.video_url);
+    let image = ytId ? `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg` : '';
+    if (!image && lesson.course_key) {
+      try {
+        const cr = await fetch(
+          `${SUPABASE_URL}/rest/v1/courses?key=eq.${encodeURIComponent(lesson.course_key)}&select=thumbnail_url&limit=1`,
+          { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } },
+        );
+        const crows = await cr.json();
+        image = (Array.isArray(crows) && crows[0] && crows[0].thumbnail_url) || '';
+      } catch { /* abaikan */ }
+    }
+    if (!image) image = `https://ruangsosmedid.com/og?lesson=${encodeURIComponent(lessonId)}`;
+
+    const title = `${clean(lesson.title)} — Ruang Sosmed ID`;
+    const desc = clean(lesson.description).slice(0, 180) || 'Tonton materi ini di Ruang Sosmed ID — daftar/login untuk akses.';
+    const pageUrl = `https://ruangsosmedid.com/?lesson=${encodeURIComponent(lessonId)}`;
+    return rewriteMeta(response, { title, desc, image, pageUrl });
+  }
 
   // ── Preview event (?event=<id>) ──
   if (eventId) {
