@@ -1183,6 +1183,48 @@ async function fetchAllBadgeTiers(): Promise<Record<string, BadgeTier>> {
   return result;
 }
 
+// Ring warna profil berdasarkan kriteria user.
+type RingTier = 'dev' | 'topup' | 'spend' | 'oldest' | 'online' | null;
+const RING_META: Record<Exclude<RingTier, null>, { color: string; grad: string; label: string }> = {
+  dev:    { color: '#22c55e', grad: 'linear-gradient(135deg,#86efac,#22c55e 55%,#15803d)', label: 'Developer / Admin' },
+  topup:  { color: '#f59e0b', grad: 'linear-gradient(135deg,#fde68a,#f59e0b 55%,#b45309)', label: 'Top-up Terbanyak' },
+  spend:  { color: '#ef4444', grad: 'linear-gradient(135deg,#fca5a5,#ef4444 55%,#b91c1c)', label: 'Spend Terbanyak' },
+  oldest: { color: '#3b82f6', grad: 'linear-gradient(135deg,#93c5fd,#3b82f6 55%,#1d4ed8)', label: 'User Terlama' },
+  online: { color: '#14b8a6', grad: 'linear-gradient(135deg,#5eead4,#14b8a6 55%,#0f766e)', label: 'Paling Sering Online' },
+};
+function ringClass(tier: RingTier): string {
+  return tier ? `uring uring-${tier}` : '';
+}
+async function fetchUserRings(): Promise<Record<string, RingTier>> {
+  const [{ data: users }, { data: topups }, { data: txs }] = await Promise.all([
+    supabase.from('app_users').select('username, role, created_at'),
+    supabase.from('topup_requests').select('username, amount_rp').eq('status', 'approved'),
+    supabase.from('credit_transactions').select('username, amount, description'),
+  ]);
+  const rings: Record<string, RingTier> = {};
+  const topupSum: Record<string, number> = {};
+  const spendSum: Record<string, number> = {};
+  const loginCount: Record<string, number> = {};
+  let oldest: { u: string; t: number } | null = null;
+  for (const u of (users ?? []) as { username: string; role: string; created_at: string }[]) {
+    const t = new Date(u.created_at).getTime();
+    if (!oldest || t < oldest.t) oldest = { u: u.username, t };
+    if (u.role === 'developer' || u.role === 'admin') rings[u.username] = 'dev';
+  }
+  for (const r of (topups ?? []) as { username: string; amount_rp: number }[]) topupSum[r.username] = (topupSum[r.username] ?? 0) + (Number(r.amount_rp) || 0);
+  for (const t of (txs ?? []) as { username: string; amount: number; description: string }[]) {
+    if (t.amount < 0) spendSum[t.username] = (spendSum[t.username] ?? 0) + Math.abs(t.amount);
+    if ((t.description ?? '').startsWith('Bonus: Login Harian')) loginCount[t.username] = (loginCount[t.username] ?? 0) + 1;
+  }
+  const maxKey = (m: Record<string, number>) => { let k: string | undefined, v = 0; for (const [key, val] of Object.entries(m)) if (val > v) { v = val; k = key; } return k; };
+  const assign = (u: string | undefined, tier: RingTier) => { if (u && !rings[u]) rings[u] = tier; };
+  assign(maxKey(topupSum), 'topup');
+  assign(maxKey(spendSum), 'spend');
+  assign(oldest?.u, 'oldest');
+  assign(maxKey(loginCount), 'online');
+  return rings;
+}
+
 function timeAgo(isoString: string) {
   const diff = Date.now() - new Date(isoString).getTime();
   const mins = Math.floor(diff / 60_000);
@@ -2817,6 +2859,7 @@ function App() {
   const [showReferralClaim, setShowReferralClaim] = useState(false);
   const [checkinModal, setCheckinModal] = useState<{ dailyCoins: number; day7: CheckinDay7 } | null>(null);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [ownRing, setOwnRing] = useState<RingTier>(null);
   const [userCredits, setUserCredits] = useState<number | null>(null);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [featureCosts, setFeatureCosts] = useState<FeatureCosts>(defaultFeatureCosts);
@@ -3005,6 +3048,8 @@ function App() {
       setProfileAvatarUrl(nextProfile.photoUrl);
       setUserCredits(creditsData?.balance ?? null);
     })();
+
+    void fetchUserRings().then((rings) => { if (isActive && session) setOwnRing(rings[session.username] ?? null); });
 
     // Realtime: update balance langsung saat user_credits berubah
     const creditChannel = supabase.channel(`user-credits-${session.username}`)
@@ -3257,9 +3302,10 @@ function App() {
             {session && <NotificationBell username={session.username} />}
             <button
               type="button"
-              className="account-trigger"
+              className={`account-trigger ${ringClass(ownRing)}`}
               aria-label="menu akun"
               aria-expanded={isAccountMenuOpen}
+              title={ownRing ? RING_META[ownRing].label : undefined}
               onClick={() => setIsAccountMenuOpen((current) => !current)}
             >
               <img
@@ -10133,12 +10179,14 @@ function ForumThreadCard({
   currentUser,
   userAvatarMap,
   badgeMap = {},
+  ringMap = {},
   onClick,
 }: {
   thread: ForumThread;
   currentUser: { username: string; displayName: string; avatarUrl: string };
   userAvatarMap: Record<string, string>;
   badgeMap?: Record<string, BadgeTier>;
+  ringMap?: Record<string, RingTier>;
   onClick: () => void;
 }) {
   const participantUsernames = Array.from(
@@ -10228,6 +10276,7 @@ function ForumReplyItem({
   currentUser,
   userAvatarMap,
   badgeMap = {},
+  ringMap = {},
   onReplyTo,
   onUpvote,
   onImageClick,
@@ -10241,6 +10290,7 @@ function ForumReplyItem({
   currentUser: { username: string; displayName: string; avatarUrl: string };
   userAvatarMap: Record<string, string>;
   badgeMap?: Record<string, BadgeTier>;
+  ringMap?: Record<string, RingTier>;
   onReplyTo: (replyId: string, displayName: string) => void;
   onUpvote: (replyId: string) => void;
   onImageClick: (url: string) => void;
@@ -10268,7 +10318,7 @@ function ForumReplyItem({
     <div className={`forum-reply-item${reply.answered ? ' forum-reply-item--answered' : ''}`}>
       <div className="forum-reply-item-left">
         <div className="forum-reply-avatar-wrap">
-          <img src={replyAvatarSrc} alt={replyDisplayName} className="forum-avatar-sm" />
+          <img src={replyAvatarSrc} alt={replyDisplayName} className={`forum-avatar-sm ${ringClass(ringMap[reply.authorUsername])}`} />
           {children.length > 0 && <div className="forum-reply-thread-line" />}
         </div>
       </div>
@@ -10323,7 +10373,7 @@ function ForumReplyItem({
                 depth={depth + 1}
                 currentUser={currentUser}
                 userAvatarMap={userAvatarMap}
-                badgeMap={badgeMap}
+                badgeMap={badgeMap} ringMap={ringMap}
                 onReplyTo={onReplyTo}
                 onUpvote={onUpvote}
                 onImageClick={onImageClick}
@@ -10346,6 +10396,7 @@ function ForumThreadDetail({
   avatarUrl,
   userAvatarMap,
   badgeMap = {},
+  ringMap = {},
   onBack,
   onUpdate,
   onDelete,
@@ -10357,6 +10408,7 @@ function ForumThreadDetail({
   avatarUrl: string;
   userAvatarMap: Record<string, string>;
   badgeMap?: Record<string, BadgeTier>;
+  ringMap?: Record<string, RingTier>;
   onBack: () => void;
   onUpdate: (updated: ForumThread) => void;
   onDelete: (threadId: string) => void;
@@ -10556,7 +10608,7 @@ function ForumThreadDetail({
               : (userAvatarMap[thread.authorUsername] || forumAvatarSvg(thread.authorDisplayName, thread.authorUsername));
             return (
               <>
-                <img src={src} alt={name} className="forum-avatar-md" />
+                <img src={src} alt={name} className={`forum-avatar-md ${ringClass(ringMap[thread.authorUsername])}`} />
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <BadgeIcon tier={badgeMap[thread.authorUsername] ?? null} size={16} />
@@ -10653,7 +10705,7 @@ function ForumThreadDetail({
             depth={0}
             currentUser={{ username: session.username, displayName, avatarUrl }}
             userAvatarMap={userAvatarMap}
-            badgeMap={badgeMap}
+            badgeMap={badgeMap} ringMap={ringMap}
             onReplyTo={handleReplyTo}
             onUpvote={handleUpvote}
             onImageClick={setLightboxUrl}
@@ -10668,7 +10720,7 @@ function ForumThreadDetail({
 
       {/* ── Pinned reply bar ── */}
       <form className="forum-reply-bar" onSubmit={submitReply} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitReply(); }}>
-        <img src={avatarUrl || forumAvatarSvg(displayName, session.username)} alt={displayName} className="forum-avatar-sm forum-reply-bar-avatar" />
+        <img src={avatarUrl || forumAvatarSvg(displayName, session.username)} alt={displayName} className={`forum-avatar-sm forum-reply-bar-avatar ${ringClass(ringMap[session.username])}`} />
         <div className="forum-reply-bar-inner">
           {replyingToName && (
             <div className="forum-reply-bar-context">
@@ -10958,9 +11010,11 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
   const [composerJobTitle, setComposerJobTitle] = useState<string>(session.role);
   const [userAvatarMap, setUserAvatarMap] = useState<Record<string, string>>({});
   const [forumBadgeMap, setForumBadgeMap] = useState<Record<string, BadgeTier>>({});
+  const [forumRingMap, setForumRingMap] = useState<Record<string, RingTier>>({});
 
   // Load badge tiers for forum authors
   useEffect(() => { void fetchAllBadgeTiers().then(setForumBadgeMap); }, []);
+  useEffect(() => { void fetchUserRings().then(setForumRingMap); }, []);
 
   // Bersihkan query param setelah mount
   useEffect(() => {
@@ -11128,7 +11182,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
           displayName={composerDisplayName}
           avatarUrl={composerAvatarUrl}
           userAvatarMap={userAvatarMap}
-          badgeMap={forumBadgeMap}
+          badgeMap={forumBadgeMap} ringMap={forumRingMap}
           onBack={() => setSelectedThreadId(null)}
           onUpdate={updateThread}
           onDelete={deleteThread}
@@ -11184,7 +11238,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
                 thread={thread}
                 currentUser={{ username: session.username, displayName: composerDisplayName, avatarUrl: composerAvatarUrl }}
                 userAvatarMap={userAvatarMap}
-                badgeMap={forumBadgeMap}
+                badgeMap={forumBadgeMap} ringMap={forumRingMap}
                 onClick={() => openThread(thread.id)}
               />
           ))}
@@ -13496,6 +13550,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [referralDraft, setReferralDraft] = useState<ReferralCode>({ code: '', credits: 0, description: '', expiresAt: '' });
   const [referralSaving, setReferralSaving] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [ringMap, setRingMap] = useState<Record<string, RingTier>>({});
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   // Semua transaksi (hanya kolom untuk hitung statistik) — TIDAK dibatasi 50 baris,
   // supaya Est. Pendapatan / Coin Tersalurkan tidak menyusut saat transaksi baru masuk.
@@ -13668,6 +13723,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, []);
+
+  useEffect(() => { void fetchUserRings().then(setRingMap); }, []);
 
   // Realtime: refresh laporan pendapatan saat ada perubahan topup (approve/tolak/baru).
   useEffect(() => {
@@ -14095,8 +14152,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       <td>
                         <div className="admin-user-cell">
                           {u.avatarUrl
-                            ? <img src={u.avatarUrl} alt={u.displayName} className="admin-user-avatar admin-user-avatar-img" />
-                            : <div className="admin-user-avatar">{(u.displayName || u.username).slice(0, 1).toUpperCase()}</div>
+                            ? <img src={u.avatarUrl} alt={u.displayName} className={`admin-user-avatar admin-user-avatar-img ${ringClass(ringMap[u.username])}`} title={ringMap[u.username] ? RING_META[ringMap[u.username]!].label : undefined} />
+                            : <div className={`admin-user-avatar ${ringClass(ringMap[u.username])}`} title={ringMap[u.username] ? RING_META[ringMap[u.username]!].label : undefined}>{(u.displayName || u.username).slice(0, 1).toUpperCase()}</div>
                           }
                           <div>
                             <div className="admin-user-name">{u.displayName || u.username}</div>
