@@ -5826,6 +5826,9 @@ function getCourseBadge(courseKey: string, releaseSettings: AllCourseReleaseSett
     }
     if (nextDay) return { type: 'next', label: `Video Berikutnya · ${nextDay}` };
   }
+  // Fallback: sudah pernah ada upload tapi tidak ada jadwal rilis → tetap tampilkan
+  // "Video Berikutnya" biar card tidak kosong badge-nya setelah 24 jam.
+  if (lastLessonUploadedAt) return { type: 'next', label: 'Video Berikutnya · Segera' };
   return null;
 }
 
