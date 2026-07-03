@@ -14,6 +14,9 @@ create table if not exists public.notifications (
   created_at timestamptz not null default now()
 );
 
+-- Pengirim/aktor notifikasi (mis. user yang membalas thread) — untuk menampilkan foto di toast.
+alter table public.notifications add column if not exists actor_username text;
+
 create index if not exists notifications_recipient_idx on public.notifications(recipient_username);
 create index if not exists notifications_created_at_idx on public.notifications(created_at desc);
 create index if not exists notifications_unread_idx on public.notifications(recipient_username, is_read) where not is_read;

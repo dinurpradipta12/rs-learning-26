@@ -954,8 +954,8 @@ async function updateThreadViewCount(threadId: string, viewCount: number): Promi
 
 type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply';
 
-async function insertNotification(recipient: string, type: NotifType, title: string, body: string, link?: string) {
-  await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null }]);
+async function insertNotification(recipient: string, type: NotifType, title: string, body: string, link?: string, actorUsername?: string) {
+  await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null, actor_username: actorUsername ?? null }]);
 }
 
 // ── Confirm Modal ─────────────────────────────────────────────
@@ -2142,7 +2142,7 @@ function createAssessmentQuestion(): AssessmentQuestion {
   };
 }
 
-type NotifRow = { id: string; type: NotifType; title: string; body: string; link: string | null; is_read: boolean; created_at: string };
+type NotifRow = { id: string; type: NotifType; title: string; body: string; link: string | null; is_read: boolean; created_at: string; actor_username?: string | null };
 
 function NotificationBell({ username }: { username: string }) {
   const [open, setOpen] = useState(false);
@@ -2150,7 +2150,21 @@ function NotificationBell({ username }: { username: string }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [allNotifs, setAllNotifs] = useState<NotifRow[]>([]);
   const [drawerFilter, setDrawerFilter] = useState<'semua' | 'topup' | 'review' | 'lainnya'>('semua');
+  const [toasts, setToasts] = useState<Array<NotifRow & { avatarUrl?: string | null }>>([]);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const dismissToast = (id: string) => setToasts((prev) => prev.filter((t) => t.id !== id));
+  const pushToast = (n: NotifRow) => {
+    setToasts((prev) => [...prev, n].slice(-3));
+    // Foto pengirim untuk notifikasi balasan.
+    if (n.type === 'thread_reply' && n.actor_username) {
+      void supabase.from('user_profiles').select('avatar_path').eq('username', n.actor_username).maybeSingle().then(({ data }) => {
+        const path = (data as { avatar_path?: string | null } | null)?.avatar_path;
+        if (path) setToasts((prev) => prev.map((t) => t.id === n.id ? { ...t, avatarUrl: profileAvatarPublicUrl(path) } : t));
+      });
+    }
+    setTimeout(() => dismissToast(n.id), 5000);
+  };
 
   const loadNotifs = async () => {
     const { data } = await supabase
@@ -2168,7 +2182,9 @@ function NotificationBell({ username }: { username: string }) {
     const channel = supabase
       .channel(`notifs-${username}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_username=eq.${username}` }, (payload) => {
-        setNotifs((prev) => [payload.new as NotifRow, ...prev].slice(0, 30));
+        const row = payload.new as NotifRow;
+        setNotifs((prev) => [row, ...prev].slice(0, 30));
+        pushToast(row);
       })
       .subscribe();
 
@@ -2367,6 +2383,39 @@ function NotificationBell({ username }: { username: string }) {
               ))}
             </div>
           </aside>
+        </div>,
+        document.body,
+      )}
+
+      {toasts.length > 0 && createPortal(
+        <div className="notif-toast-wrap">
+          {toasts.map((t) => {
+            const tone = /ditolak|gagal|failure|dibatalkan/i.test(t.title) || t.type === 'booking_rejected'
+              ? 'red'
+              : (t.type === 'booking_approved' || t.type === 'credits_added') ? 'green' : 'blue';
+            const showAvatar = t.type === 'thread_reply';
+            return (
+              <a
+                key={t.id}
+                href={t.link ?? '#'}
+                className={`notif-toast notif-toast--${tone}`}
+                onClick={() => dismissToast(t.id)}
+              >
+                <div className="notif-toast-icon">
+                  {showAvatar && t.avatarUrl
+                    ? <img src={t.avatarUrl} alt="" className="notif-toast-avatar" />
+                    : <span className="notif-toast-glyph">{notifIcon(t.type)}</span>}
+                </div>
+                <div className="notif-toast-body">
+                  <strong>{t.title}</strong>
+                  <p>{t.body}</p>
+                </div>
+                <button type="button" className="notif-toast-close" aria-label="Tutup" onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismissToast(t.id); }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </a>
+            );
+          })}
         </div>,
         document.body,
       )}
@@ -10665,14 +10714,14 @@ function ForumThreadDetail({
 
     // Notifikasi ke pemilik thread jika bukan diri sendiri
     if (thread.authorUsername !== session.username) {
-      void insertNotification(thread.authorUsername, 'thread_reply', 'Ada Balasan di Thread Kamu', `${displayName} membalas thread "${thread.title}"`, `#community`);
+      void insertNotification(thread.authorUsername, 'thread_reply', 'Ada Balasan di Thread Kamu', `${displayName} membalas thread "${thread.title}"`, `#community`, session.username);
     }
 
     // Notifikasi ke pemilik reply yang dibalas (jika berbeda dari pemilik thread dan bukan diri sendiri)
     if (replyingToId) {
       const parentReply = thread.replies.find((r) => r.id === replyingToId);
       if (parentReply && parentReply.authorUsername !== session.username && parentReply.authorUsername !== thread.authorUsername) {
-        void insertNotification(parentReply.authorUsername, 'thread_reply', 'Komentar Kamu Dibalas', `${displayName} membalas komentarmu di "${thread.title}"`, `#community`);
+        void insertNotification(parentReply.authorUsername, 'thread_reply', 'Komentar Kamu Dibalas', `${displayName} membalas komentarmu di "${thread.title}"`, `#community`, session.username);
       }
     }
     void sendTelegram(
