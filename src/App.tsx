@@ -2855,6 +2855,7 @@ function App() {
     return h.startsWith('#materi/') ? '#materi' : h;
   });
   const [initialThreadId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('thread'));
+  const [initialEventId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('event'));
   const [session, setSession] = useState<AppSession | null>(() => readStoredSession());
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [showReferralClaim, setShowReferralClaim] = useState(false);
@@ -3200,6 +3201,13 @@ function App() {
   // Juga setelah login/daftar dengan intent join dari halaman share publik.
   useEffect(() => {
     if (!session) return;
+    // Link share event via query param (?event=<id>) — dipakai agar preview OG jalan.
+    if (initialEventId) {
+      sessionStorage.setItem('pending_join_event', initialEventId);
+      window.history.replaceState({}, '', window.location.pathname);
+      window.location.hash = '#events';
+      return;
+    }
     if (hash.startsWith('#event/')) {
       sessionStorage.setItem('pending_join_event', hash.slice('#event/'.length));
       window.location.hash = '#events';
@@ -3208,16 +3216,17 @@ function App() {
     if (sessionStorage.getItem('pending_join_event') && page !== 'events') {
       window.location.hash = '#events';
     }
-  }, [session, hash, page]);
+  }, [session, hash, page, initialEventId]);
 
   if (!session) {
     // Link share event: tampilkan halaman publik event (tanpa perlu login).
-    if (page === 'eventshare') {
+    // Mendukung ?event=<id> (untuk preview OG) maupun #event/<id>.
+    if ((page === 'eventshare' || initialEventId) && hash !== '#login') {
       return (
         <div className="shell landing-shell">
           <div className="ambient ambient-a" />
           <div className="ambient ambient-b" />
-          <EventSharePage eventId={hash.slice('#event/'.length)} />
+          <EventSharePage eventId={initialEventId || hash.slice('#event/'.length)} />
           <UpdateToast />
         </div>
       );
@@ -17158,7 +17167,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [joinTarget, setJoinTarget] = useState<HubEvent | null>(null);
   const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
   const copyShareLink = (id: string) => {
-    const url = `${window.location.origin}/#event/${id}`;
+    const url = `${window.location.origin}/?event=${id}`;
     void navigator.clipboard.writeText(url);
     setCopiedShareId(id);
     setTimeout(() => setCopiedShareId((c) => (c === id ? null : c)), 1800);
