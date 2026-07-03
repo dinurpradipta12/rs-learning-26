@@ -1990,16 +1990,18 @@ body.dark .notif-drawer { background: #12162b; }
 
 /* Ring warna profil per kriteria user (box-shadow ring untuk <img> avatar) */
 .uring { border-radius: 50%; }
-.uring-dev    { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #22c55e; }
-.uring-topup  { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #f59e0b; }
-.uring-spend  { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #ef4444; }
-.uring-oldest { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #3b82f6; }
-.uring-online { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #14b8a6; }
-body.dark .uring-dev    { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px #22c55e; }
-body.dark .uring-topup  { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px #f59e0b; }
-body.dark .uring-spend  { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px #ef4444; }
-body.dark .uring-oldest { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px #3b82f6; }
-body.dark .uring-online { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px #14b8a6; }
+.uring-default { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px #c4b5fd; }
+.uring-dev    { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px #22c55e; }
+.uring-topup  { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px #f59e0b; }
+.uring-spend  { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px #ef4444; }
+.uring-oldest { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px #3b82f6; }
+.uring-online { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px #14b8a6; }
+body.dark .uring-default { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px #7c3aed; }
+body.dark .uring-dev    { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px #22c55e; }
+body.dark .uring-topup  { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px #f59e0b; }
+body.dark .uring-spend  { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px #ef4444; }
+body.dark .uring-oldest { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px #3b82f6; }
+body.dark .uring-online { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px #14b8a6; }
 /* Header account trigger memakai gradient sebagai ring — ganti warna per tier */
 .account-trigger.uring-dev    { background: linear-gradient(135deg,#86efac,#22c55e 55%,#15803d); }
 .account-trigger.uring-topup  { background: linear-gradient(135deg,#fde68a,#f59e0b 55%,#b45309); }
@@ -7301,9 +7303,11 @@ body.dark .forum-filter-btn--qna { color: #fbbf24; }
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: visible;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-left: 4px;
   scrollbar-width: thin;
 }
 
@@ -7866,7 +7870,7 @@ body.dark .forum-card-last-reply { background: rgba(255,255,255,0.04); }
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 0 8px;
+  padding: 12px 4px 8px;
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
@@ -7874,6 +7878,7 @@ body.dark .forum-card-last-reply { background: rgba(255,255,255,0.04); }
 .forum-reply-bar-avatar {
   flex-shrink: 0;
   margin-top: 6px;
+  margin-left: 4px;
 }
 
 .forum-reply-bar-inner {

@@ -1193,7 +1193,7 @@ const RING_META: Record<Exclude<RingTier, null>, { color: string; grad: string; 
   online: { color: '#14b8a6', grad: 'linear-gradient(135deg,#5eead4,#14b8a6 55%,#0f766e)', label: 'Paling Sering Online' },
 };
 function ringClass(tier: RingTier): string {
-  return tier ? `uring uring-${tier}` : '';
+  return tier ? `uring uring-${tier}` : 'uring uring-default';
 }
 async function fetchUserRings(): Promise<Record<string, RingTier>> {
   const [{ data: users }, { data: topups }, { data: txs }] = await Promise.all([
@@ -3302,7 +3302,7 @@ function App() {
             {session && <NotificationBell username={session.username} />}
             <button
               type="button"
-              className={`account-trigger ${ringClass(ownRing)}`}
+              className={`account-trigger ${ownRing ? ringClass(ownRing) : ''}`}
               aria-label="menu akun"
               aria-expanded={isAccountMenuOpen}
               title={ownRing ? RING_META[ownRing].label : undefined}
