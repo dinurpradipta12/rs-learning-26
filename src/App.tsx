@@ -4812,6 +4812,22 @@ function DashboardSection({ session }: { session: AppSession }) {
   const [bannerSettings, setBannerSettings] = useState<BannerSettings>(defaultBannerSettings);
   useEffect(() => { void loadBannerSettings().then(setBannerSettings); }, []);
 
+  // ── video tutorial (dari pengaturan Help) ──
+  const [tutorialVideoUrl, setTutorialVideoUrl] = useState('');
+  useEffect(() => { void loadHelpSettings().then((s) => setTutorialVideoUrl(s.videoUrl || '')); }, []);
+  const tutorialEmbedUrl = (() => {
+    const url = tutorialVideoUrl.trim();
+    if (!url) return '';
+    try {
+      const parsed = new URL(url);
+      let videoId = '';
+      if (parsed.hostname === 'youtu.be') videoId = parsed.pathname.slice(1);
+      else if (parsed.hostname.includes('youtube.com')) videoId = parsed.searchParams.get('v') ?? '';
+      if (videoId) return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+    } catch { /* fall through */ }
+    return url;
+  })();
+
   // ── profile name ──
   const [profileName, setProfileName] = useState('');
 
@@ -5261,32 +5277,30 @@ function DashboardSection({ session }: { session: AppSession }) {
       {/* ── Main grid ────────────────────────────────────── */}
       <div className="db-grid">
 
-        {/* ── Next lesson ── */}
+        {/* ── Video tutorial ── */}
         <article className="db-card db-card-accent">
           <div className="db-card-head">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            <p className="eyebrow">Lanjutkan Materi</p>
+            <p className="eyebrow">Video Tutorial</p>
           </div>
-          {nextLesson ? (
+          {tutorialEmbedUrl ? (
             <>
-              <strong className="db-card-title">{nextLesson.title}</strong>
-              <p className="db-card-sub">Materi berikutnya yang belum diselesaikan</p>
-              <a className="button primary tiny db-card-cta" href="#materi">Mulai sekarang →</a>
+              <div className="db-tutorial-video">
+                <iframe
+                  src={tutorialEmbedUrl}
+                  title="Video Tutorial"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              </div>
+              <p className="db-card-sub">Tonton dulu cara pakai platform biar makin lancar belajarnya.</p>
             </>
-          ) : totalLessons === 0 ? (
-            <p className="db-card-sub">Belum ada materi yang tersedia.</p>
           ) : (
             <>
-              <strong className="db-card-title">Semua materi selesai!</strong>
-              <p className="db-card-sub">Kamu telah menyelesaikan seluruh kurikulum.</p>
-              <a className="button secondary tiny db-card-cta" href="#materi">Lihat semua →</a>
+              <strong className="db-card-title">Video tutorial belum tersedia</strong>
+              <p className="db-card-sub">Admin belum menambahkan link video tutorial.</p>
             </>
-          )}
-          {totalLessons > 0 && (
-            <div className="db-mini-progress">
-              <div className="db-mini-bar"><span style={{ width: `${progress}%` }} /></div>
-              <span>{progress}%</span>
-            </div>
           )}
         </article>
 
