@@ -8032,6 +8032,16 @@ function LmsSidebar({
                     <span>{lesson.duration}</span>
                   </div>
                 </button>
+                {canEdit && !isEditMode && (
+                  <button
+                    type="button"
+                    className={`lms-lesson-share-btn${copiedLessonId === lesson.id ? ' copied' : ''}`}
+                    title="Salin link share materi ini"
+                    onClick={(e) => { e.stopPropagation(); copyLessonLink(lesson.id); }}
+                  >
+                    {copiedLessonId === lesson.id ? <Ic name="check" size={15} /> : <Ic name="link" size={15} />}
+                  </button>
+                )}
                 {!isLocked && !isEditMode && (
                   <button
                     type="button"
