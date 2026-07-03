@@ -14744,3 +14744,13 @@ body.dark .referral-claim-modal { background: #12162b; }
 .event-code-pay-btn { margin-top: 4px; }
 .event-access-code { position: relative; font-size: 1.6rem; font-weight: 900; letter-spacing: 0.15em; color: var(--accent); background: var(--accent-soft); border: 2px dashed var(--accent); border-radius: 14px; padding: 18px; cursor: pointer; }
 .event-access-code-copy { display: block; font-size: 0.62rem; font-weight: 600; letter-spacing: normal; color: var(--muted); margin-top: 6px; text-transform: none; }
+
+/* PWA di tablet (iPad): perkecil skala tampilan agar tidak terlalu besar.
+   Hanya di PWA standalone + layar sentuh (pointer coarse) ukuran tablet,
+   supaya desktop/laptop tidak terpengaruh. */
+@media (display-mode: standalone) and (pointer: coarse) and (min-width: 700px) {
+  :root { zoom: 0.85; }
+}
+@media (display-mode: window-controls-overlay) and (pointer: coarse) and (min-width: 700px) {
+  :root { zoom: 0.85; }
+}
