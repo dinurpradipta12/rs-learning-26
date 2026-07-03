@@ -8204,6 +8204,10 @@ body.dark .admin-row-selected { background: rgba(var(--accent-rgb), 0.1) !import
 }
 .admin-status-badge.active { background: #e6f9f0; color: #167f72; }
 .admin-status-badge.inactive { background: #f5f5f5; color: #888; }
+.referral-status-toggle { display: inline-flex; align-items: center; gap: 8px; }
+.referral-status-label { font-size: 0.8rem; font-weight: 700; }
+.referral-status-label.active { color: #167f72; }
+.referral-status-label.inactive { color: #b0b0b0; }
 
 /* Actions */
 .admin-actions { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }

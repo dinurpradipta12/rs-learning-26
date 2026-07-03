@@ -11331,6 +11331,7 @@ type ReferralCode = {
   expiresAt?: string;
   type?: 'coin' | 'feature';
   features?: Array<'free_video' | 'free_booking' | 'free_thread' | 'free_asset' | 'free_event'>;
+  active?: boolean; // undefined dianggap aktif (kompatibel data lama)
 };
 type PromoPopup = {
   id: string;
@@ -11620,6 +11621,7 @@ async function validateReferralCode(code: string): Promise<ReferralCode | null> 
   const settings = await loadAdminSettings();
   const match = settings.referralCodes?.find((r) => r.code.toLowerCase() === code.trim().toLowerCase());
   if (!match) return null;
+  if ((match.active ?? true) === false) return null; // kode dinonaktifkan admin
   if (match.expiresAt && new Date(match.expiresAt) < new Date()) return null;
   return match;
 }
@@ -13789,6 +13791,11 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     await saveReferralCodes(updated);
   };
 
+  const handleToggleReferralActive = async (idx: number) => {
+    const updated = referralCodes.map((r, i) => i === idx ? { ...r, active: (r.active ?? true) ? false : true } : r);
+    await saveReferralCodes(updated);
+  };
+
   const handleSavePromo = async () => {
     setPromoSaving(true);
     let savedPromo = { ...promo };
@@ -14703,7 +14710,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       const expired = r.expiresAt ? new Date(r.expiresAt) < new Date() : false;
                       const codeType = r.type ?? 'coin';
                       return (
-                        <tr key={idx} className={expired ? 'admin-row-inactive' : ''}>
+                        <tr key={idx} className={(expired || (r.active ?? true) === false) ? 'admin-row-inactive' : ''}>
                           <td><span className="referral-code-badge">{r.code}</span></td>
                           <td>
                             {codeType === 'coin'
@@ -14718,9 +14725,26 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                             <span className="referral-usage-count">{referralUsage[r.code] ?? 0} user</span>
                           </td>
                           <td>
-                            <span className={`admin-status-badge ${expired ? 'inactive' : 'active'}`}>
-                              {expired ? 'Expired' : 'Aktif'}
-                            </span>
+                            {expired ? (
+                              <span className="admin-status-badge inactive">Expired</span>
+                            ) : (() => {
+                              const isActive = r.active ?? true;
+                              return (
+                                <div className="referral-status-toggle">
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={isActive}
+                                    className={`perk-toggle ${isActive ? 'on' : ''}`}
+                                    title={isActive ? 'Aktif — klik untuk nonaktifkan' : 'Nonaktif — klik untuk aktifkan'}
+                                    onClick={() => void handleToggleReferralActive(idx)}
+                                  >
+                                    <span className="perk-toggle-knob" />
+                                  </button>
+                                  <span className={`referral-status-label ${isActive ? 'active' : 'inactive'}`}>{isActive ? 'Aktif' : 'Nonaktif'}</span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td>
                             <div className="admin-actions">
