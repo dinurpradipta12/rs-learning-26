@@ -14735,11 +14735,11 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                                     type="button"
                                     role="switch"
                                     aria-checked={isActive}
-                                    className={`perk-toggle ${isActive ? 'on' : ''}`}
+                                    className={`referral-switch ${isActive ? 'on' : ''}`}
                                     title={isActive ? 'Aktif — klik untuk nonaktifkan' : 'Nonaktif — klik untuk aktifkan'}
                                     onClick={() => void handleToggleReferralActive(idx)}
                                   >
-                                    <span className="perk-toggle-knob" />
+                                    <span className="referral-switch-knob" />
                                   </button>
                                   <span className={`referral-status-label ${isActive ? 'active' : 'inactive'}`}>{isActive ? 'Aktif' : 'Nonaktif'}</span>
                                 </div>
