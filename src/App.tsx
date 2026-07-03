@@ -6323,24 +6323,24 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           ? <img src={review.avatarUrl} alt={review.name} className="lms-review-avatar lms-review-avatar-img" />
           : <div className="lms-review-avatar">{review.name.charAt(0).toUpperCase()}</div>
         }
-        <div>
+        <div className="lms-review-headinfo">
           <strong>{review.name}</strong>
           {review.jobTitle && <span className="lms-review-jobtitle">{review.jobTitle}</span>}
           <span className="lms-review-stars">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
         </div>
+        {review.id && (
+          <button
+            type="button"
+            className={`lms-review-like${reviewLikes[review.id]?.liked ? ' liked' : ''}`}
+            onClick={() => void toggleReviewLike(review.id!)}
+            aria-label="Suka"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill={reviewLikes[review.id]?.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <span className="lms-review-like-count">{reviewLikes[review.id]?.count ?? 0}</span>
+          </button>
+        )}
       </div>
       <p>{review.feedback}</p>
-      {review.id && (
-        <button
-          type="button"
-          className={`lms-review-like${reviewLikes[review.id]?.liked ? ' liked' : ''}`}
-          onClick={() => void toggleReviewLike(review.id!)}
-          aria-label="Suka"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill={reviewLikes[review.id]?.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-          <span className="lms-review-like-count">{reviewLikes[review.id]?.count ?? 0}</span>
-        </button>
-      )}
     </div>
   );
 
