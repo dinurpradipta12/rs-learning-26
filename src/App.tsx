@@ -17524,12 +17524,12 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                         </div>
                         {ev.description && <p className="events-list-desc">{ev.description}</p>}
                       </div>
-                      <div className="events-list-actions">
-                        <button type="button" className="admin-action-btn" onClick={() => copyShareLink(ev.id)} title="Salin link share event">{copiedShareId === ev.id ? <><Ic name="check" size={12} /> Tersalin</> : <><Ic name="link" size={12} /> Salin Link</>}</button>
-                        <button type="button" className="admin-action-btn" onClick={() => openEdit(idx)}>edit</button>
-                        <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog('Hapus event ini? Tindakan tidak bisa dibatalkan.').then((ok) => { if (ok) void handleDelete(idx); })}>hapus</button>
+                      <div className="events-list-actions events-list-actions--icons">
+                        <button type="button" className="admin-icon-btn" onClick={() => copyShareLink(ev.id)} title={copiedShareId === ev.id ? 'Tersalin!' : 'Salin link share event'}>{copiedShareId === ev.id ? <Ic name="check" size={16} /> : <Ic name="link" size={16} />}</button>
+                        <button type="button" className="admin-icon-btn" onClick={() => openEdit(idx)} title="Edit event"><Ic name="edit" size={16} /></button>
+                        <button type="button" className="admin-icon-btn danger" onClick={() => void confirmDialog('Hapus event ini? Tindakan tidak bisa dibatalkan.').then((ok) => { if (ok) void handleDelete(idx); })} title="Hapus event"><Ic name="trash" size={16} /></button>
                         {ev.recurrenceGroupId && (
-                          <button type="button" className="admin-action-btn danger" onClick={() => void confirmDialog(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`).then((ok) => { if (ok) void handleDeleteGroup(ev.recurrenceGroupId!); })} style={{ whiteSpace: 'nowrap' }}>hapus semua</button>
+                          <button type="button" className="admin-icon-btn danger" onClick={() => void confirmDialog(`Hapus semua event berulang dalam grup ini? (${events.filter((e) => e.recurrenceGroupId === ev.recurrenceGroupId).length} event)`).then((ok) => { if (ok) void handleDeleteGroup(ev.recurrenceGroupId!); })} title="Hapus semua event berulang di grup ini"><Ic name="trash" size={16} /><span className="admin-icon-btn-badge">semua</span></button>
                         )}
                       </div>
                     </div>

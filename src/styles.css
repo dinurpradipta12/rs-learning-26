@@ -14628,6 +14628,21 @@ body.dark .referral-claim-modal { background: #12162b; }
 .events-list-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); }
 .events-list-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.5; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .events-list-actions { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; justify-content: center; align-items: flex-end; }
+.events-list-actions--icons { flex-direction: row; align-items: center; gap: 6px; }
+.admin-icon-btn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--card);
+  color: var(--muted); cursor: pointer; transition: all 0.15s ease;
+}
+.admin-icon-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(var(--accent-rgb),0.06); }
+.admin-icon-btn.danger:hover { border-color: #dc2626; color: #dc2626; background: rgba(220,38,38,0.06); }
+.admin-icon-btn-badge {
+  position: absolute; bottom: -6px; right: -4px;
+  font-size: 0.54rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em;
+  background: #dc2626; color: #fff; border-radius: 999px; padding: 1px 5px; line-height: 1.3;
+}
 
 @media (max-width: 720px) {
   .events-list-card { flex-direction: column; }
