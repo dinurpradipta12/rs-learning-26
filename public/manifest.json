@@ -4,8 +4,9 @@
   "description": "Platform belajar sosial media marketing yang lengkap",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay"],
   "background_color": "#f6f1ff",
-  "theme_color": "#7a4fd6",
+  "theme_color": "#fcfaff",
   "icons": [
     {
       "src": "/icon-192.png",

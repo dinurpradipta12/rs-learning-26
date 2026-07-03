@@ -1082,6 +1082,25 @@ body.dark .landing-shell { background: linear-gradient(180deg, #eaf1ff 0%, #f6f9
   width: 100%;
 }
 
+/* PWA Window Controls Overlay: konten naik ke area title bar (bar OS hilang).
+   Beri padding kiri agar tidak ketimpa tombol window (traffic lights) & jadikan
+   header area bisa di-drag, tapi elemen interaktif tetap bisa diklik. */
+@media (display-mode: window-controls-overlay) {
+  .topbar {
+    padding-left: calc(env(titlebar-area-x, 0px) + clamp(32px, 4vw, 72px)) !important;
+    min-height: env(titlebar-area-height, 0px);
+    -webkit-app-region: drag;
+  }
+  .topbar a,
+  .topbar button,
+  .topbar input,
+  .topbar select,
+  .topbar [role="button"],
+  .topbar .account-trigger {
+    -webkit-app-region: no-drag;
+  }
+}
+
 .topbar {
   position: fixed;
   top: 0;
