@@ -10234,7 +10234,7 @@ function ForumThreadCard({
         </span>
       </div>
       <h3 className="forum-thread-title">{thread.title}</h3>
-      <p className="forum-thread-excerpt">{thread.body.slice(0, 120)}{thread.body.length > 120 ? '…' : ''}</p>
+      <p className="forum-thread-excerpt">{(thread.body ?? '').slice(0, 120)}{(thread.body ?? '').length > 120 ? '…' : ''}</p>
       {thread.imageUrl && (
         <img src={thread.imageUrl} alt="attachment" className="forum-thread-thumb" />
       )}
@@ -10250,7 +10250,7 @@ function ForumThreadCard({
             <img src={avatarSrc} alt={last.authorDisplayName} className="forum-avatar-xs" />
             <div className="forum-card-last-reply-content">
               <span className="forum-card-last-reply-author">{last.authorDisplayName}</span>
-              <span className="forum-card-last-reply-body">{last.body.slice(0, 80)}{last.body.length > 80 ? '…' : ''}</span>
+              <span className="forum-card-last-reply-body">{(last.body ?? '').slice(0, 80)}{(last.body ?? '').length > 80 ? '…' : ''}</span>
             </div>
             <span className="forum-card-last-reply-time">{timeAgo(last.createdAt)}</span>
           </div>
@@ -11069,8 +11069,8 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
     const mapThreadRow = (t: Record<string, unknown>): Omit<ForumThread, 'replies'> => ({
       id: t.id as string,
       category: t.category as string,
-      title: t.title as string,
-      body: t.body as string,
+      title: (t.title as string) ?? '',
+      body: (t.body as string) ?? '',
       imageUrl: (t.image_url as string) ?? undefined,
       authorUsername: t.author_username as string,
       authorDisplayName: t.author_display_name as string,
@@ -11099,9 +11099,16 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
           const row = mapThreadRow(payload.new as Record<string, unknown>);
           setForumThreads((prev) => prev.some((t) => t.id === row.id) ? prev : [{ ...row, replies: [] }, ...prev]);
         } else {
-          // UPDATE: ubah field thread, pertahankan replies yang sudah ada
+          // UPDATE: ubah field thread, pertahankan replies yang sudah ada.
+          // Payload realtime bisa TERPOTONG untuk row besar (body/title hilang),
+          // jadi jangan timpa field dengan nilai kosong dari payload.
           const row = mapThreadRow(payload.new as Record<string, unknown>);
-          setForumThreads((prev) => prev.map((t) => t.id === row.id ? { ...t, ...row } : t));
+          setForumThreads((prev) => prev.map((t) => t.id === row.id ? {
+            ...t, ...row,
+            title: row.title || t.title,
+            body: row.body || t.body,
+            imageUrl: row.imageUrl ?? t.imageUrl,
+          } : t));
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, (payload) => {
@@ -11129,7 +11136,7 @@ function CommunityPage({ session, initialThreadId, featureCosts, userPerks = {},
   const visibleThreads = forumThreads.filter((t) => {
     const matchCat = filterCategory === 'semua' || t.category === filterCategory;
     const q = searchQuery.toLowerCase();
-    const matchSearch = !q || t.title.toLowerCase().includes(q) || t.body.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
+    const matchSearch = !q || (t.title ?? '').toLowerCase().includes(q) || (t.body ?? '').toLowerCase().includes(q) || (t.category ?? '').toLowerCase().includes(q);
     return matchCat && matchSearch;
   });
 
@@ -18132,7 +18139,7 @@ function GlobalSearchModal({ onClose }: { onClose: () => void }) {
         }
       }
       for (const t of (threads ?? []) as { id: string; title: string; body: string; category: string }[]) {
-        if (t.title.toLowerCase().includes(q) || t.body.toLowerCase().includes(q)) {
+        if ((t.title ?? '').toLowerCase().includes(q) || (t.body ?? '').toLowerCase().includes(q)) {
           matched.push({ type: 'thread', id: t.id, title: t.title, subtitle: `QnA · ${t.category}`, hash: `#community` });
         }
       }
