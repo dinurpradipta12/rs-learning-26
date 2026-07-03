@@ -5809,8 +5809,10 @@ function getCourseBadge(courseKey: string, releaseSettings: AllCourseReleaseSett
   const { lastLessonUploadedAt, releaseDays, moduleComplete } = settings;
   if (moduleComplete) return { type: 'complete', label: 'Modul Sudah Lengkap' };
   if (lastLessonUploadedAt) {
-    const daysSince = (Date.now() - new Date(lastLessonUploadedAt).getTime()) / (1000 * 60 * 60 * 24);
-    if (daysSince < 7) return { type: 'new', label: 'Video Baru · Tonton Sekarang' };
+    const hoursSince = (Date.now() - new Date(lastLessonUploadedAt).getTime()) / (1000 * 60 * 60);
+    // "Video Baru" hanya dalam 24 jam pertama sejak upload; setelah itu jatuh ke
+    // "Video Berikutnya" sesuai jadwal rilis di bawah.
+    if (hoursSince < 24) return { type: 'new', label: 'Video Baru · Tonton Sekarang' };
   }
   if (releaseDays && releaseDays.length > 0) {
     const dayNamesJS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
