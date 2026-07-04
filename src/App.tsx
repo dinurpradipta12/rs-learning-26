@@ -4,9 +4,8 @@ import { supabase } from './lib/supabase';
 import logo1 from './logo1.png';
 import ruangCoinImg from './ruang-coin.png';
 
-// ── Telegram Bot (Admin) ──────────────────────────────────────
-const TG_TOKEN = '8366984234:AAHjA8l7QqvVNtc7kajGwaTwkzAy4t52Sko';
-const TG_CHAT  = '8830130248';
+// Telegram: token bot TIDAK lagi di client. Semua pengiriman lewat edge
+// function `tg-notify` (lihat sendTelegram / sendStudentBot / sendAdminPhoto).
 
 // Kompres & resize gambar sebelum upload agar hemat storage + egress Supabase.
 // File non-gambar (pdf/zip), GIF (animasi), dan SVG dikembalikan apa adanya.
@@ -85,37 +84,25 @@ async function scheduleEventReminders(username: string, ev: { id: string; title:
   }
 }
 
-async function sendTelegram(text: string, buttons?: Array<Array<{ text: string; callback_data: string }>>): Promise<void> {
+type TgButtons = Array<Array<{ text: string; callback_data: string }>>;
+
+// Semua pengiriman Telegram lewat edge function `tg-notify`. Token bot ada di
+// server (env), TIDAK di bundle client. Signatur lama dipertahankan agar
+// pemanggil tidak berubah.
+async function sendTelegram(text: string, buttons?: TgButtons): Promise<void> {
   try {
-    const body: Record<string, unknown> = { chat_id: TG_CHAT, text, parse_mode: 'HTML' };
-    if (buttons) body.reply_markup = { inline_keyboard: buttons };
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    await supabase.functions.invoke('tg-notify', { body: { action: 'admin', text, buttons } });
   } catch { /* silent */ }
 }
 
 // ── Student Bot (Ruang Admin) ─────────────────────────────────
-async function sendStudentBot(chatId: string, text: string, token: string, buttons?: Array<Array<{ text: string; callback_data: string }>>): Promise<void> {
-  if (!token || !chatId) return;
+// Param `token` dipertahankan untuk kompatibilitas pemanggil lama, tapi tidak
+// dipakai lagi (token ada di server).
+async function sendStudentBot(chatId: string, text: string, _token?: string, buttons?: TgButtons): Promise<void> {
+  if (!chatId) return;
   try {
-    const body: Record<string, unknown> = { chat_id: chatId, text, parse_mode: 'HTML' };
-    if (buttons) body.reply_markup = { inline_keyboard: buttons };
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    await supabase.functions.invoke('tg-notify', { body: { action: 'student', chatId, text, buttons } });
   } catch { /* silent */ }
-}
-
-// Token student bot dipakemkan agar tidak berubah lagi (tidak bergantung ke DB).
-const STUDENT_BOT_TOKEN = '8824436093:AAFOwAwqzVzUvKp-KSTb7S6b83m9O9FIW50';
-
-async function getStudentBotToken(): Promise<string> {
-  return STUDENT_BOT_TOKEN;
 }
 
 async function getStudentChatId(username: string): Promise<string | null> {
@@ -124,145 +111,25 @@ async function getStudentChatId(username: string): Promise<string | null> {
 }
 
 async function notifyStudent(username: string, text: string): Promise<void> {
-  const [chatId, token] = await Promise.all([getStudentChatId(username), getStudentBotToken()]);
-  if (chatId && token) await sendStudentBot(chatId, text, token);
+  const chatId = await getStudentChatId(username);
+  if (chatId) await sendStudentBot(chatId, text);
+}
+
+// Kirim foto (mis. bukti topup) ke admin via edge function; pakai URL publik
+// storage, bukan multipart — token tetap di server.
+async function sendAdminPhoto(photoUrl: string, caption: string, buttons?: TgButtons): Promise<void> {
+  try {
+    await supabase.functions.invoke('tg-notify', { body: { action: 'admin_photo', photoUrl, text: caption, buttons } });
+  } catch { /* silent */ }
 }
 
 function generateLinkCode(): string {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
 
-async function answerCallback(callbackQueryId: string, text?: string): Promise<void> {
-  try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/answerCallbackQuery`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callback_query_id: callbackQueryId, text, show_alert: false }),
-    });
-  } catch { /* silent */ }
-}
-
-async function processTelegramCommand(text: string): Promise<string | null> {
-  const cmd = text.trim().toLowerCase();
-
-  // /at <shortId> → approve topup
-  const atMatch = cmd.match(/^\/at\s+([a-f0-9\-]{6,8})/);
-  if (atMatch) {
-    const shortId = atMatch[1];
-    const { data: rows } = await supabase.from('topup_requests').select('*').ilike('id', `${shortId}%`).eq('status', 'pending').limit(1);
-    const req = rows?.[0];
-    if (!req) return `❌ Request topup <code>${shortId}</code> tidak ditemukan atau sudah diproses.`;
-    if (!req.proof_url) return `❌ Topup <code>${shortId}</code> belum ada bukti transaksi. Topup tanpa bukti tidak dapat disetujui.`;
-    const { data: creditRow } = await supabase.from('user_credits').select('balance').eq('username', req.username).maybeSingle();
-    const current = (creditRow as { balance?: number } | null)?.balance ?? 0;
-    await Promise.all([
-      supabase.from('topup_requests').update({ status: 'approved' }).eq('id', req.id),
-      supabase.from('user_credits').upsert({ username: req.username, balance: current + req.credits }),
-      supabase.from('credit_transactions').insert({ username: req.username, amount: req.credits, type: 'topup', description: `Topup ${req.package_label}` }),
-    ]);
-    return `✅ <b>Topup disetujui!</b>\n\n👤 @${req.username}\n💰 +${req.credits.toLocaleString('id-ID')} Ruang Coin\nSaldo baru: ${(current + req.credits).toLocaleString('id-ID')} Ruang Coin`;
-  }
-
-  // /rt <shortId> → reject topup
-  const rtMatch = cmd.match(/^\/rt\s+([a-f0-9\-]{6,8})/);
-  if (rtMatch) {
-    const shortId = rtMatch[1];
-    const { data: rows } = await supabase.from('topup_requests').select('*').ilike('id', `${shortId}%`).eq('status', 'pending').limit(1);
-    const req = rows?.[0];
-    if (!req) return `❌ Request topup <code>${shortId}</code> tidak ditemukan atau sudah diproses.`;
-    await supabase.from('topup_requests').update({ status: 'rejected' }).eq('id', req.id);
-    return `❌ <b>Topup ditolak.</b>\n\n👤 @${req.username}\n💰 ${req.credits.toLocaleString('id-ID')} Ruang Coin\nUser akan menerima notifikasi penolakan.`;
-  }
-
-  // /ab <shortId> → approve booking
-  const abMatch = cmd.match(/^\/ab\s+([a-f0-9\-]{6,8})/);
-  if (abMatch) {
-    const shortId = abMatch[1];
-    const { data: rows } = await supabase.from('one_on_one_bookings').select('*').ilike('id', `${shortId}%`).eq('status', 'pending').limit(1);
-    const booking = rows?.[0];
-    if (!booking) return `❌ Booking <code>${shortId}</code> tidak ditemukan atau sudah diproses.`;
-    await supabase.from('one_on_one_bookings').update({ status: 'approved' }).eq('id', booking.id);
-    return `✅ <b>Booking disetujui!</b>\n\n👤 @${booking.requester_username}\n📌 ${booking.topic}\n🗓 ${booking.preferred_date} pukul ${(booking.preferred_time as string).slice(0, 5)}`;
-  }
-
-  // /rb <shortId> → reject booking
-  const rbMatch = cmd.match(/^\/rb\s+([a-f0-9\-]{6,8})/);
-  if (rbMatch) {
-    const shortId = rbMatch[1];
-    const { data: rows } = await supabase.from('one_on_one_bookings').select('*').ilike('id', `${shortId}%`).eq('status', 'pending').limit(1);
-    const booking = rows?.[0];
-    if (!booking) return `❌ Booking <code>${shortId}</code> tidak ditemukan atau sudah diproses.`;
-    await supabase.from('one_on_one_bookings').update({ status: 'rejected' }).eq('id', booking.id);
-    return `❌ <b>Booking ditolak.</b>\n\n👤 @${booking.requester_username}\n📌 ${booking.topic}`;
-  }
-
-  // /help
-  if (cmd === '/help' || cmd === '/start') {
-    return `📋 <b>Daftar Command</b>\n\n<code>/at &lt;id&gt;</code> — Approve topup\n<code>/rt &lt;id&gt;</code> — Reject topup\n<code>/ab &lt;id&gt;</code> — Approve booking 1:1\n<code>/rb &lt;id&gt;</code> — Reject booking 1:1\n\n💡 ID dikirim otomatis di setiap notifikasi.\nContoh: <code>/at a1b2c3d4</code>`;
-  }
-
-  // command dikenal tapi tanpa ID
-  if (/^\/(at|rt|ab|rb)$/.test(cmd)) {
-    const labels: Record<string, string> = { at: 'approve topup', rt: 'reject topup', ab: 'approve booking', rb: 'reject booking' };
-    const key = cmd.slice(1);
-    return `⚠️ Format salah. Gunakan:\n<code>${cmd} &lt;id&gt;</code>\nContoh: <code>${cmd} a1b2c3d4</code>\n\nID ada di notifikasi ${labels[key] ?? ''}.`;
-  }
-
-  return `❓ Command tidak dikenal. Ketik /help untuk daftar command.`;
-}
-
-// Singleton guard: only one polling loop allowed across all React renders/mounts
-let tgPollingActive = false;
-
-function useTelegramPolling(active: boolean) {
-  const offsetRef = useRef(0);
-  useEffect(() => {
-    if (!active) return;
-    // Prevent duplicate polling instances (React StrictMode double-invoke)
-    if (tgPollingActive) return;
-    tgPollingActive = true;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const url = `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${offsetRef.current}&timeout=0`;
-        const res = await fetch(url);
-        type TgUpdate = {
-          update_id: number;
-          message?: { text?: string; chat?: { id: number } };
-          callback_query?: { id: string; data?: string; from?: { id: number }; message?: { message_id: number } };
-        };
-        const json = await res.json() as { ok: boolean; result: TgUpdate[] };
-        if (json.ok && !cancelled) {
-          for (const update of json.result) {
-            offsetRef.current = update.update_id + 1;
-
-            // Handle inline button tap (callback_query)
-            if (update.callback_query) {
-              const cq = update.callback_query;
-              await answerCallback(cq.id, '⏳ Memproses...');
-              const reply = await processTelegramCommand(`/${cq.data ?? ''}`);
-              if (reply) await sendTelegram(reply);
-              continue;
-            }
-
-            // Handle text command
-            const text = update.message?.text?.trim() ?? '';
-            if (!text.startsWith('/') || update.message?.chat?.id !== Number(TG_CHAT)) continue;
-            const reply = await processTelegramCommand(text);
-            if (reply) await sendTelegram(reply);
-          }
-        }
-      } catch { /* silent */ }
-      if (!cancelled) setTimeout(poll, 4000);
-    };
-    // Delete any active webhook first, then start polling
-    void (async () => {
-      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_updates=true`, { method: 'POST' });
-      if (!cancelled) void poll();
-    })();
-    return () => { cancelled = true; tgPollingActive = false; };
-  }, [active]);
-}
+// Command bot admin (/at /rt /ab /rb) kini ditangani SERVER lewat edge function
+// `telegram-webhook` (mode webhook). Polling di browser sudah dihapus agar token
+// bot tidak perlu ada di client.
 
 // Ikon SVG UI (pengganti emoji). stroke pakai currentColor.
 type IcName =
@@ -599,6 +466,10 @@ type AppSession = {
   displayName: string;
   role: 'student' | 'developer' | 'admin';
   createdAt?: string;
+  // Token sesi yang diterbitkan server (app_sessions). Bukti identitas untuk
+  // semua operasi sensitif — role di sini hanya untuk UX, otorisasi tetap
+  // diverifikasi server via token ini.
+  token?: string;
 };
 
 type LocalAuthUser = {
@@ -1457,6 +1328,12 @@ function readStoredSession() {
   } catch {
     return null;
   }
+}
+
+// Token sesi user yang sedang login (untuk RPC self-reward). Semua reward
+// selalu untuk user aktif, jadi membaca token tersimpan sudah tepat.
+function currentSessionToken(): string | undefined {
+  return readStoredSession()?.token;
 }
 
 function persistStoredSession(session: AppSession, rememberMe: boolean) {
@@ -2686,20 +2563,12 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
     const shortId = topupId.slice(0, 8);
     await supabase.from('topup_requests').update({ proof_url: proofUrl }).eq('id', topupId);
 
-    // kirim foto ke Telegram
-    try {
-      const form = new FormData();
-      form.append('chat_id', TG_CHAT);
-      form.append('photo', file);
-      form.append('caption', `💰 <b>Pembelian Coin Baru — Butuh Approval</b>\n\n👤 ${session?.displayName ?? session?.username} (@${session?.username})\n📦 Paket: ${activePkgSnapshot.label}\n💵 Harga: ${formatRupiah(activePkgSnapshot.price)}\n🪙 Coin: ${activePkgSnapshot.credits.toLocaleString('id-ID')} Ruang Coin\n🆔 ID: <code>${shortId}</code>`);
-      form.append('parse_mode', 'HTML');
-      form.append('reply_markup', JSON.stringify({
-        inline_keyboard: [[
-          { text: '✅ Approve', callback_data: `at:${topupId}` },
-        ]],
-      }));
-      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`, { method: 'POST', body: form });
-    } catch { /* silent */ }
+    // kirim foto bukti ke Telegram admin via edge function (token di server)
+    void sendAdminPhoto(
+      proofUrl,
+      `💰 <b>Pembelian Coin Baru — Butuh Approval</b>\n\n👤 ${session?.displayName ?? session?.username} (@${session?.username})\n📦 Paket: ${activePkgSnapshot.label}\n💵 Harga: ${formatRupiah(activePkgSnapshot.price)}\n🪙 Coin: ${activePkgSnapshot.credits.toLocaleString('id-ID')} Ruang Coin\n🆔 ID: <code>${shortId}</code>`,
+      [[{ text: '✅ Approve', callback_data: `at:${topupId}` }]],
+    );
 
     // notif in-app ke admin
     const { data: devs } = await supabase.from('app_users').select('username').eq('role', 'developer');
@@ -3131,9 +3000,7 @@ function App() {
   const isDeveloper = session?.role === 'developer' || session?.role === 'admin';
   const redirectTarget = page === 'login' ? '#dashboard' : hash;
 
-  // Telegram command polling — aktif saat admin login
-  // Telegram commands handled by supabase/functions/telegram-webhook (webhook mode)
-  // useTelegramPolling(isDeveloper);
+  // Command bot Telegram ditangani edge function telegram-webhook (webhook mode).
 
   // Re-fetch perks on every page navigation so changes take effect immediately
   useEffect(() => {
@@ -3626,7 +3493,7 @@ function App() {
         {page === 'assets' && <AssetManagerPage canEdit={isDeveloper} session={session} userPerks={userPerks} />}
         {page === 'myfile' && session && <MyFilePage session={session} />}
         {page === 'admin' && isDeveloper && <AdminPage session={session} featureCosts={featureCosts} onFeatureCostsChange={(c) => { setFeatureCosts(c); void saveFeatureCosts(c); }} />}
-        {page === 'inbox' && isDeveloper && <InboxPage />}
+        {page === 'inbox' && isDeveloper && <InboxPage session={session} />}
         {page === 'login' && (
           <LoginPage session={session} redirectTo={redirectTarget} onLoginSuccess={setSession} />
         )}
@@ -4997,16 +4864,12 @@ function DashboardSection({ session }: { session: AppSession }) {
     if (!allDone || journeyRewardChecked) return;
     setJourneyRewardChecked(true);
     void (async () => {
-      const desc = 'Bonus: Selesai Journey';
-      const { count } = await supabase.from('credit_transactions').select('id', { count: 'exact', head: true }).eq('username', session.username).eq('description', desc);
-      if ((count ?? 0) > 0) return; // sudah pernah dapat
-      const { data: bal } = await supabase.from('user_credits').select('balance').eq('username', session.username).maybeSingle();
-      const next = (bal?.balance ?? 0) + JOURNEY_REWARD;
-      await Promise.all([
-        supabase.from('user_credits').upsert({ username: session.username, balance: next }),
-        supabase.from('credit_transactions').insert({ username: session.username, amount: JOURNEY_REWARD, type: 'topup', description: desc }),
-      ]);
-      setCredits(next);
+      // Server memverifikasi belum pernah klaim & menulis saldo.
+      if (!session.token) return;
+      const { data } = await supabase.rpc('claim_journey_reward', { p_token: session.token });
+      const res = data as { ok?: boolean; newBalance?: number } | null;
+      if (!res?.ok) return; // sudah pernah dapat / gagal
+      if (res.newBalance != null) setCredits(res.newBalance);
       setJourneyRewardToast(true);
       setTimeout(() => setJourneyRewardToast(false), 6000);
     })();
@@ -9012,6 +8875,7 @@ function LoginPage({
       displayName: matchedUser.display_name ?? matchedUser.username,
       role: matchedUser.role,
       createdAt: matchedUser.created_at,
+      token: matchedUser.token,
     };
 
     onLoginSuccess(nextSession);
@@ -9086,40 +8950,28 @@ function LoginPage({
       displayName: (result as { display_name?: string })?.display_name ?? (displayName.trim() || registeredUsername),
       role: (result as { role?: string })?.role ?? 'user',
       createdAt: (result as { created_at?: string })?.created_at ?? new Date().toISOString(),
+      token: (result as { token?: string })?.token,
     };
 
-    // Apply referral code bonus — re-validate in case user didn't blur the input
+    // Apply referral code bonus — divalidasi & diberikan SERVER lewat token
+    // sesi baru user. Client tidak lagi menulis saldo/perk sendiri.
     const newUser = nextSession.username;
     let appliedReferralCredits = 0;
     let appliedReferralFeatures: string[] = [];
     const usedReferralCode = referralCode.trim().toUpperCase();
-    if (referralCode.trim()) {
-      const matchedReferral = referralStatus === 'valid' && referralMatched ? referralMatched : await validateReferralCode(referralCode);
-      if (matchedReferral) {
-        const codeType = matchedReferral.type ?? 'coin';
-        if (codeType === 'coin' && matchedReferral.credits > 0) {
-          appliedReferralCredits = matchedReferral.credits;
-        } else if (codeType === 'feature' && matchedReferral.features && matchedReferral.features.length > 0) {
-          appliedReferralFeatures = matchedReferral.features;
-          const referralPerks: UserPerks = {};
-          for (const f of matchedReferral.features) referralPerks[f as keyof UserPerks] = true;
-          // Store as time-limited referral_perks (not permanent perks)
-          await supabase.from('user_profiles').update({
-            referral_perks: referralPerks,
-            referral_perks_expires_at: matchedReferral.expiresAt ?? null,
-          } as never).eq('username', newUser);
+    if (referralCode.trim() && nextSession.token) {
+      const { data: refData } = await supabase.rpc('claim_referral_code', {
+        p_token: nextSession.token,
+        p_code: usedReferralCode,
+      });
+      const refRes = refData as { ok?: boolean; type?: string; credits?: number } | null;
+      if (refRes?.ok) {
+        if (refRes.type === 'coin') appliedReferralCredits = refRes.credits ?? 0;
+        else if (refRes.type === 'feature') {
+          const m = referralStatus === 'valid' && referralMatched ? referralMatched : await validateReferralCode(referralCode);
+          appliedReferralFeatures = m?.features ?? [];
         }
-        // Simpan kode referral yang digunakan ke profil user
-        await supabase.from('user_profiles').update({ referral_code: usedReferralCode }).eq('username', newUser);
       }
-    }
-    if (appliedReferralCredits > 0) {
-      const { data: existingCredits } = await supabase.from('user_credits').select('balance').eq('username', newUser).maybeSingle();
-      const currentBalance = existingCredits?.balance ?? 0;
-      await Promise.all([
-        supabase.from('user_credits').upsert({ username: newUser, balance: currentBalance + appliedReferralCredits }),
-        supabase.from('credit_transactions').insert({ username: newUser, amount: appliedReferralCredits, type: 'topup', description: `Bonus kode referral: ${usedReferralCode}` }),
-      ]);
     }
 
     const featureNames: Record<string, string> = { free_video: 'Video', free_booking: 'Booking 1:1', free_thread: 'Thread', free_asset: 'Asset', free_event: 'Event' };
@@ -11003,20 +10855,15 @@ function ForumComposer({
     if (isQnaSession) {
       // Silent broadcast to all members with linked Telegram
       void (async () => {
-        const [{ data: users }, token] = await Promise.all([
-          supabase.from('app_users').select('telegram_chat_id').not('telegram_chat_id', 'is', null).neq('telegram_chat_id', ''),
-          getStudentBotToken(),
-        ]);
-        if (!token || !users) return;
+        const { data: users } = await supabase.from('app_users').select('telegram_chat_id').not('telegram_chat_id', 'is', null).neq('telegram_chat_id', '');
+        if (!users) return;
         const broadcastMsg =
           `🎙️ <b>QNA Session Baru!</b>\n\n` +
           `📌 <b>${title.trim()}</b>\n\n` +
           (body.trim() ? `${body.trim().slice(0, 300)}${body.trim().length > 300 ? '…' : ''}\n\n` : '') +
           `💬 Buka aplikasi untuk ikut tanya jawab!`;
-        for (const u of users) {
-          const chatId = (u as { telegram_chat_id: string }).telegram_chat_id;
-          if (chatId) await sendStudentBot(chatId, broadcastMsg, token);
-        }
+        const chatIds = users.map((u) => (u as { telegram_chat_id: string }).telegram_chat_id).filter(Boolean);
+        if (chatIds.length > 0) await supabase.functions.invoke('tg-notify', { body: { action: 'student_bulk', chatIds, text: broadcastMsg } });
       })();
     } else {
       void sendTelegram(
@@ -11613,26 +11460,17 @@ const coinRewardIcons: Record<CoinRewardKey, string> = {
   reply_thread: '💬', create_thread: '📝', daily_login: '📅', complete_lesson: '🎬', write_review: '⭐',
 };
 
-// Award koin ke user saat melakukan aksi tertentu (dengan batas harian anti-spam).
-async function awardCoinReward(username: string, key: CoinRewardKey): Promise<number | null> {
+// Award koin ke user saat melakukan aksi tertentu. Batas harian, jumlah, &
+// penulisan saldo dievaluasi DI SERVER (claim_self_reward) — client tidak
+// bisa lagi mengklaim jumlah sembarang. Parameter `username` dipertahankan
+// untuk kompatibilitas pemanggil (selalu user aktif).
+async function awardCoinReward(_username: string, key: CoinRewardKey): Promise<number | null> {
   try {
-    const settings = await loadAdminSettings();
-    const rule = (settings.coin_rewards ?? defaultCoinRewards)[key];
-    if (!rule || rule.amount <= 0) return null;
-    const desc = `Bonus: ${coinRewardLabels[key]}`;
-    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
-    const { count } = await supabase.from('credit_transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('username', username).eq('description', desc)
-      .gte('created_at', startOfDay.toISOString());
-    if ((count ?? 0) >= rule.perDay) return null;
-    const { data: bal } = await supabase.from('user_credits').select('balance').eq('username', username).maybeSingle();
-    const next = (bal?.balance ?? 0) + rule.amount;
-    await Promise.all([
-      supabase.from('user_credits').upsert({ username, balance: next }),
-      supabase.from('credit_transactions').insert({ username, amount: rule.amount, type: 'topup', description: desc }),
-    ]);
-    return next;
+    const token = currentSessionToken();
+    if (!token) return null;
+    const { data } = await supabase.rpc('claim_self_reward', { p_token: token, p_reward_key: key });
+    const res = data as { ok?: boolean; newBalance?: number } | null;
+    return res?.ok ? (res.newBalance ?? null) : null;
   } catch { return null; }
 }
 
@@ -12023,29 +11861,22 @@ function DailyCheckinModal({ username, dailyCoins, day7, onCoinChange, onFeature
     if (d !== claimableDay || claiming) return;
     setClaiming(true);
     const isDay7 = d === 7;
-    const coins = dayCoins(d);
-    const desc = isDay7 ? 'Bonus: Check-in Hari ke-7' : 'Bonus: Login Harian';
-    const { data: bal } = await supabase.from('user_credits').select('balance').eq('username', username).maybeSingle();
-    const next = (bal?.balance ?? 0) + coins;
-    const ops: Promise<unknown>[] = [
-      supabase.from('user_credits').upsert({ username, balance: next }),
-      supabase.from('credit_transactions').insert({ username, amount: coins, type: 'topup', description: desc }),
-      supabase.from('user_profiles').update({ checkin_streak: d, last_checkin: todayStr } as never).eq('username', username),
-    ];
-    // Hari ke-7: bonus akses fitur (kalau diatur admin)
-    if (isDay7 && day7.features.length > 0) {
-      const { data: prof } = await supabase.from('user_profiles').select('referral_perks').eq('username', username).maybeSingle();
-      const existing = ((prof as { referral_perks?: UserPerks } | null)?.referral_perks ?? {}) as UserPerks;
-      const merged: UserPerks = { ...existing };
-      for (const f of day7.features) merged[f as keyof UserPerks] = true;
-      ops.push(supabase.from('user_profiles').update({ referral_perks: merged } as never).eq('username', username));
+    // Streak, jumlah coin, & bonus fitur hari ke-7 dihitung & ditulis SERVER.
+    const token = currentSessionToken();
+    if (!token) { setClaiming(false); return; }
+    const { data, error } = await supabase.rpc('claim_daily_checkin', { p_token: token });
+    const res = data as { ok?: boolean; newBalance?: number; day?: number; coins?: number; error?: string } | null;
+    if (error || !res?.ok) {
+      setClaiming(false);
+      return;
     }
-    await Promise.all(ops);
-    onCoinChange(next);
+    const coins = res.coins ?? dayCoins(d);
+    const claimedDay = res.day ?? d;
+    if (res.newBalance != null) onCoinChange(res.newBalance);
     if (isDay7 && day7.features.length > 0) onFeatureClaim(day7.features);
-    setClaimedInCycle(d);
+    setClaimedInCycle(claimedDay);
     setClaimedToday(true);
-    setJustClaimed({ coins, features: isDay7 ? day7.features : [], day: d });
+    setJustClaimed({ coins, features: isDay7 ? day7.features : [], day: claimedDay });
     setClaiming(false);
   };
 
@@ -12134,34 +11965,24 @@ function ReferralClaimModal({ session, currentCredits, onClose, onCoinClaimed, o
   const handleClaim = async () => {
     if (!preview) return;
     setStatus('claiming');
-    const codeType = preview.type ?? 'coin';
+    // Validasi kode, sekali-pakai, pemberian coin/perk semuanya di SERVER.
+    const token = currentSessionToken();
+    if (!token) { setStatus('invalid'); return; }
+    const { data, error } = await supabase.rpc('claim_referral_code', { p_token: token, p_code: codeUpper });
+    const res = data as { ok?: boolean; type?: string; credits?: number; newBalance?: number; error?: string } | null;
+    if (error || !res?.ok) {
+      setStatus(res?.error?.includes('sudah pernah') ? 'used' : 'invalid');
+      return;
+    }
 
-    if (codeType === 'feature' && preview.features && preview.features.length > 0) {
-      const { data: profRow } = await supabase.from('user_profiles').select('referral_perks').eq('username', session.username).maybeSingle();
-      const existingPerks = ((profRow as { referral_perks?: UserPerks } | null)?.referral_perks ?? {}) as UserPerks;
-      const referralPerks: UserPerks = { ...existingPerks };
-      for (const f of preview.features) referralPerks[f as keyof UserPerks] = true;
-      await Promise.all([
-        supabase.from('user_profiles').update({
-          referral_perks: referralPerks,
-          referral_perks_expires_at: preview.expiresAt ?? null,
-          referral_code: codeUpper,
-        } as never).eq('username', session.username),
-        supabase.from('credit_transactions').insert({ username: session.username, amount: 0, type: 'topup', description: `Klaim akses fitur: ${codeUpper}` }),
-      ]);
+    if (res.type === 'feature' && preview.features && preview.features.length > 0) {
       onFeatureClaimed(preview.features);
       setSuccess({ credits: 0, features: preview.features, code: codeUpper });
       return;
     }
 
-    // Coin
-    const newBal = currentCredits + preview.credits;
-    await Promise.all([
-      supabase.from('user_credits').upsert({ username: session.username, balance: newBal }),
-      supabase.from('credit_transactions').insert({ username: session.username, amount: preview.credits, type: 'topup', description: `Bonus kode referral: ${codeUpper}` }),
-    ]);
-    onCoinClaimed(newBal);
-    setSuccess({ credits: preview.credits, code: codeUpper });
+    if (res.newBalance != null) onCoinClaimed(res.newBalance);
+    setSuccess({ credits: res.credits ?? preview.credits, code: codeUpper });
   };
 
   return createPortal(
@@ -13786,7 +13607,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   // "Ruang Coin Tersalurkan" & "Est. Pendapatan".
   const handleResetTransactions = async () => {
     setResettingTx(true);
-    await supabase.from('credit_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.rpc('admin_clear_transactions', { p_token: session.token });
     setResettingTx(false);
     setShowResetTxModal(false);
     void loadData();
@@ -13995,14 +13816,12 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     await channel.send({ type: 'broadcast', event: 'show-promo', payload: { promo } });
     await supabase.removeChannel(channel);
 
-    // Blast ke semua student yang sudah link Telegram
-    const botToken = STUDENT_BOT_TOKEN;
-    if (botToken) {
-      const { data: linkedUsers } = await supabase.from('app_users').select('telegram_chat_id').not('telegram_chat_id', 'is', null);
-      if (linkedUsers && linkedUsers.length > 0) {
-        const broadcastText = `📢 <b>${promo.title || 'Promo Spesial!'}</b>\n\n${promo.body || ''}\n\n🔗 Buka Ruang Sosmed ID untuk info lengkap.`;
-        await Promise.all(linkedUsers.map((u: { telegram_chat_id: string }) => sendStudentBot(u.telegram_chat_id, broadcastText, botToken)));
-      }
+    // Blast ke semua student yang sudah link Telegram (token di server)
+    const { data: linkedUsers } = await supabase.from('app_users').select('telegram_chat_id').not('telegram_chat_id', 'is', null);
+    if (linkedUsers && linkedUsers.length > 0) {
+      const broadcastText = `📢 <b>${promo.title || 'Promo Spesial!'}</b>\n\n${promo.body || ''}\n\n🔗 Buka Ruang Sosmed ID untuk info lengkap.`;
+      const chatIds = linkedUsers.map((u: { telegram_chat_id: string }) => u.telegram_chat_id).filter(Boolean);
+      if (chatIds.length > 0) await supabase.functions.invoke('tg-notify', { body: { action: 'student_bulk', chatIds, text: broadcastText } });
     }
     setPromoBroadcasting(false);
     setPromoBroadcastSent(true);
@@ -14028,8 +13847,25 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   };
 
   const handleToggleActive = async (user: AdminUser) => {
-    await supabase.from('app_users').update({ is_active: !user.isActive }).eq('username', user.username);
+    const { error } = await supabase.rpc('admin_set_user_active', { p_token: session.token, p_username: user.username, p_active: !user.isActive });
+    if (error) { window.alert(`Gagal mengubah status: ${error.message}`); return; }
     setUsers((prev) => prev.map((u) => u.username === user.username ? { ...u, isActive: !u.isActive } : u));
+  };
+
+  // Reset saldo Ruang Coin user ke 0 (diverifikasi & ditulis server).
+  const handleResetCredits = async (user: AdminUser) => {
+    if (user.credits === 0) { window.alert(`Saldo @${user.username} sudah 0.`); return; }
+    if (!await confirmDialog(`Reset saldo Ruang Coin @${user.username} dari ${user.credits.toLocaleString('id-ID')} menjadi 0?`)) return;
+    const { data, error } = await supabase.rpc('admin_set_credits', {
+      p_token: session.token,
+      p_target_username: user.username,
+      p_amount: 0,
+      p_description: 'Reset saldo oleh admin',
+    });
+    const res = data as { ok?: boolean; error?: string } | null;
+    if (error || !res?.ok) { window.alert(`Gagal reset saldo: ${error?.message ?? res?.error ?? 'akses ditolak'}`); return; }
+    void insertNotification(user.username, 'credits_added', 'Saldo Ruang Coin Direset', 'Saldo Ruang Coin kamu diatur ulang menjadi 0 oleh admin.', '#profil');
+    setUsers((prev) => prev.map((u) => u.username === user.username ? { ...u, credits: 0 } : u));
   };
 
   const handleDeleteUser = async (username: string) => {
@@ -14043,7 +13879,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const handleSavePerks = async () => {
     if (!perksUser) return;
     setPerksSaving(true);
-    await supabase.from('user_profiles').update({ perks: draftPerks }).eq('username', perksUser.username);
+    const { error } = await supabase.rpc('admin_set_perks', { p_token: session.token, p_username: perksUser.username, p_perks: draftPerks });
+    if (error) { window.alert(`Gagal menyimpan perks: ${error.message}`); setPerksSaving(false); return; }
     setUsers((prev) => prev.map((u) => u.username === perksUser.username ? { ...u, perks: draftPerks } : u));
     setPerksSaving(false);
     setShowPerksModal(false);
@@ -14056,14 +13893,21 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setSaving(true);
 
     const desc = creditNote || `Paket ${selectedPackage.label} — ${amount} Ruang Coin`;
-    await supabase.from('credit_transactions').insert({
-      username: selectedUser.username,
-      amount,
-      type: 'topup',
-      description: desc,
-      created_by: session.username,
+    // Penambahan coin diverifikasi & ditulis di server. Server mengecek token
+    // sesi milik developer/admin dan menghitung saldo baru sendiri — client
+    // tidak boleh lagi menulis "balance" hasil hitungannya.
+    const { data: grant, error: grantErr } = await supabase.rpc('admin_grant_credits', {
+      p_token: session.token,
+      p_target_username: selectedUser.username,
+      p_amount: amount,
+      p_description: desc,
     });
-    await supabase.from('user_credits').upsert({ username: selectedUser.username, balance: selectedUser.credits + amount });
+    const grantRes = grant as { ok?: boolean; error?: string } | null;
+    if (grantErr || !grantRes?.ok) {
+      window.alert(`Gagal menambah coin: ${grantErr?.message ?? grantRes?.error ?? 'akses ditolak'}`);
+      setSaving(false);
+      return;
+    }
     void insertNotification(selectedUser.username, 'credits_added', `+${amount.toLocaleString('id-ID')} Ruang Coin Ditambahkan`, desc, '#profil');
 
     setUsers((prev) => prev.map((u) => u.username === selectedUser.username ? { ...u, credits: u.credits + amount } : u));
@@ -14111,10 +13955,12 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     const initialCredits = parseInt(newInitialCredits, 10);
     if (initialCredits > 0) {
       const username = newUsername.trim().toLowerCase();
-      await Promise.all([
-        supabase.from('user_credits').upsert({ username, balance: initialCredits }),
-        supabase.from('credit_transactions').insert({ username, amount: initialCredits, type: 'topup', description: 'Ruang Coin awal pendaftaran' }),
-      ]);
+      await supabase.rpc('admin_grant_credits', {
+        p_token: session.token,
+        p_target_username: username,
+        p_amount: initialCredits,
+        p_description: 'Ruang Coin awal pendaftaran',
+      });
     }
 
     setSaving(false);
@@ -14180,7 +14026,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
   const handleBulkToggleActive = async (activate: boolean) => {
     for (const username of selectedUsernames) {
-      await supabase.from('app_users').update({ is_active: activate }).eq('username', username);
+      await supabase.rpc('admin_set_user_active', { p_token: session.token, p_username: username, p_active: activate });
     }
     setUsers((prev) => prev.map((u) => selectedUsernames.has(u.username) ? { ...u, isActive: activate } : u));
     setSelectedUsernames(new Set());
@@ -14190,7 +14036,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setBulkSaving(true);
     for (const username of selectedUsernames) {
       const cur = users.find((u) => u.username === username)?.perks ?? {};
-      await supabase.from('user_profiles').update({ perks: { ...cur, ...bulkDraftPerks } }).eq('username', username);
+      await supabase.rpc('admin_set_perks', { p_token: session.token, p_username: username, p_perks: { ...cur, ...bulkDraftPerks } });
     }
     setUsers((prev) => prev.map((u) => selectedUsernames.has(u.username) ? { ...u, perks: { ...u.perks, ...bulkDraftPerks } } : u));
     setBulkSaving(false);
@@ -14376,6 +14222,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           </button>
                           <button type="button" className="admin-action-btn perk-btn" title="Atur akses khusus" onClick={() => { setPerksUser(u); setDraftPerks({ ...u.perks }); setShowPerksModal(true); }}>
                             <CoinIcon size={12} /> akses
+                          </button>
+                          <button type="button" className="admin-action-btn" title="Atur ulang saldo Ruang Coin ke 0" onClick={() => handleResetCredits(u)}>
+                            reset coin
                           </button>
                           <button type="button" className="admin-action-btn" title={u.isActive ? 'Nonaktifkan' : 'Aktifkan'} onClick={() => handleToggleActive(u)}>
                             {u.isActive ? 'nonaktifkan' : 'aktifkan'}
@@ -15672,7 +15521,7 @@ type TopupRequest = {
   bonus_credits?: number;
 };
 
-function InboxPage() {
+function InboxPage({ session }: { session: AppSession }) {
   const [activeTab, setActiveTab] = useState<'booking' | 'topup'>(() =>
     window.location.hash === '#inbox-topup' ? 'topup' : 'booking'
   );
@@ -15707,31 +15556,26 @@ function InboxPage() {
       return;
     }
     setTopupActionId(req.id);
-    const { data: existing } = await supabase.from('user_credits').select('balance').eq('username', req.username).maybeSingle();
-    const current = existing?.balance ?? 0;
     const promo = req.promo_bonus as PackagePromo | null | undefined;
     const bonus = req.bonus_credits ?? 0;
     const totalCredits = req.credits + bonus;
 
-    const ops: Promise<unknown>[] = [
-      supabase.from('user_credits').upsert({ username: req.username, balance: current + totalCredits }),
-      supabase.from('credit_transactions').insert({ username: req.username, amount: req.credits, type: 'topup', description: `Topup ${req.package_label} — ${formatRupiah(req.amount_rp)}` }),
-      supabase.from('topup_requests').update({ status: 'approved', processed_at: new Date().toISOString() }).eq('id', req.id),
-    ];
-    if (bonus > 0) {
-      ops.push(supabase.from('credit_transactions').insert({ username: req.username, amount: bonus, type: 'topup', description: `🎁 Bonus paket ${req.package_label}` }));
+    // Persetujuan + penambahan coin (termasuk bonus & perk promo) dilakukan
+    // server dari data request tersimpan. Client hanya mengirim token & id.
+    const { data: appr, error: apprErr } = await supabase.rpc('admin_approve_topup', {
+      p_token: session.token,
+      p_topup_id: req.id,
+    });
+    const apprRes = appr as { ok?: boolean; error?: string } | null;
+    if (apprErr || !apprRes?.ok) {
+      window.alert(`Gagal menyetujui topup: ${apprErr?.message ?? apprRes?.error ?? 'akses ditolak'}`);
+      setTopupActionId(null);
+      return;
     }
 
-    // Apply promo bonus features / booking
+    const ops: Promise<unknown>[] = [];
+    // Notifikasi in-app + promo message (bukan operasi finansial).
     if (promo?.active) {
-      const perksUpdate: Record<string, boolean> = {};
-      for (const f of promo.bonus_features ?? []) perksUpdate[f] = true;
-      if (promo.bonus_booking) perksUpdate['free_booking'] = true;
-      if (Object.keys(perksUpdate).length > 0) {
-        const { data: existingProfile } = await supabase.from('user_profiles').select('perks').eq('username', req.username).maybeSingle();
-        const currentPerks = (existingProfile?.perks ?? {}) as Record<string, boolean>;
-        ops.push(supabase.from('user_profiles').update({ perks: { ...currentPerks, ...perksUpdate } }).eq('username', req.username));
-      }
       const bonusDesc = [
         promo.bonus_booking && 'Sesi 1:1 Gratis',
         ...(promo.bonus_features ?? []).map((f: string) => ({ free_video: 'Video', free_booking: 'Booking', free_thread: 'Thread', free_asset: 'Asset', free_event: 'Event' }[f] ?? f)),
@@ -15760,10 +15604,17 @@ function InboxPage() {
 
   const handleRejectTopup = async (req: TopupRequest) => {
     setTopupActionId(req.id);
-    await Promise.all([
-      supabase.from('topup_requests').update({ status: 'rejected', processed_at: new Date().toISOString(), note: rejectNote || null }).eq('id', req.id),
-      insertNotification(req.username, 'credits_added', 'Request Topup Ditolak', rejectNote ? `Topupmu ditolak: ${rejectNote}` : 'Request topup kamu tidak dapat diproses. Hubungi admin untuk info lebih lanjut.', '#profil'),
-    ]);
+    const { error: rejErr } = await supabase.rpc('admin_reject_topup', {
+      p_token: session.token,
+      p_topup_id: req.id,
+      p_note: rejectNote || null,
+    });
+    if (rejErr) {
+      window.alert(`Gagal menolak topup: ${rejErr.message}`);
+      setTopupActionId(null);
+      return;
+    }
+    await insertNotification(req.username, 'credits_added', 'Request Topup Ditolak', rejectNote ? `Topupmu ditolak: ${rejectNote}` : 'Request topup kamu tidak dapat diproses. Hubungi admin untuk info lebih lanjut.', '#profil');
 
     // Notify student via Telegram bot
     const rejectMsg = rejectNote
@@ -16226,17 +16077,7 @@ function ProfilePage({
       setTgChatId((data as { telegram_chat_id?: string } | null)?.telegram_chat_id ?? null);
     };
     void fetchTg();
-    // Also fetch bot username from token
-    const fetchBotName = async () => {
-      const token = await getStudentBotToken();
-      if (!token) return;
-      try {
-        const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
-        const json = await res.json() as { ok: boolean; result: { username: string } };
-        if (json.ok) setStudentBotName(json.result.username);
-      } catch { /* silent */ }
-    };
-    void fetchBotName();
+    // Nama bot ditampilkan dari default (token bot tidak lagi di client).
   }, [session.username]);
 
   const handleGenerateLinkCode = async () => {
@@ -16323,29 +16164,18 @@ function ProfilePage({
 
     const codeType = match.type ?? 'coin';
 
+    // Validasi + pemberian dilakukan SERVER (claim_referral_code).
+    const token = currentSessionToken();
+    if (!token) { setProfileReferralStatus('invalid'); return; }
+    const { data: claimData, error: claimErr } = await supabase.rpc('claim_referral_code', { p_token: token, p_code: code });
+    const claimRes = claimData as { ok?: boolean; type?: string; credits?: number; newBalance?: number; error?: string } | null;
+    if (claimErr || !claimRes?.ok) {
+      setProfileReferralStatus(claimRes?.error?.includes('sudah pernah') ? 'used' : 'invalid');
+      return;
+    }
+
     // ── Kode tipe Akses Fitur ──
     if (codeType === 'feature' && match.features && match.features.length > 0) {
-      // Gabung dengan referral_perks yang sudah ada agar tidak menimpa fitur lain
-      const { data: profRow } = await supabase.from('user_profiles').select('referral_perks').eq('username', session.username).maybeSingle();
-      const existingPerks = ((profRow as { referral_perks?: UserPerks } | null)?.referral_perks ?? {}) as UserPerks;
-      const referralPerks: UserPerks = { ...existingPerks };
-      for (const f of match.features) referralPerks[f as keyof UserPerks] = true;
-
-      await Promise.all([
-        supabase.from('user_profiles').update({
-          referral_perks: referralPerks,
-          referral_perks_expires_at: match.expiresAt ?? null,
-          referral_code: code,
-        } as never).eq('username', session.username),
-        // Penanda agar kode tidak bisa diklaim dua kali (amount 0)
-        supabase.from('credit_transactions').insert({
-          username: session.username,
-          amount: 0,
-          type: 'topup',
-          description: `Klaim akses fitur: ${code}`,
-        }),
-      ]);
-
       setProfileReferralCode('');
       setProfileReferralStatus('idle');
       setReferralSuccessModal({ credits: 0, code, features: match.features });
@@ -16355,19 +16185,7 @@ function ProfilePage({
     // ── Kode tipe Ruang Coin ──
     setProfileReferralCredits(match.credits);
     setProfileReferralStatus('valid');
-
-    // Tambah koin langsung
-    const currentBal = creditBalance ?? 0;
-    const newBal = currentBal + match.credits;
-    await Promise.all([
-      supabase.from('user_credits').upsert({ username: session.username, balance: newBal }),
-      supabase.from('credit_transactions').insert({
-        username: session.username,
-        amount: match.credits,
-        type: 'topup',
-        description: `Bonus kode referral: ${code}`,
-      }),
-    ]);
+    const newBal = claimRes.newBalance ?? ((creditBalance ?? 0) + match.credits);
 
     setCreditBalance(newBal);
     onCreditChange?.(newBal);
@@ -16881,15 +16699,11 @@ function ProfilePage({
                   const proofUrl = supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
                   const shortId2 = topupSavedId.slice(0, 8);
                   await supabase.from('topup_requests').update({ proof_url: proofUrl }).eq('id', topupSavedId);
-                  try {
-                    const form = new FormData();
-                    form.append('chat_id', TG_CHAT);
-                    form.append('photo', file);
-                    form.append('caption', `💰 <b>Pembelian Coin Baru — Butuh Approval</b>\n\n👤 ${session.displayName} (@${session.username})\n📦 Paket: ${topupPkgSnapshot.label}\n💵 Harga: ${formatRupiah(topupPkgSnapshot.price)}\n🪙 Coin: ${topupPkgSnapshot.credits.toLocaleString('id-ID')} Ruang Coin\n🆔 ID: <code>${shortId2}</code>`);
-                    form.append('parse_mode', 'HTML');
-                    form.append('reply_markup', JSON.stringify({ inline_keyboard: [[{ text: '✅ Approve', callback_data: `at:${topupSavedId}` }]] }));
-                    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`, { method: 'POST', body: form });
-                  } catch { /* silent */ }
+                  void sendAdminPhoto(
+                    proofUrl,
+                    `💰 <b>Pembelian Coin Baru — Butuh Approval</b>\n\n👤 ${session.displayName} (@${session.username})\n📦 Paket: ${topupPkgSnapshot.label}\n💵 Harga: ${formatRupiah(topupPkgSnapshot.price)}\n🪙 Coin: ${topupPkgSnapshot.credits.toLocaleString('id-ID')} Ruang Coin\n🆔 ID: <code>${shortId2}</code>`,
+                    [[{ text: '✅ Approve', callback_data: `at:${topupSavedId}` }]],
+                  );
                   const { data: devs } = await supabase.from('app_users').select('username').eq('role', 'developer');
                   if (devs) for (const dev of devs) await supabase.from('notifications').insert([{ recipient_username: dev.username, type: 'credits_added', title: 'Bukti Topup Dikirim', body: `${session.displayName} upload bukti topup ${topupPkgSnapshot.credits} coin`, link: '#inbox-topup' }]);
                   setTopupStep('uploaded');
