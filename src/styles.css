@@ -15051,3 +15051,41 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
   .calendar-month-day-head { padding: 8px 2px !important; font-size: 0.66rem !important; }
   .calendar-event-chip { min-width: 0 !important; font-size: 0.6rem; }
 }
+
+/* ── Modal password sementara (reset password admin) ── */
+.reset-pw-box {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 16px;
+}
+.reset-pw-code {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  background: var(--accent-soft, rgba(92,110,248,0.1));
+  border: 1.5px dashed var(--accent);
+  border-radius: 12px;
+  padding: 12px 16px;
+  user-select: all;
+}
+.reset-pw-copy {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  transition: background 0.15s, transform 0.1s;
+}
+.reset-pw-copy:hover { transform: translateY(-1px); }
+.reset-pw-copy.copied { background: #16a34a; }
+body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }

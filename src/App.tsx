@@ -13560,6 +13560,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [bulkSaving, setBulkSaving] = useState(false);
   const USERS_PER_PAGE = 20;
 
+  // Hasil reset password → tampilkan di modal (bukan window.alert)
+  const [resetPwInfo, setResetPwInfo] = useState<{ username: string; password: string } | null>(null);
+  const [resetPwCopied, setResetPwCopied] = useState(false);
+
   // Credit packages & payment info (editable)
   const [packages, setPackages] = useState<CreditPackage[]>(defaultCreditPackages);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>(defaultPaymentInfo);
@@ -13892,7 +13896,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     const res = data as { ok?: boolean; error?: string } | null;
     if (error || !res?.ok) { window.alert(`Gagal reset password: ${error?.message ?? res?.error ?? 'akses ditolak'}`); return; }
     void insertNotification(user.username, 'credits_added', 'Password Direset Admin', 'Password akunmu direset oleh admin. Login dengan password sementara dari admin, lalu segera ganti di Profil.', '#profil');
-    window.alert(`Password sementara untuk @${user.username}:\n\n${temp}\n\nSampaikan ke user. Minta user login lalu segera ganti password di Profil → Ganti Password.`);
+    setResetPwCopied(false);
+    setResetPwInfo({ username: user.username, password: temp });
   };
 
   const handleDeleteUser = async (username: string) => {
@@ -15195,6 +15200,40 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
       )}
 
       {/* Modal: Tambah Ruang Coin */}
+      {resetPwInfo && createPortal(
+        <div className="admin-modal-overlay" onClick={() => setResetPwInfo(null)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <h3 className="admin-modal-title">Password Sementara</h3>
+            <p className="admin-modal-sub">untuk <strong>@{resetPwInfo.username}</strong>. Sampaikan ke user, lalu minta segera ganti di <strong>Profil → Ganti Password</strong>. Sesi lama sudah dicabut.</p>
+            <div className="reset-pw-box">
+              <code className="reset-pw-code">{resetPwInfo.password}</code>
+              <button
+                type="button"
+                className={`reset-pw-copy${resetPwCopied ? ' copied' : ''}`}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(resetPwInfo.password);
+                  } catch {
+                    const ta = document.createElement('textarea');
+                    ta.value = resetPwInfo.password; document.body.appendChild(ta); ta.select();
+                    try { document.execCommand('copy'); } catch { /* ignore */ }
+                    ta.remove();
+                  }
+                  setResetPwCopied(true);
+                  setTimeout(() => setResetPwCopied(false), 2000);
+                }}
+              >
+                {resetPwCopied ? '✓ Tersalin' : 'Salin'}
+              </button>
+            </div>
+            <div className="admin-modal-footer" style={{ justifyContent: 'flex-end', display: 'flex', marginTop: 20 }}>
+              <button type="button" className="button primary" onClick={() => setResetPwInfo(null)}>Selesai</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {showAddCredits && selectedUser && createPortal(
         <div className="admin-modal-overlay" onClick={() => setShowAddCredits(false)}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
