@@ -278,7 +278,9 @@ begin
   if coalesce((ref->>'active')::boolean, true) = false then
     return json_build_object('ok', false, 'error', 'Kode nonaktif');
   end if;
-  if (ref->>'expiresAt') is not null and (ref->>'expiresAt')::timestamptz < now() then
+  -- String kosong '' bukan null → hindari cast ''::timestamptz yang error.
+  if nullif(ref->>'expiresAt', '') is not null
+     and (ref->>'expiresAt')::timestamptz < now() then
     return json_build_object('ok', false, 'error', 'Kode kedaluwarsa');
   end if;
 
@@ -300,7 +302,7 @@ begin
     end loop;
     update public.user_profiles
       set referral_perks = merged,
-          referral_perks_expires_at = (ref->>'expiresAt')::timestamptz,
+          referral_perks_expires_at = nullif(ref->>'expiresAt', '')::timestamptz,
           referral_code = code_up
       where username = caller.username;
     insert into public.credit_transactions (username, amount, type, description)
