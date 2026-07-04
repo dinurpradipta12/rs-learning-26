@@ -13854,6 +13854,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
   // Reset saldo Ruang Coin user ke 0 (diverifikasi & ditulis server).
   const handleResetCredits = async (user: AdminUser) => {
+    if (!session.token) { window.alert('Sesi kamu lama (tanpa token). Logout & login ulang dulu, lalu coba lagi.'); return; }
     if (user.credits === 0) { window.alert(`Saldo @${user.username} sudah 0.`); return; }
     if (!await confirmDialog(`Reset saldo Ruang Coin @${user.username} dari ${user.credits.toLocaleString('id-ID')} menjadi 0?`)) return;
     const { data, error } = await supabase.rpc('admin_set_credits', {

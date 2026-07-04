@@ -4,12 +4,16 @@ const SUPABASE_URL         = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const ADMIN_TG_TOKEN       = Deno.env.get('TG_TOKEN') ?? '';
 const ADMIN_TG_CHAT        = Deno.env.get('TG_CHAT') ?? '';
+// Token bot peserta: utamakan env secret (tidak bocor ke client). Fallback ke
+// admin settings di DB hanya untuk kompatibilitas data lama.
+const STUDENT_BOT_TOKEN_ENV = Deno.env.get('STUDENT_BOT_TOKEN') ?? '';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 async function getBotToken(): Promise<string> {
+  if (STUDENT_BOT_TOKEN_ENV) return STUDENT_BOT_TOKEN_ENV;
   const { data } = await supabase
     .from('learning_hub_content')
     .select('content')
