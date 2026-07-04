@@ -14886,7 +14886,8 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
 @media (max-width: 768px) {
   /* 1. Cegah scroll horizontal & media meluber */
   html, body { overflow-x: hidden; max-width: 100%; }
-  img, video { max-width: 100%; height: auto; }
+  /* Cegah gambar meluber TANPA memaksa height:auto (merusak logo ber-aspect tetap) */
+  img, video { max-width: 100%; }
 
   /* 2. Input font 16px → cegah auto-zoom iOS saat fokus */
   input, select, textarea { font-size: 16px; }
@@ -14937,6 +14938,19 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
     max-width: calc(100vw - 20px);
     overflow-x: auto;
   }
+  /* Ikon ada di child <nav> yang flex-column → balik jadi row agar jadi bar */
+  .sidebar-nav.sidebar-nav--left nav,
+  .sidebar-nav.sidebar-nav--right nav {
+    flex-direction: row !important;
+    width: auto !important;
+    margin-top: 0 !important;
+    padding: 6px 0 !important;
+    flex-wrap: nowrap;
+  }
+  .sidebar-nav.sidebar-nav--left .sidebar-nav-pos-wrap,
+  .sidebar-nav.sidebar-nav--right .sidebar-nav-pos-wrap { margin-bottom: 0 !important; margin-right: 4px; }
+  .sidebar-nav.sidebar-nav--left .sidebar-nav-divider,
+  .sidebar-nav.sidebar-nav--right .sidebar-nav-divider { display: none; }
   .sidebar-nav-item { min-width: 40px; min-height: 40px; }
   .sidebar-nav-tooltip { display: none !important; } /* tak ada hover di mobile */
   /* Ruang agar konten tak tertutup bottom-bar */
@@ -14947,4 +14961,35 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
   /* Penyesuaian ekstra HP kecil: rapatkan padding hero & judul */
   .hero, .page-hero, .landing-hero { padding-left: 16px; padding-right: 16px; }
   .hero-copy h2, .page-hero h2 { font-size: clamp(1.4rem, 6vw, 1.9rem); }
+}
+
+/* ===== MOBILE OVERRIDES — Langkah 2: Header, nav-island, dashboard ===== */
+@media (max-width: 768px) {
+  /* Header: rapatkan padding & jarak agar muat di layar sempit */
+  .topbar { padding: 12px 16px !important; gap: 10px !important; }
+  .topbar-nav-row { gap: 10px !important; flex-wrap: wrap; justify-content: flex-end; }
+  /* Subtitle brand membungkus & menabrak saldo → sembunyikan di mobile (logo tetap) */
+  .topbar-brand-row .eyebrow { display: none !important; }
+  /* max-width:100% collapse ke 0 di parent fit-content → kecualikan logo */
+  .topbar-brand-logo { max-width: none !important; }
+
+  /* Dynamic-island nav (varian atas/bawah) → jangan meluber, boleh scroll samping */
+  .sidebar-nav.sidebar-nav--top,
+  .sidebar-nav.sidebar-nav--bottom {
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .sidebar-nav--top { top: 64px !important; }
+
+  /* Dashboard hero: dari baris (nama | panel statistik) → tumpuk vertikal */
+  .db-hero {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 20px !important;
+    padding: 20px !important;
+  }
+  .db-stats-panel { width: 100% !important; }
+  .db-hero-name { font-size: 1.35rem !important; }
+  .db-stat-chips { flex-wrap: wrap; }
 }
