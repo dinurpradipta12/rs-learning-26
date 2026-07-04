@@ -44,6 +44,14 @@ Deno.serve(async (req: Request) => {
     const { action, text = '', chatId, chatIds, photoUrl, buttons } = body;
     const markup = buttons ? { inline_keyboard: buttons } : undefined;
 
+    // Ambil username bot peserta (untuk ditampilkan di UI) tanpa membocorkan token.
+    if (action === 'student_botname') {
+      if (!STUDENT_BOT_TOKEN) return json({ ok: false, error: 'student bot not set' });
+      const res = await fetch(`https://api.telegram.org/bot${STUDENT_BOT_TOKEN}/getMe`);
+      const data = await res.json() as { ok: boolean; result?: { username?: string } };
+      return json({ ok: data.ok, username: data.result?.username ?? null });
+    }
+
     if (action === 'admin') {
       if (!TG_TOKEN || !TG_CHAT) return json({ ok: false, error: 'admin bot not configured' });
       await tgApi(TG_TOKEN, 'sendMessage', {

@@ -16078,7 +16078,14 @@ function ProfilePage({
       setTgChatId((data as { telegram_chat_id?: string } | null)?.telegram_chat_id ?? null);
     };
     void fetchTg();
-    // Nama bot ditampilkan dari default (token bot tidak lagi di client).
+    // Ambil username bot peserta dari server (token tetap di server).
+    void (async () => {
+      try {
+        const { data } = await supabase.functions.invoke('tg-notify', { body: { action: 'student_botname' } });
+        const res = data as { ok?: boolean; username?: string } | null;
+        if (res?.ok && res.username) setStudentBotName(res.username);
+      } catch { /* pakai default */ }
+    })();
   }, [session.username]);
 
   const handleGenerateLinkCode = async () => {
