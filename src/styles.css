@@ -14993,3 +14993,49 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
   .db-hero-name { font-size: 1.35rem !important; }
   .db-stat-chips { flex-wrap: wrap; }
 }
+
+/* ===== MOBILE OVERRIDES — Langkah 3: Tabel admin User Control → kartu ===== */
+@media (max-width: 768px) {
+  .admin-users-table thead { display: none; }
+  .admin-users-table,
+  .admin-users-table tbody { display: block; width: 100%; }
+  .admin-users-table tr {
+    display: block;
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    padding: 14px 14px 10px;
+    margin-bottom: 12px;
+  }
+  .admin-users-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    border: none !important;
+    text-align: right;
+  }
+  .admin-users-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.76rem;
+    color: var(--muted);
+    text-align: left;
+    flex-shrink: 0;
+  }
+  /* Sel "User" = judul kartu: rata kiri, tanpa label, beri ruang untuk checkbox */
+  .admin-users-table td.admin-td-user { justify-content: flex-start; padding-top: 0; padding-right: 40px; }
+  .admin-users-table td.admin-td-user::before { display: none; }
+  /* Checkbox pindah ke pojok kanan-atas kartu */
+  .admin-users-table td.admin-td-check {
+    position: absolute; top: 12px; right: 12px; padding: 0; justify-content: flex-end;
+  }
+  .admin-users-table td.admin-td-check::before { display: none; }
+  /* Tombol aksi: label di atas, tombol menyebar penuh & mudah ditekan */
+  .admin-users-table td.admin-td-actions { flex-direction: column; align-items: stretch; text-align: left; }
+  .admin-users-table td.admin-td-actions::before { margin-bottom: 6px; }
+  .admin-users-table td.admin-td-actions .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .admin-users-table td.admin-td-actions .admin-action-btn { flex: 1 1 auto; min-height: 40px; }
+}

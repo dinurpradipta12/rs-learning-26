@@ -14143,7 +14143,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   </div>
                 )}
               </div>
-              <table className="admin-table">
+              <table className="admin-table admin-users-table">
                 <thead>
                   <tr>
                     <th style={{ width: 36 }}>
@@ -14162,10 +14162,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 <tbody>
                   {pagedUsers.map((u) => (
                     <tr key={u.username} className={`${!u.isActive ? 'admin-row-inactive' : ''}${selectedUsernames.has(u.username) ? ' admin-row-selected' : ''}`}>
-                      <td>
+                      <td className="admin-td-check">
                         <input type="checkbox" checked={selectedUsernames.has(u.username)} onChange={() => toggleSelectUser(u.username)} />
                       </td>
-                      <td>
+                      <td className="admin-td-user">
                         <div className="admin-user-cell">
                           {u.avatarUrl
                             ? <img src={u.avatarUrl} alt={u.displayName} className={`admin-user-avatar admin-user-avatar-img ${ringClass(ringMap[u.username])}`} title={ringMap[u.username] ? RING_META[ringMap[u.username]!].label : undefined} />
@@ -14177,20 +14177,20 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           </div>
                         </div>
                       </td>
-                      <td><span className={`admin-role-badge admin-role-${u.role}`}>{u.role}</span></td>
-                      <td><span className="admin-credits-cell">{u.credits.toLocaleString('id-ID')}</span></td>
-                      <td>
+                      <td data-label="Role"><span className={`admin-role-badge admin-role-${u.role}`}>{u.role}</span></td>
+                      <td data-label="Ruang Coin"><span className="admin-credits-cell">{u.credits.toLocaleString('id-ID')}</span></td>
+                      <td data-label="Status">
                         <span className={`admin-status-badge ${u.isActive ? 'active' : 'inactive'}`}>
                           {u.isActive ? 'Aktif' : 'Nonaktif'}
                         </span>
                       </td>
-                      <td className="admin-date-cell">{new Date(u.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                      <td>
+                      <td data-label="Bergabung" className="admin-date-cell">{new Date(u.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td data-label="Referral">
                         {u.referralCode
                           ? <span className="admin-referral-badge" title={`Daftar dengan kode ${u.referralCode}`}><Ic name="ticket" size={12} /> {u.referralCode}</span>
                           : <span className="perk-none">—</span>}
                       </td>
-                      <td>
+                      <td data-label="Akses">
                         {(() => {
                           const refActive = !u.referralPerksExpiresAt || new Date(u.referralPerksExpiresAt) > new Date();
                           const rp = refActive ? (u.referralPerks ?? {}) : {};
@@ -14216,7 +14216,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           );
                         })()}
                       </td>
-                      <td>
+                      <td data-label="Aksi" className="admin-td-actions">
                         <div className="admin-actions">
                           <button type="button" className="admin-action-btn" title="Tambah Ruang Coin" onClick={() => { setSelectedUser(u); setShowAddCredits(true); }}>
                             + Ruang Coin
