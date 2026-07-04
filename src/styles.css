@@ -14196,7 +14196,7 @@ body.dark .admin-input:focus {
   animation: fade-in 0.15s ease;
 }
 .confirm-modal {
-  background: var(--card);
+  background: #ffffff;
   border-radius: 20px;
   padding: 28px 28px 22px;
   max-width: 400px;
