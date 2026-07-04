@@ -14876,3 +14876,75 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
 .notif-toast-body p { margin: 2px 0 0; font-size: 0.82rem; line-height: 1.35; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .notif-toast-close { flex-shrink: 0; background: none; border: none; color: var(--muted); cursor: pointer; padding: 2px; align-self: flex-start; }
 .notif-toast-close:hover { color: var(--text); }
+
+/* =========================================================================
+   MOBILE OVERRIDES (RS-2026-07) — Langkah 1: Fondasi global
+   Semua aturan di sini HANYA berlaku di layar sempit. Desktop (di atas
+   breakpoint) tidak terpengaruh sama sekali. JANGAN menaruh aturan desktop
+   di section ini.
+   ========================================================================= */
+@media (max-width: 768px) {
+  /* 1. Cegah scroll horizontal & media meluber */
+  html, body { overflow-x: hidden; max-width: 100%; }
+  img, video { max-width: 100%; height: auto; }
+
+  /* 2. Input font 16px → cegah auto-zoom iOS saat fokus */
+  input, select, textarea { font-size: 16px; }
+
+  /* 3. Grid dua-kolom yang fixed → 1 kolom (grid auto-fit dibiarkan) */
+  .two-up,
+  .lms-shell,
+  .login-split-card,
+  .profile-overview,
+  .subscription-detail-grid,
+  .aem-two-col,
+  .hero,
+  .course-modal-form,
+  .course-modal-row { grid-template-columns: 1fr !important; }
+
+  /* 4. Dialog modal → mendekati full-width, tinggi dibatasi & bisa discroll */
+  .course-modal,
+  .course-modal-sm,
+  .admin-modal,
+  .aem-modal,
+  .delete-confirm-modal,
+  .assessment-result-modal {
+    max-width: calc(100vw - 24px) !important;
+    width: calc(100vw - 24px) !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+  }
+  /* Backdrop overlay (khusus dialog, bukan overlay gambar) → beri padding & scroll */
+  .course-modal-overlay,
+  .admin-modal-overlay,
+  .aem-overlay,
+  .confirm-overlay,
+  .checkin-overlay,
+  .login-split-overlay,
+  .notif-drawer-overlay,
+  .video-overlay { padding: 12px !important; overflow-y: auto !important; }
+
+  /* 5. Sidebar pill (kiri/kanan) → paksa jadi bottom-bar + target sentuh ≥40px */
+  .sidebar-nav.sidebar-nav--left,
+  .sidebar-nav.sidebar-nav--right {
+    left: 50% !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important;
+    flex-direction: row !important;
+    width: auto !important;
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+  }
+  .sidebar-nav-item { min-width: 40px; min-height: 40px; }
+  .sidebar-nav-tooltip { display: none !important; } /* tak ada hover di mobile */
+  /* Ruang agar konten tak tertutup bottom-bar */
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 480px) {
+  /* Penyesuaian ekstra HP kecil: rapatkan padding hero & judul */
+  .hero, .page-hero, .landing-hero { padding-left: 16px; padding-right: 16px; }
+  .hero-copy h2, .page-hero h2 { font-size: clamp(1.4rem, 6vw, 1.9rem); }
+}
