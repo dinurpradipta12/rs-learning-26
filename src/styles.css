@@ -15039,3 +15039,15 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
   .admin-users-table td.admin-td-actions .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .admin-users-table td.admin-td-actions .admin-action-btn { flex: 1 1 auto; min-height: 40px; }
 }
+
+/* ===== MOBILE OVERRIDES — Langkah 4: Kalender (month board muat 7 kolom) ===== */
+@media (max-width: 768px) {
+  /* Aturan lama memaksa kolom min 132px → scroll samping. Di HP paksa muat penuh. */
+  .calendar-month-board {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    overflow-x: hidden !important;
+  }
+  .calendar-month-cell { min-height: 64px !important; padding: 6px 3px !important; }
+  .calendar-month-day-head { padding: 8px 2px !important; font-size: 0.66rem !important; }
+  .calendar-event-chip { min-width: 0 !important; font-size: 0.6rem; }
+}
