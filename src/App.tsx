@@ -9093,6 +9093,12 @@ function LoginPage({
                     daftar sekarang
                   </button>
                 </p>
+                <p className="login-switch-row">
+                  lupa password?{' '}
+                  <a className="login-switch-btn" href={`https://wa.me/6289619941101?text=${encodeURIComponent('Halo Admin, saya lupa password akun Ruang Sosmed. Username saya: ')}`} target="_blank" rel="noreferrer">
+                    hubungi admin
+                  </a>
+                </p>
               </form>
             ) : (
               <form className="drawer-form login-form" onSubmit={handleSignUp}>
@@ -13869,6 +13875,26 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setUsers((prev) => prev.map((u) => u.username === user.username ? { ...u, credits: 0 } : u));
   };
 
+  // Reset password user yang lupa: server set password sementara acak & cabut
+  // sesi lamanya. Admin menyampaikan password sementara ke user (mis. via WA),
+  // lalu user ganti sendiri di Profil → Ganti Password.
+  const handleResetPassword = async (user: AdminUser) => {
+    if (!session.token) { window.alert('Sesi kamu lama (tanpa token). Logout & login ulang dulu, lalu coba lagi.'); return; }
+    if (!await confirmDialog(`Reset password @${user.username}? Password lama tidak bisa dipakai lagi & sesi login-nya dicabut.`)) return;
+    // Password sementara acak (8 karakter, mudah dibacakan).
+    const temp = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+      .map((b) => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 30]).join('') + '00';
+    const { data, error } = await supabase.rpc('admin_reset_password', {
+      p_token: session.token,
+      p_target_username: user.username,
+      p_new_password: temp,
+    });
+    const res = data as { ok?: boolean; error?: string } | null;
+    if (error || !res?.ok) { window.alert(`Gagal reset password: ${error?.message ?? res?.error ?? 'akses ditolak'}`); return; }
+    void insertNotification(user.username, 'credits_added', 'Password Direset Admin', 'Password akunmu direset oleh admin. Login dengan password sementara dari admin, lalu segera ganti di Profil.', '#profil');
+    window.alert(`Password sementara untuk @${user.username}:\n\n${temp}\n\nSampaikan ke user. Minta user login lalu segera ganti password di Profil → Ganti Password.`);
+  };
+
   const handleDeleteUser = async (username: string) => {
     if (!await confirmDialog(`Hapus user "${username}"? Semua data user akan ikut terhapus.`)) return;
     const { data: delResult, error } = await supabase.rpc('delete_app_user_as_admin', { p_target_username: username, p_admin_username: session.username });
@@ -14226,6 +14252,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                           </button>
                           <button type="button" className="admin-action-btn" title="Atur ulang saldo Ruang Coin ke 0" onClick={() => handleResetCredits(u)}>
                             reset coin
+                          </button>
+                          <button type="button" className="admin-action-btn" title="Reset password (user lupa password)" onClick={() => handleResetPassword(u)}>
+                            reset pw
                           </button>
                           <button type="button" className="admin-action-btn" title={u.isActive ? 'Nonaktifkan' : 'Aktifkan'} onClick={() => handleToggleActive(u)}>
                             {u.isActive ? 'nonaktifkan' : 'aktifkan'}
