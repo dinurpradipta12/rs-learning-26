@@ -11873,6 +11873,7 @@ function DailyCheckinModal({ username, dailyCoins, day7, onCoinChange, onFeature
   const [claimedToday, setClaimedToday] = useState(false);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState('');
   const [justClaimed, setJustClaimed] = useState<{ coins: number; features: string[]; day: number } | null>(null);
 
   useEffect(() => {
@@ -11903,9 +11904,15 @@ function DailyCheckinModal({ username, dailyCoins, day7, onCoinChange, onFeature
     // Streak, jumlah coin, & bonus fitur hari ke-7 dihitung & ditulis SERVER.
     const token = currentSessionToken();
     if (!token) { setClaiming(false); return; }
+    setClaimError('');
     const { data, error } = await supabase.rpc('claim_daily_checkin', { p_token: token });
     const res = data as { ok?: boolean; newBalance?: number; day?: number; coins?: number; error?: string } | null;
     if (error || !res?.ok) {
+      setClaimError(
+        error?.message?.includes('claim_daily_checkin')
+          ? 'Fitur check-in belum terpasang di server. Hubungi admin.'
+          : (error?.message ?? res?.error ?? 'Gagal klaim, coba lagi.'),
+      );
       setClaiming(false);
       return;
     }
@@ -11957,7 +11964,9 @@ function DailyCheckinModal({ username, dailyCoins, day7, onCoinChange, onFeature
                 );
               })}
             </div>
-            {justClaimed ? (
+            {claimError ? (
+              <p className="checkin-footer" style={{ color: '#dc2626' }}>{claimError}</p>
+            ) : justClaimed ? (
               <p className="checkin-footer">🎉 Kamu dapat <strong>+{justClaimed.coins} Koin</strong>{justClaimed.features.length > 0 ? ` + akses ${justClaimed.features.map((f) => featLabel[f] ?? f).join(', ')}` : ''}! Sampai jumpa besok.</p>
             ) : claimedToday ? (
               <p className="checkin-footer">Kamu sudah check-in hari ini ✓. Datang lagi besok ya!</p>
