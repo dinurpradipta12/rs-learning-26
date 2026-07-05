@@ -169,8 +169,9 @@ begin
   select checkin_streak, last_checkin into prof
     from public.user_profiles where username = caller.username for update;
   streak := coalesce(prof.checkin_streak, 0);
-  -- String kosong '' bukan null → hindari cast ''::date yang error.
-  last_dt := nullif(prof.last_checkin, '')::date;
+  -- Cast ke text dulu → aman untuk kolom date maupun text; '' jadi null
+  -- (menghindari error 'invalid input syntax for type date').
+  last_dt := nullif(prof.last_checkin::text, '')::date;
 
   -- Sudah check-in hari ini.
   if last_dt = today then
@@ -191,7 +192,7 @@ begin
   new_balance := public._add_credits(caller.username, coins, desc_text, null);
 
   update public.user_profiles
-    set checkin_streak = claim_day, last_checkin = today::text
+    set checkin_streak = claim_day, last_checkin = today
     where username = caller.username;
 
   -- Bonus fitur hari ke-7.
