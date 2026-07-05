@@ -5697,7 +5697,7 @@ function MyFilePage({ session }: { session: AppSession }) {
 }
 
 // ── Course Release Settings ────────────────────────────────────────────────────
-type CourseReleaseSettings = { releaseDays: string[]; lastLessonUploadedAt?: string; moduleComplete?: boolean };
+type CourseReleaseSettings = { releaseDays: string[]; releaseTime?: string; lastLessonUploadedAt?: string; moduleComplete?: boolean };
 type AllCourseReleaseSettings = Record<string, CourseReleaseSettings>;
 // ── App Theme ────────────────────────────────────────────────
 type AppTheme = {
@@ -5779,10 +5779,20 @@ async function updateLastLessonUploadedAt(courseKey: string): Promise<void> {
 
 const DAYS_ID = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
+// Format jam simpanan "HH:MM" (24 jam) → "08.30 pm".
+function formatReleaseTime(t?: string): string {
+  if (!t) return '';
+  const [hh, mm] = t.split(':').map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return '';
+  const ampm = hh < 12 ? 'am' : 'pm';
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${String(h12).padStart(2, '0')}.${String(mm).padStart(2, '0')} ${ampm}`;
+}
+
 function getCourseBadge(courseKey: string, releaseSettings: AllCourseReleaseSettings): { type: 'new' | 'next' | 'complete'; label: string } | null {
   const settings = releaseSettings[courseKey];
   if (!settings) return null;
-  const { lastLessonUploadedAt, releaseDays, moduleComplete } = settings;
+  const { lastLessonUploadedAt, releaseDays, releaseTime, moduleComplete } = settings;
   if (moduleComplete) return { type: 'complete', label: 'Modul Sudah Lengkap' };
   if (lastLessonUploadedAt) {
     const hoursSince = (Date.now() - new Date(lastLessonUploadedAt).getTime()) / (1000 * 60 * 60);
@@ -5800,7 +5810,10 @@ function getCourseBadge(courseKey: string, releaseSettings: AllCourseReleaseSett
       let diff = dayIdx - today; if (diff <= 0) diff += 7;
       if (diff < minDiff) { minDiff = diff; nextDay = dayName; }
     }
-    if (nextDay) return { type: 'next', label: `Video Berikutnya · ${nextDay}` };
+    if (nextDay) {
+      const t = formatReleaseTime(releaseTime);
+      return { type: 'next', label: `Video Berikutnya · ${nextDay}${t ? ` - ${t}` : ''}` };
+    }
   }
   // Fallback: sudah pernah ada upload tapi tidak ada jadwal rilis → tetap tampilkan
   // "Video Berikutnya" biar card tidak kosong badge-nya setelah 24 jam.
@@ -5819,6 +5832,7 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
   const [courseProgress, setCourseProgress] = useState<Record<string, number>>({});
   const [releaseSettings, setReleaseSettings] = useState<AllCourseReleaseSettings>({});
   const [formReleaseDays, setFormReleaseDays] = useState<string[]>([]);
+  const [formReleaseTime, setFormReleaseTime] = useState('');
   const [formModuleComplete, setFormModuleComplete] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
@@ -5893,6 +5907,7 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
   const openCreate = () => {
     setForm({ ...emptyCourseForm(), sort_order: courses.length + 1 });
     setFormReleaseDays([]);
+    setFormReleaseTime('');
     setFormModuleComplete(false);
     setFormError('');
     setThumbFile(null);
@@ -5905,6 +5920,7 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
     e.stopPropagation();
     setForm({ key: c.key, title: c.title, subtitle: c.subtitle, description: c.description, level: c.level, thumbnail_url: c.thumbnail_url, sort_order: c.sort_order, status: c.status ?? 'open' });
     setFormReleaseDays(releaseSettings[c.key]?.releaseDays ?? []);
+    setFormReleaseTime(releaseSettings[c.key]?.releaseTime ?? '');
     setFormModuleComplete(releaseSettings[c.key]?.moduleComplete ?? false);
     setFormError('');
     setThumbFile(null);
@@ -5946,7 +5962,7 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
     // Save release schedule settings
     const updatedRelSettings = {
       ...releaseSettings,
-      [payload.key]: { ...(releaseSettings[payload.key] ?? {}), releaseDays: formReleaseDays, moduleComplete: formModuleComplete },
+      [payload.key]: { ...(releaseSettings[payload.key] ?? {}), releaseDays: formReleaseDays, releaseTime: formReleaseTime, moduleComplete: formModuleComplete },
     };
     await saveCourseReleaseSettings(updatedRelSettings);
     setSaving(false);
@@ -6130,7 +6146,24 @@ function CourseCatalogPage({ onSelect, canEdit = false, sessionUsername = '' }: 
                   ))}
                 </div>
                 {formReleaseDays.length > 0 && (
-                  <p className="course-release-days-preview">Video baru akan tampil badge "Video Berikutnya · [Hari]" berdasarkan hari yang dipilih</p>
+                  <div className="course-release-time-row" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>Jam rilis</span>
+                    <input
+                      type="time"
+                      value={formReleaseTime}
+                      onChange={(e) => setFormReleaseTime(e.target.value)}
+                      className="course-modal-input"
+                      style={{ width: 'auto', minWidth: 130 }}
+                    />
+                    {formReleaseTime && (
+                      <button type="button" className="admin-mini-btn" onClick={() => setFormReleaseTime('')}>hapus jam</button>
+                    )}
+                  </div>
+                )}
+                {formReleaseDays.length > 0 && (
+                  <p className="course-release-days-preview">
+                    Badge: "Video Berikutnya · {formReleaseDays[0]}{formReleaseTime ? ` - ${formatReleaseTime(formReleaseTime)}` : ''}"
+                  </p>
                 )}
               </div>
               <label className="course-modal-label full course-module-complete-row">
