@@ -169,7 +169,8 @@ begin
   select checkin_streak, last_checkin into prof
     from public.user_profiles where username = caller.username for update;
   streak := coalesce(prof.checkin_streak, 0);
-  last_dt := prof.last_checkin::date;
+  -- String kosong '' bukan null → hindari cast ''::date yang error.
+  last_dt := nullif(prof.last_checkin, '')::date;
 
   -- Sudah check-in hari ini.
   if last_dt = today then
