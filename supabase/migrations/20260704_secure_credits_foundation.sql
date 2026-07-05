@@ -303,80 +303,11 @@ end;
 $$;
 grant execute on function public.admin_reject_topup(text, uuid, text) to anon, authenticated;
 
--- ── 6. RPC otoritatif: klaim reward oleh USER sendiri ───────
--- Aturan reward (jumlah, batas per hari) dievaluasi DI SERVER agar
--- client tidak bisa mengklaim sembarang jumlah. Jumlah reward diambil
--- dari app_settings.coin_rewards (dikelola admin), bukan dari client.
-drop function if exists public.claim_self_reward(text, text);
-create or replace function public.claim_self_reward(p_token text, p_reward_key text)
-returns json
-language plpgsql
-volatile
-security definer
-set search_path = public
-as $$
-declare
-  caller record;
-  rewards jsonb;
-  rule jsonb;
-  amount integer;
-  per_day integer;
-  desc_text text;
-  used_today integer;
-  current_balance integer;
-  new_balance integer;
-begin
-  select * into caller from public._session_identity(p_token);
-  if caller.username is null then
-    raise exception 'Access denied' using errcode = '42501';
-  end if;
-
-  -- Hanya key reward yang dikenal yang boleh diklaim.
-  if p_reward_key not in ('daily_login', 'reply_thread', 'post_thread') then
-    raise exception 'Reward tidak dikenal';
-  end if;
-
-  select (value->'coin_rewards') into rewards from public.app_settings
-    where key = 'coin_rewards' limit 1;
-  -- app_settings bisa menyimpan langsung objek coin_rewards; fallback aman:
-  if rewards is null then
-    select value into rewards from public.app_settings where key = 'coin_rewards' limit 1;
-  end if;
-
-  rule := rewards->p_reward_key;
-  amount := coalesce((rule->>'amount')::int, 0);
-  per_day := coalesce((rule->>'perDay')::int, 1);
-  if amount <= 0 then
-    return json_build_object('ok', false, 'error', 'Reward nonaktif');
-  end if;
-
-  desc_text := 'Bonus: ' || p_reward_key;
-
-  select count(*) into used_today from public.credit_transactions
-    where username = caller.username
-      and description = desc_text
-      and created_at >= date_trunc('day', now());
-  if used_today >= per_day then
-    return json_build_object('ok', false, 'error', 'Batas harian tercapai');
-  end if;
-
-  select balance into current_balance from public.user_credits where username = caller.username;
-  current_balance := coalesce(current_balance, 0);
-  new_balance := current_balance + amount;
-
-  insert into public.user_credits (username, balance)
-  values (caller.username, new_balance)
-  on conflict (username) do update set balance = excluded.balance;
-
-  insert into public.credit_transactions (username, amount, type, description)
-  values (caller.username, amount, 'topup', desc_text);
-
-  return json_build_object('ok', true, 'newBalance', new_balance, 'amount', amount);
-end;
-$$;
-grant execute on function public.claim_self_reward(text, text) to anon, authenticated;
-
--- NOTE: reward daily check-in bertingkat, journey, dan klaim kode
--- referral punya aturan lebih kompleks — ditangani di Stage berikutnya
--- dengan RPC khusus. Stage 1 ini menutup jalur yang paling banyak
--- disalahgunakan (admin grant, approve topup, reward generik).
+-- ── 6. Reward mandiri (claim_self_reward) → DIPINDAH ke stage2 ──
+-- CATATAN PENTING: versi final claim_self_reward ada di
+-- 20260704_secure_credits_stage2.sql (mengenali 5 key reward, membaca
+-- coin_rewards dari learning_hub_content via _admin_settings).
+-- Stub lama yang dulu ada di sini SENGAJA DIHAPUS — kalau tidak, menjalankan
+-- ulang file foundation akan menimpa versi stage2 dan mematikan bonus
+-- write_review / create_thread / complete_lesson. Jalankan stage2 setelah
+-- foundation, dan JANGAN definisikan claim_self_reward di sini lagi.
