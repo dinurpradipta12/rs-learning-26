@@ -11993,12 +11993,14 @@ function ReferralClaimModal({ session, currentCredits, onClose, onCoinClaimed, o
   const [status, setStatus] = useState<'idle' | 'checking' | 'invalid' | 'used' | 'claiming'>('idle');
   const [preview, setPreview] = useState<ReferralCode | null>(null);
   const [success, setSuccess] = useState<{ credits: number; features?: string[]; code: string } | null>(null);
+  const [claimErrMsg, setClaimErrMsg] = useState('');
 
   const codeUpper = code.trim().toUpperCase();
 
   const handleCheck = async () => {
     if (!codeUpper) return;
     setStatus('checking');
+    setClaimErrMsg('');
     setPreview(null);
     const match = await validateReferralCode(codeUpper);
     if (!match) { setStatus('invalid'); return; }
@@ -12019,7 +12021,10 @@ function ReferralClaimModal({ session, currentCredits, onClose, onCoinClaimed, o
     const { data, error } = await supabase.rpc('claim_referral_code', { p_token: token, p_code: codeUpper });
     const res = data as { ok?: boolean; type?: string; credits?: number; newBalance?: number; error?: string } | null;
     if (error || !res?.ok) {
-      setStatus(res?.error?.includes('sudah pernah') ? 'used' : 'invalid');
+      if (res?.error?.includes('sudah pernah')) { setStatus('used'); return; }
+      // Tampilkan error server yang sebenarnya (mis. fungsi belum ada / akses ditolak).
+      setClaimErrMsg(error?.message ?? res?.error ?? 'Gagal klaim kode. Coba lagi.');
+      setStatus('invalid');
       return;
     }
 
@@ -12082,7 +12087,7 @@ function ReferralClaimModal({ session, currentCredits, onClose, onCoinClaimed, o
               </button>
             </div>
 
-            {status === 'invalid' && <p className="referral-claim-msg error">Kode tidak ditemukan atau sudah kedaluwarsa.</p>}
+            {status === 'invalid' && <p className="referral-claim-msg error">{claimErrMsg || 'Kode tidak ditemukan atau sudah kedaluwarsa.'}</p>}
             {status === 'used' && <p className="referral-claim-msg error">Kamu sudah pernah mengklaim kode ini. Satu kode hanya bisa diklaim sekali per akun.</p>}
 
             {preview && (
@@ -16834,6 +16839,7 @@ function ProfilePage({
                   package_label: activePkg.label,
                   status: 'pending',
                   promo_bonus: promoSnapshot2 ?? null,
+                  bonus_credits: activePkg.bonusCredits ?? 0,
                 }).select('id').single();
                 setTopupSavedId((topupRow2 as { id?: string } | null)?.id ?? '');
                 setTopupProcessing(false);
