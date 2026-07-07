@@ -1222,6 +1222,7 @@ type Lesson = {
   meta: string;
   description: string;
   videoUrl: string;
+  thumbnailUrl?: string; // cover custom (upload). Kalau kosong → derive dari YouTube.
   stats: string[];
   assets: LessonAsset[];
   unlockEventId?: string; // rekaman khusus peserta event tsb (buka pakai kode akses)
@@ -1236,6 +1237,7 @@ type LessonRow = {
   meta: string;
   description: string;
   video_url: string;
+  thumbnail_url?: string | null;
   unlock_event_id?: string | null;
 };
 
@@ -1277,6 +1279,7 @@ type LessonEditorDraft = {
   meta: string;
   description: string;
   videoUrl: string;
+  thumbnailUrl: string;
   statsText: string;
   assets: LessonAssetDraftItem[];
   unlockEventId: string;
@@ -1849,6 +1852,7 @@ function mapLessonRowsToLessons(lessonRows: LessonRow[], assetRows: LessonAssetR
       meta: lessonRow.meta,
       description: lessonRow.description,
       videoUrl: lessonRow.video_url,
+      thumbnailUrl: lessonRow.thumbnail_url ?? undefined,
       stats: [],
       unlockEventId: lessonRow.unlock_event_id ?? undefined,
       assets: assetsByLesson.get(lessonRow.lesson_key)?.sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) ?? [],
@@ -1985,6 +1989,7 @@ function createEmptyLessonDraft(): LessonEditorDraft {
     meta: 'video class',
     description: '',
     videoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    thumbnailUrl: '',
     statsText: '',
     assets: [],
     unlockEventId: '',
@@ -6455,7 +6460,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
     const [{ data: lessonRows, error: lessonError }, { data: assetRows, error: assetError }] = await Promise.all([
       supabase
         .from('lessons')
-        .select('lesson_key, course_key, sort_order, title, duration, meta, description, video_url, unlock_event_id')
+        .select('lesson_key, course_key, sort_order, title, duration, meta, description, video_url, thumbnail_url, unlock_event_id')
         .eq('course_key', courseKey)
         .order('sort_order', { ascending: true }),
       supabase
@@ -6805,6 +6810,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       meta: draft.meta.trim() || 'video class',
       description: draft.description.trim() || 'deskripsi materi',
       videoUrl: draft.videoUrl.trim() || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+      thumbnailUrl: draft.thumbnailUrl.trim() || undefined,
       stats: stats.length > 0 ? stats : ['no stats'],
       unlockEventId: draft.unlockEventId || undefined,
       assets,
@@ -6821,6 +6827,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       meta: lesson.meta,
       description: lesson.description,
       video_url: lesson.videoUrl,
+      thumbnail_url: lesson.thumbnailUrl ?? null,
       unlock_event_id: lesson.unlockEventId ?? null,
     });
 
@@ -6916,6 +6923,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       meta: lesson.meta,
       description: lesson.description,
       videoUrl: lesson.videoUrl,
+      thumbnailUrl: lesson.thumbnailUrl ?? '',
       statsText: lesson.stats.join('\n'),
       unlockEventId: lesson.unlockEventId ?? '',
       assets: lesson.assets.map((asset) => ({
@@ -7067,6 +7075,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           meta: lesson.meta,
           description: lesson.description,
           video_url: lesson.videoUrl,
+          thumbnail_url: lesson.thumbnailUrl ?? null,
           unlock_event_id: lesson.unlockEventId ?? null,
         })),
         { onConflict: 'lesson_key' },
@@ -7960,6 +7969,7 @@ function LmsSidebar({
             const isActive = lesson.id === selectedLessonId;
             const isDone = completedLessons.has(lesson.id);
             const isBookmarked = bookmarks?.has(lesson.id) ?? false;
+            const cover = lessonCoverUrl(lesson);
 
             return (
               <div key={lesson.id} className={`lms-lesson-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}>
@@ -7969,8 +7979,20 @@ function LmsSidebar({
                   disabled={isLocked}
                   onClick={() => onSelectLesson(lesson.id)}
                 >
-                  <span className={`lms-play-icon ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
-                    {isDone ? '✓' : '▶'}
+                  <span className="lms-lesson-num">{index + 1}</span>
+                  <span className="lms-lesson-cover">
+                    {cover && (
+                      <img
+                        src={cover}
+                        alt=""
+                        className="lms-lesson-cover-img"
+                        loading="lazy"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    )}
+                    <span className={`lms-lesson-cover-icon ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
+                      {isDone ? '✓' : isLocked ? '🔒' : '▶'}
+                    </span>
                   </span>
                   <div className="lms-lesson-info">
                     <strong>{lesson.title}</strong>
@@ -8098,6 +8120,26 @@ function LessonEditorDrawer({
   const [eventOptions, setEventOptions] = useState<{ id: string; title: string; date: string }[]>([]);
   useEffect(() => { void loadHubEvents().then((evs) => setEventOptions(evs.map((e) => ({ id: e.id, title: e.title, date: e.date })))); }, []);
 
+  const [coverUploading, setCoverUploading] = useState(false);
+  const handleCoverUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setCoverUploading(true);
+    try {
+      const compressed = await compressImage(file, 1280, 0.82); // hemat storage
+      const ext = (compressed.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `lesson-covers/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('lesson-assets').upload(path, compressed, { upsert: true, contentType: compressed.type });
+      if (!error) {
+        const url = supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
+        onChangeDraft((current) => ({ ...current, thumbnailUrl: url }));
+      } else {
+        window.alert(`Gagal upload cover: ${error.message}`);
+      }
+    } finally {
+      setCoverUploading(false);
+    }
+  };
+
   if (typeof document === 'undefined') {
     return null;
   }
@@ -8203,6 +8245,31 @@ function LessonEditorDrawer({
               onChange={(event) => onChangeDraft((current) => ({ ...current, videoUrl: event.target.value }))}
               placeholder="https://..."
             />
+          </label>
+          <label>
+            cover materi <span className="lesson-form-hint" style={{ display: 'inline' }}>(opsional — kalau kosong pakai thumbnail YouTube otomatis)</span>
+            <div className="lesson-cover-upload">
+              <div className="lesson-cover-preview">
+                {draft.thumbnailUrl
+                  ? <img src={draft.thumbnailUrl} alt="cover" />
+                  : <span className="lesson-cover-ph">▶</span>}
+              </div>
+              <div className="lesson-cover-actions">
+                <input
+                  type="file"
+                  accept="image/*"
+                  id="lesson-cover-input"
+                  style={{ display: 'none' }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleCoverUpload(f); e.target.value = ''; }}
+                />
+                <button type="button" className="button secondary" disabled={coverUploading} onClick={() => document.getElementById('lesson-cover-input')?.click()}>
+                  {coverUploading ? 'mengupload…' : draft.thumbnailUrl ? 'ganti cover' : 'upload cover'}
+                </button>
+                {draft.thumbnailUrl && (
+                  <button type="button" className="button ghost" onClick={() => onChangeDraft((c) => ({ ...c, thumbnailUrl: '' }))}>hapus</button>
+                )}
+              </div>
+            </div>
           </label>
           <label>
             kunci rekaman (khusus peserta event)
@@ -17029,6 +17096,15 @@ function posterForLesson(title: string) {
   `;
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+// Cover lesson untuk UI kurikulum: cover upload kalau ada, kalau tidak derive
+// dari thumbnail YouTube, kalau bukan YouTube → null (pakai placeholder).
+function lessonCoverUrl(lesson: Lesson): string | null {
+  if (lesson.thumbnailUrl) return lesson.thumbnailUrl;
+  const id = extractYoutubeId(normalizeMediaUrl(lesson.videoUrl.trim()));
+  if (id) return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  return null;
 }
 
 function resolveLessonMedia(rawUrl: string): { kind: 'youtube'; embedUrl: string } | { kind: 'video'; url: string } | { kind: 'unsupported' } {

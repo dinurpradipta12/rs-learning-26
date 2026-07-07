@@ -5874,7 +5874,7 @@ body.dark .review-modal-form textarea:focus {
   position: relative;
 }
 .lms-lesson-item:last-child { border-bottom: none; }
-.lms-lesson-item.locked { opacity: 0.4; }
+.lms-lesson-item.locked { opacity: 0.85; }
 
 .lms-lesson-btn {
   flex: 1; min-width: 0;
@@ -15089,3 +15089,43 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
 .reset-pw-copy:hover { transform: translateY(-1px); }
 .reset-pw-copy.copied { background: #16a34a; }
 body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
+
+/* ── Kurikulum lesson dengan cover (gaya Netflix) ── */
+.lms-lesson-btn { gap: 12px; align-items: center; }
+.lms-lesson-num {
+  flex-shrink: 0; width: 16px; text-align: center;
+  font-size: 0.9rem; font-weight: 700; color: var(--muted);
+}
+.lms-lesson-cover {
+  flex-shrink: 0; position: relative;
+  width: 96px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
+  background: linear-gradient(135deg, #1f2937, #3b4b66);
+  display: flex; align-items: center; justify-content: center;
+}
+.lms-lesson-cover-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.lms-lesson-cover-icon {
+  position: relative; z-index: 1;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(0,0,0,0.55); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; padding-left: 1px;
+}
+.lms-lesson-cover-icon.done { background: #167f72; }
+.lms-lesson-cover-icon.active { background: var(--accent); }
+/* Locked → cover diredupkan (ala "belum rilis" Netflix) */
+.lms-lesson-item.locked .lms-lesson-cover-img { filter: brightness(0.35) grayscale(0.3); }
+.lms-lesson-item.locked .lms-lesson-cover { background: #111827; }
+
+/* Upload cover di editor materi */
+.lesson-cover-upload { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.lesson-cover-preview {
+  width: 128px; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden;
+  background: linear-gradient(135deg, #1f2937, #3b4b66);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.lesson-cover-preview img { width: 100%; height: 100%; object-fit: cover; }
+.lesson-cover-ph { color: rgba(255,255,255,0.7); font-size: 1rem; }
+.lesson-cover-actions { display: flex; flex-direction: column; gap: 8px; }
