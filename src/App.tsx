@@ -1223,6 +1223,8 @@ type Lesson = {
   description: string;
   videoUrl: string;
   thumbnailUrl?: string; // cover custom (upload). Kalau kosong → derive dari YouTube.
+  comingSoon?: boolean;  // materi belum rilis (belum ada video)
+  availableAt?: string;  // tanggal rilis (YYYY-MM-DD). Kalau future → "Tersedia [tgl]"
   stats: string[];
   assets: LessonAsset[];
   unlockEventId?: string; // rekaman khusus peserta event tsb (buka pakai kode akses)
@@ -1238,6 +1240,8 @@ type LessonRow = {
   description: string;
   video_url: string;
   thumbnail_url?: string | null;
+  coming_soon?: boolean | null;
+  available_at?: string | null;
   unlock_event_id?: string | null;
 };
 
@@ -1280,6 +1284,8 @@ type LessonEditorDraft = {
   description: string;
   videoUrl: string;
   thumbnailUrl: string;
+  comingSoon: boolean;
+  availableAt: string;
   statsText: string;
   assets: LessonAssetDraftItem[];
   unlockEventId: string;
@@ -1853,6 +1859,8 @@ function mapLessonRowsToLessons(lessonRows: LessonRow[], assetRows: LessonAssetR
       description: lessonRow.description,
       videoUrl: lessonRow.video_url,
       thumbnailUrl: lessonRow.thumbnail_url ?? undefined,
+      comingSoon: lessonRow.coming_soon ?? false,
+      availableAt: lessonRow.available_at ?? undefined,
       stats: [],
       unlockEventId: lessonRow.unlock_event_id ?? undefined,
       assets: assetsByLesson.get(lessonRow.lesson_key)?.sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) ?? [],
@@ -1990,6 +1998,8 @@ function createEmptyLessonDraft(): LessonEditorDraft {
     description: '',
     videoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     thumbnailUrl: '',
+    comingSoon: false,
+    availableAt: '',
     statsText: '',
     assets: [],
     unlockEventId: '',
@@ -6460,7 +6470,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
     const [{ data: lessonRows, error: lessonError }, { data: assetRows, error: assetError }] = await Promise.all([
       supabase
         .from('lessons')
-        .select('lesson_key, course_key, sort_order, title, duration, meta, description, video_url, thumbnail_url, unlock_event_id')
+        .select('lesson_key, course_key, sort_order, title, duration, meta, description, video_url, thumbnail_url, coming_soon, available_at, unlock_event_id')
         .eq('course_key', courseKey)
         .order('sort_order', { ascending: true }),
       supabase
@@ -6811,6 +6821,8 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       description: draft.description.trim() || 'deskripsi materi',
       videoUrl: draft.videoUrl.trim() || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
       thumbnailUrl: draft.thumbnailUrl.trim() || undefined,
+      comingSoon: draft.comingSoon,
+      availableAt: draft.availableAt || undefined,
       stats: stats.length > 0 ? stats : ['no stats'],
       unlockEventId: draft.unlockEventId || undefined,
       assets,
@@ -6828,6 +6840,8 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       description: lesson.description,
       video_url: lesson.videoUrl,
       thumbnail_url: lesson.thumbnailUrl ?? null,
+      coming_soon: lesson.comingSoon ?? false,
+      available_at: lesson.availableAt || null,
       unlock_event_id: lesson.unlockEventId ?? null,
     });
 
@@ -6924,6 +6938,8 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       description: lesson.description,
       videoUrl: lesson.videoUrl,
       thumbnailUrl: lesson.thumbnailUrl ?? '',
+      comingSoon: lesson.comingSoon ?? false,
+      availableAt: lesson.availableAt ?? '',
       statsText: lesson.stats.join('\n'),
       unlockEventId: lesson.unlockEventId ?? '',
       assets: lesson.assets.map((asset) => ({
@@ -7076,6 +7092,8 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
           description: lesson.description,
           video_url: lesson.videoUrl,
           thumbnail_url: lesson.thumbnailUrl ?? null,
+          coming_soon: lesson.comingSoon ?? false,
+          available_at: lesson.availableAt || null,
           unlock_event_id: lesson.unlockEventId ?? null,
         })),
         { onConflict: 'lesson_key' },
@@ -7965,14 +7983,15 @@ function LmsSidebar({
 
         <div className="lms-lesson-list">
           {materialLessons.map((lesson, index) => {
-            const isLocked = !isLessonUnlocked(index);
+            const comingSoon = isLessonComingSoon(lesson) && !canEdit;
+            const isLocked = !isLessonUnlocked(index) || comingSoon;
             const isActive = lesson.id === selectedLessonId;
             const isDone = completedLessons.has(lesson.id);
             const isBookmarked = bookmarks?.has(lesson.id) ?? false;
             const cover = lessonCoverUrl(lesson);
 
             return (
-              <div key={lesson.id} className={`lms-lesson-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}>
+              <div key={lesson.id} className={`lms-lesson-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''} ${comingSoon ? 'coming-soon' : ''}`}>
                 <button
                   type="button"
                   className="lms-lesson-btn"
@@ -7996,7 +8015,7 @@ function LmsSidebar({
                   </span>
                   <div className="lms-lesson-info">
                     <strong>{lesson.title}</strong>
-                    <span>{lesson.duration}</span>
+                    <span className={comingSoon ? 'lms-lesson-soon' : ''}>{comingSoon ? lessonReleaseLabel(lesson) : lesson.duration}</span>
                   </div>
                 </button>
                 {canEdit && !isEditMode && (
@@ -8271,6 +8290,25 @@ function LessonEditorDrawer({
               </div>
             </div>
           </label>
+          <label className="lesson-coming-soon-row" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <input
+              type="checkbox"
+              checked={draft.comingSoon}
+              onChange={(e) => onChangeDraft((c) => ({ ...c, comingSoon: e.target.checked }))}
+              style={{ width: 16, height: 16, accentColor: 'var(--accent)' }}
+            />
+            <span>Coming Soon <span className="lesson-form-hint" style={{ display: 'inline' }}>(materi belum rilis / video belum ada → terkunci & cover redup)</span></span>
+          </label>
+          {draft.comingSoon && (
+            <label>
+              tanggal rilis <span className="lesson-form-hint" style={{ display: 'inline' }}>(opsional — kalau diisi tampil "Tersedia [tanggal]")</span>
+              <input
+                type="date"
+                value={draft.availableAt}
+                onChange={(e) => onChangeDraft((c) => ({ ...c, availableAt: e.target.value }))}
+              />
+            </label>
+          )}
           <label>
             kunci rekaman (khusus peserta event)
             <select
@@ -17105,6 +17143,20 @@ function lessonCoverUrl(lesson: Lesson): string | null {
   const id = extractYoutubeId(normalizeMediaUrl(lesson.videoUrl.trim()));
   if (id) return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
   return null;
+}
+
+// Materi "belum rilis": ditandai Coming Soon oleh admin, atau tanggal rilisnya
+// masih di masa depan.
+function isLessonComingSoon(lesson: Lesson): boolean {
+  if (lesson.availableAt && new Date(lesson.availableAt) > new Date()) return true;
+  return !!lesson.comingSoon;
+}
+// Label rilis ala Netflix: "Tersedia Minggu, 10 Jul" atau "Coming Soon".
+function lessonReleaseLabel(lesson: Lesson): string {
+  if (lesson.availableAt && new Date(lesson.availableAt) > new Date()) {
+    return `Tersedia ${new Date(lesson.availableAt).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}`;
+  }
+  return 'Coming Soon';
 }
 
 function resolveLessonMedia(rawUrl: string): { kind: 'youtube'; embedUrl: string } | { kind: 'video'; url: string } | { kind: 'unsupported' } {
