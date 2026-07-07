@@ -15135,3 +15135,64 @@ body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
 .lesson-cover-preview img { width: 100%; height: 100%; object-fit: cover; }
 .lesson-cover-ph { color: rgba(255,255,255,0.7); font-size: 1rem; }
 .lesson-cover-actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Book 1:1: kalender + slot jam (gaya scheduler) ── */
+.book-cal { border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.book-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.book-cal-head strong { font-size: 0.95rem; font-weight: 700; }
+.book-cal-nav { display: flex; gap: 6px; }
+.book-cal-nav button {
+  width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); cursor: pointer; color: var(--text); font-size: 0.9rem;
+}
+.book-cal-nav button:hover { background: var(--accent-soft, rgba(92,110,248,0.1)); }
+.book-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.book-cal-dayname { text-align: center; font-size: 0.68rem; font-weight: 700; color: var(--muted); padding: 4px 0; }
+.book-cal-cell {
+  aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 10px; background: transparent; cursor: pointer;
+  font-size: 0.85rem; font-weight: 600; color: var(--text); font-family: inherit;
+  transition: background 0.12s;
+}
+.book-cal-cell.empty { visibility: hidden; cursor: default; }
+.book-cal-cell:not(.disabled):hover { background: var(--accent-soft, rgba(92,110,248,0.12)); }
+.book-cal-cell.selected { background: var(--accent) !important; color: #fff; }
+.book-cal-cell.disabled { color: var(--muted); opacity: 0.35; cursor: not-allowed; }
+
+.book-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.book-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 6px; border: 1.5px solid var(--line); border-radius: 12px;
+  background: var(--card); cursor: pointer; font-family: inherit; transition: all 0.12s;
+}
+.book-slot strong { font-size: 0.95rem; color: var(--accent); font-weight: 700; }
+.book-slot span { font-size: 0.66rem; color: var(--muted); }
+.book-slot:not(.taken):hover { border-color: var(--accent); }
+.book-slot.selected { background: var(--accent); border-color: var(--accent); }
+.book-slot.selected strong, .book-slot.selected span { color: #fff; }
+.book-slot.taken { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
+.book-slots-empty { font-size: 0.82rem; color: var(--muted); padding: 6px 0; }
+
+/* Admin: editor ketersediaan jadwal 1:1 */
+.booking-avail-days { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+.booking-avail-day {
+  width: 42px; height: 34px; border-radius: 9px; border: 1.5px solid var(--line);
+  background: var(--card); cursor: pointer; font-weight: 700; font-size: 0.78rem; color: var(--muted);
+}
+.booking-avail-day.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.booking-avail-slots { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.booking-avail-slot {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 8px 6px 12px; border-radius: 9px; background: var(--accent-soft, rgba(92,110,248,0.1));
+  color: var(--accent); font-weight: 700; font-size: 0.85rem;
+}
+.booking-avail-slot button {
+  border: none; background: rgba(0,0,0,0.08); color: inherit; border-radius: 50%;
+  width: 18px; height: 18px; cursor: pointer; line-height: 1; font-size: 0.85rem;
+}
+.booking-avail-add { display: inline-flex; gap: 6px; align-items: center; }
+.booking-avail-add input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.booking-avail-add button {
+  padding: 6px 12px; border: 1px dashed var(--accent); background: transparent;
+  color: var(--accent); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
+}

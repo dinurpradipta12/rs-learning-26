@@ -9423,13 +9423,35 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
 
   // ── Book 1:1 ─────────────────────────────────────────────────
   const [bookOpen, setBookOpen] = useState(false);
-  const [bookForm, setBookForm] = useState({ topic: '', preferred_date: '', preferred_time: '10:00', note: '' });
+  const [bookForm, setBookForm] = useState({ topic: '', preferred_date: '', preferred_time: '', note: '' });
   const [bookSubmitting, setBookSubmitting] = useState(false);
   const [bookError, setBookError] = useState<string | null>(null);
   const [bookSuccess, setBookSuccess] = useState(false);
+  // Ketersediaan (diatur admin) + slot yang sudah terisi untuk tanggal terpilih.
+  const [bookingAvail, setBookingAvail] = useState<BookingAvailability>(defaultBookingAvailability);
+  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
+  const [bookCalMonth, setBookCalMonth] = useState<string>(() => todayString.slice(0, 7));
+
+  useEffect(() => { void loadAdminSettings().then((s) => setBookingAvail(s.booking ?? defaultBookingAvailability)); }, []);
+
+  // Ambil jam yang sudah dibooking (pending/approved) untuk tanggal terpilih.
+  useEffect(() => {
+    if (!bookOpen || !bookForm.preferred_date) { setBookedTimes([]); return; }
+    let cancelled = false;
+    void supabase.from('one_on_one_bookings')
+      .select('preferred_time, status')
+      .eq('preferred_date', bookForm.preferred_date)
+      .neq('status', 'rejected')
+      .then(({ data }) => {
+        if (cancelled) return;
+        setBookedTimes(((data ?? []) as { preferred_time: string }[]).map((b) => String(b.preferred_time ?? '').slice(0, 5)));
+      });
+    return () => { cancelled = true; };
+  }, [bookOpen, bookForm.preferred_date]);
 
   function openBook() {
-    setBookForm({ topic: '', preferred_date: selectedDate, preferred_time: '10:00', note: '' });
+    setBookForm({ topic: '', preferred_date: selectedDate, preferred_time: '', note: '' });
+    setBookCalMonth((selectedDate || todayString).slice(0, 7));
     setBookError(null);
     setBookSuccess(false);
     setBookOpen(true);
@@ -9474,7 +9496,9 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
   function handleBookSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!bookForm.topic.trim()) { setBookError('Topik wajib diisi.'); return; }
-    if (!bookForm.preferred_date) { setBookError('Tanggal wajib diisi.'); return; }
+    if (!bookForm.preferred_date) { setBookError('Pilih tanggal dulu.'); return; }
+    if (!bookForm.preferred_time) { setBookError('Pilih jam yang tersedia dulu.'); return; }
+    if (bookedTimes.includes(bookForm.preferred_time)) { setBookError('Jam itu baru saja terisi. Pilih jam lain.'); return; }
     const cost = featureCosts.book_1on1;
     const bookingFree = userPerks.credit_exempt || userPerks.free_booking;
     if (cost > 0 && !canManage && !bookingFree && onRequestConfirm) {
@@ -10207,27 +10231,76 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                 />
               </div>
 
-              <p className="aem-section-label">Preferensi Jadwal</p>
-              <div className="aem-time-row">
-                <div className="aem-field-box" style={{ flex: 2 }}>
-                  <input
-                    type="date"
-                    className="aem-input aem-input-full"
-                    value={bookForm.preferred_date}
-                    onChange={(e) => setBookForm((f) => ({ ...f, preferred_date: e.target.value }))}
-                    required
-                  />
+              <p className="aem-section-label">Pilih Tanggal</p>
+              <div className="book-cal">
+                <div className="book-cal-head">
+                  <strong>{formatCalendarMonth(`${bookCalMonth}-01`)}</strong>
+                  <div className="book-cal-nav">
+                    <button type="button" onClick={() => setBookCalMonth((mo) => { const d = new Date(`${mo}-01T00:00:00`); d.setMonth(d.getMonth() - 1); return toLocalDateKey(d).slice(0, 7); })}>‹</button>
+                    <button type="button" onClick={() => setBookCalMonth((mo) => { const d = new Date(`${mo}-01T00:00:00`); d.setMonth(d.getMonth() + 1); return toLocalDateKey(d).slice(0, 7); })}>›</button>
+                  </div>
                 </div>
-                <div className="aem-field-box aem-field-box--time">
-                  <input
-                    type="time"
-                    className="aem-input"
-                    value={bookForm.preferred_time}
-                    onChange={(e) => setBookForm((f) => ({ ...f, preferred_time: e.target.value }))}
-                    required
-                  />
+                <div className="book-cal-grid">
+                  {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((d) => <span key={d} className="book-cal-dayname">{d}</span>)}
+                  {(() => {
+                    const y = Number(bookCalMonth.slice(0, 4));
+                    const m = Number(bookCalMonth.slice(5, 7)) - 1;
+                    const firstDow = new Date(y, m, 1).getDay();
+                    const daysInMonth = new Date(y, m + 1, 0).getDate();
+                    const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+                    return cells.map((day, idx) => {
+                      if (day === null) return <span key={`pad-${idx}`} className="book-cal-cell empty" />;
+                      const dateKey = `${bookCalMonth}-${String(day).padStart(2, '0')}`;
+                      const weekday = new Date(y, m, day).getDay();
+                      const isPast = dateKey < todayString;
+                      const available = bookingAvail.days.includes(weekday);
+                      const disabled = isPast || !available;
+                      const selected = dateKey === bookForm.preferred_date;
+                      return (
+                        <button
+                          type="button"
+                          key={dateKey}
+                          className={`book-cal-cell ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+                          disabled={disabled}
+                          onClick={() => setBookForm((f) => ({ ...f, preferred_date: dateKey, preferred_time: '' }))}
+                        >
+                          {day}
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
+
+              {bookForm.preferred_date && (
+                <>
+                  <p className="aem-section-label">
+                    Pilih Jam · {new Date(`${bookForm.preferred_date}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </p>
+                  {bookingAvail.slots.length === 0 ? (
+                    <p className="book-slots-empty">Belum ada jam yang tersedia. Atur di pengaturan admin.</p>
+                  ) : (
+                    <div className="book-slots">
+                      {bookingAvail.slots.map((slot) => {
+                        const taken = bookedTimes.includes(slot);
+                        const sel = bookForm.preferred_time === slot;
+                        return (
+                          <button
+                            type="button"
+                            key={slot}
+                            disabled={taken}
+                            className={`book-slot ${sel ? 'selected' : ''} ${taken ? 'taken' : ''}`}
+                            onClick={() => setBookForm((f) => ({ ...f, preferred_time: slot }))}
+                          >
+                            <strong>{slot}</strong>
+                            <span>{taken ? 'Terisi' : 'Tersedia'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
 
               <p className="aem-section-label">Catatan (opsional)</p>
               <div className="aem-field-box aem-field-box--textarea">
@@ -11622,7 +11695,15 @@ type CheckinFeatureKey = 'free_video' | 'free_booking' | 'free_thread' | 'free_a
 type CheckinDay7 = { coins: number; features: CheckinFeatureKey[] };
 const defaultCheckinDay7: CheckinDay7 = { coins: 0, features: [] };
 
-type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards; checkin_day7?: CheckinDay7 };
+// Ketersediaan jadwal sesi 1:1 (diatur admin). days = index hari (0=Min..6=Sab)
+// yang buka; slots = jam yang bisa dipilih ("HH:MM", 24 jam).
+type BookingAvailability = { days: number[]; slots: string[] };
+const defaultBookingAvailability: BookingAvailability = {
+  days: [1, 2, 3, 4, 5],
+  slots: ['10:00', '11:00', '13:00', '14:00', '15:00', '16:00'],
+};
+
+type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards; checkin_day7?: CheckinDay7; booking?: BookingAvailability };
 
 let _adminSettingsCache: AdminSettings | null = null;
 async function loadAdminSettings(): Promise<AdminSettings> {
@@ -11645,6 +11726,7 @@ async function loadAdminSettings(): Promise<AdminSettings> {
     student_bot_token: raw.student_bot_token ?? '',
     coin_rewards: { ...defaultCoinRewards, ...(raw.coin_rewards ?? {}) },
     checkin_day7: { ...defaultCheckinDay7, ...(raw.checkin_day7 ?? {}) },
+    booking: { ...defaultBookingAvailability, ...(raw.booking ?? {}) },
   };
   return _adminSettingsCache;
 }
@@ -13745,6 +13827,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [showRewardsModal, setShowRewardsModal] = useState(false);
   const [draftRewards, setDraftRewards] = useState<CoinRewards>({ ...defaultCoinRewards });
   const [draftDay7, setDraftDay7] = useState<CheckinDay7>({ ...defaultCheckinDay7 });
+  const [draftBooking, setDraftBooking] = useState<BookingAvailability>({ ...defaultBookingAvailability });
+  const [newSlotInput, setNewSlotInput] = useState('');
   const [rewardsSaving, setRewardsSaving] = useState(false);
   const [rewardsSaved, setRewardsSaved] = useState(false);
   const [showResetTxModal, setShowResetTxModal] = useState(false);
@@ -13886,7 +13970,10 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
 
   const handleSaveSettings = async () => {
     setSettingsSaving(true);
-    await saveAdminSettings({ packages: draftPackages, payment: draftPayment, referralCodes: draftReferralCodes, coin_rate: draftCoinRate, student_bot_token: draftStudentBotToken });
+    // Pertahankan field lain (coin_rewards, checkin_day7, promo, booking) agar
+    // menyimpan paket tidak menghapusnya.
+    const existing = await loadAdminSettings();
+    await saveAdminSettings({ ...existing, packages: draftPackages, payment: draftPayment, referralCodes: draftReferralCodes, coin_rate: draftCoinRate, student_bot_token: draftStudentBotToken });
     setReferralCodes(draftReferralCodes);
     setPackages(draftPackages);
     setPaymentInfo(draftPayment);
@@ -14461,7 +14548,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                 <button
                   type="button"
                   className="admin-settings-btn"
-                  onClick={() => { void loadAdminSettings().then((s) => { setDraftRewards({ ...defaultCoinRewards, ...(s.coin_rewards ?? {}) }); setDraftDay7({ ...defaultCheckinDay7, ...(s.checkin_day7 ?? {}) }); }); setShowRewardsModal(true); }}
+                  onClick={() => { void loadAdminSettings().then((s) => { setDraftRewards({ ...defaultCoinRewards, ...(s.coin_rewards ?? {}) }); setDraftDay7({ ...defaultCheckinDay7, ...(s.checkin_day7 ?? {}) }); setDraftBooking({ ...defaultBookingAvailability, ...(s.booking ?? {}) }); }); setShowRewardsModal(true); }}
                 >
                   <Ic name="gift" size={14} /> Atur Bonus Koin
                 </button>
@@ -14674,9 +14761,45 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                   </div>
                 </div>
 
+                <div className="costs-modal-section">
+                  <p className="admin-section-label">Jadwal Sesi 1:1 — Hari & Jam Tersedia</p>
+                  <p className="costs-modal-hint">User hanya bisa memilih hari & jam ini saat booking. Jam yang sudah dibooking otomatis terkunci.</p>
+                  <div className="booking-avail-days">
+                    {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((d, i) => (
+                      <button
+                        type="button"
+                        key={d}
+                        className={`booking-avail-day${draftBooking.days.includes(i) ? ' on' : ''}`}
+                        onClick={() => setDraftBooking((b) => ({ ...b, days: b.days.includes(i) ? b.days.filter((x) => x !== i) : [...b.days, i].sort((a, z) => a - z) }))}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="booking-avail-slots">
+                    {[...draftBooking.slots].sort().map((slot) => (
+                      <span key={slot} className="booking-avail-slot">
+                        {slot}
+                        <button type="button" onClick={() => setDraftBooking((b) => ({ ...b, slots: b.slots.filter((s) => s !== slot) }))}>×</button>
+                      </span>
+                    ))}
+                    <span className="booking-avail-add">
+                      <input
+                        type="time"
+                        value={newSlotInput}
+                        onChange={(e) => setNewSlotInput(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { if (newSlotInput && !draftBooking.slots.includes(newSlotInput)) { setDraftBooking((b) => ({ ...b, slots: [...b.slots, newSlotInput] })); setNewSlotInput(''); } }}
+                      >+ tambah jam</button>
+                    </span>
+                  </div>
+                </div>
+
                 <div className="costs-modal-footer">
                   {rewardsSaved && <span className="admin-costs-saved">✓ Tersimpan</span>}
-                  <button type="button" className="button secondary" onClick={() => { setDraftRewards({ ...defaultCoinRewards }); setDraftDay7({ ...defaultCheckinDay7 }); }}>Reset ke default</button>
+                  <button type="button" className="button secondary" onClick={() => { setDraftRewards({ ...defaultCoinRewards }); setDraftDay7({ ...defaultCheckinDay7 }); setDraftBooking({ ...defaultBookingAvailability }); }}>Reset ke default</button>
                   <button
                     type="button"
                     className="button primary"
@@ -14684,7 +14807,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                     onClick={async () => {
                       setRewardsSaving(true);
                       const settings = await loadAdminSettings();
-                      await saveAdminSettings({ ...settings, coin_rewards: draftRewards, checkin_day7: draftDay7 });
+                      await saveAdminSettings({ ...settings, coin_rewards: draftRewards, checkin_day7: draftDay7, booking: draftBooking });
                       setRewardsSaving(false);
                       setRewardsSaved(true);
                       setTimeout(() => { setRewardsSaved(false); setShowRewardsModal(false); }, 1200);
