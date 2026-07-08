@@ -823,7 +823,7 @@ async function updateThreadViewCount(threadId: string, viewCount: number): Promi
   await supabase.from('forum_threads').update({ view_count: viewCount }).eq('id', threadId);
 }
 
-type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply';
+type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply' | 'event_link';
 
 async function insertNotification(recipient: string, type: NotifType, title: string, body: string, link?: string, actorUsername?: string) {
   await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null, actor_username: actorUsername ?? null }]);
@@ -2182,6 +2182,8 @@ function NotificationBell({ username }: { username: string }) {
         return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2.5 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.5 2.5 0 0 1-2.5-1.5"/><line x1="12" y1="6" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="18"/></svg>;
       case 'thread_reply':
         return <svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
+      case 'event_link':
+        return <svg {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
       default:
         return <svg {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
     }
@@ -7983,7 +7985,7 @@ function LmsSidebar({
 
         <div className="lms-lesson-list">
           {materialLessons.map((lesson, index) => {
-            const comingSoon = isLessonComingSoon(lesson) && !canEdit;
+            const comingSoon = isLessonComingSoon(lesson);
             const isLocked = !isLessonUnlocked(index) || comingSoon;
             const isActive = lesson.id === selectedLessonId;
             const isDone = completedLessons.has(lesson.id);
@@ -17713,7 +17715,13 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       if (!error) finalDraft = { ...finalDraft, coverUrl: supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl };
     }
     let updated: HubEvent[];
+    // Deteksi link yang baru ditambahkan pada event yang di-edit → notifikasi peserta.
+    let linkJustAdded: HubEvent | null = null;
     if (editingIdx !== null) {
+      const prev = events[editingIdx];
+      if (finalDraft.link?.trim() && finalDraft.link.trim() !== (prev.link ?? '').trim()) {
+        linkJustAdded = { ...prev, ...finalDraft };
+      }
       updated = events.map((e, i) => i === editingIdx ? { ...e, ...finalDraft } : e);
     } else {
       const recurrence = finalDraft.recurrence ?? 'none';
@@ -17732,6 +17740,30 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       }
     }
     await saveHubEvents(updated);
+    // Kirim notifikasi ke peserta yang sudah join event ini bahwa link sudah tersedia.
+    if (linkJustAdded) {
+      void (async () => {
+        const { data } = await supabase
+          .from('event_participants')
+          .select('username')
+          .eq('event_id', linkJustAdded!.id);
+        const usernames = [...new Set((data ?? []).map((r: { username: string }) => r.username))];
+        const tgText = `🔗 <b>Link Event Sudah Tersedia!</b>\n\n🎯 <b>${linkJustAdded!.title}</b>\n🗓 ${linkJustAdded!.date}${linkJustAdded!.time ? ` pukul ${linkJustAdded!.time.slice(0, 5)}` : ''}\n\nKlik untuk join kelas: ${linkJustAdded!.link}`;
+        await Promise.all(
+          usernames.flatMap((u) => [
+            insertNotification(
+              u,
+              'event_link',
+              'Link Event Sudah Tersedia!',
+              `Link untuk "${linkJustAdded!.title}" sudah ditambahkan. Buka halaman Events untuk join kelas.`,
+              '#events',
+            ),
+            // Kirim juga ke Telegram user (kalau sudah connect telegram_chat_id).
+            notifyStudent(u, tgText),
+          ]),
+        );
+      })();
+    }
     setEvents(updated);
     setCoverFile(null);
     setShowForm(false);
