@@ -18485,11 +18485,25 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                         📅 {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         {ev.time && <> · {ev.time}</>}
                       </div>
-                      <div className="event-card-footer">
-                        {joined && ev.link
-                          ? <a href={ev.link} target="_blank" rel="noopener noreferrer" className="button secondary event-join-btn"><Ic name="link" size={14} /> Rekaman / Link</a>
-                          : <span className="event-past-label">Tidak ada rekaman</span>}
-                      </div>
+                      {/* Event lampau: link tidak bisa diklik lagi. Yang tersedia
+                          hanya kode akses (bisa disalin) untuk klaim rekaman kapan pun. */}
+                      {joined && myAccessCodes[ev.id] ? (
+                        <div className="event-access-code-row">
+                          <div className="event-access-code-box">
+                            <span className="event-access-code-label">Kode akses rekaman</span>
+                            <strong className="event-access-code-value"><Ic name="ticket" size={14} /> {myAccessCodes[ev.id]}</strong>
+                          </div>
+                          <button type="button" className="event-access-code-copy-btn" onClick={() => copyAccessCode(myAccessCodes[ev.id])}>
+                            {copiedCode === myAccessCodes[ev.id] ? <><Ic name="check" size={13} /> Tersalin</> : <><Ic name="copy" size={13} /> Salin</>}
+                          </button>
+                        </div>
+                      ) : joined && explicitlyJoined(ev) ? (
+                        <button type="button" className="event-claim-code-btn" disabled={claimingCode === ev.id} onClick={() => void claimAccessCode(ev)}>
+                          {claimingCode === ev.id ? 'Memproses…' : <><Ic name="ticket" size={13} /> Ambil Kode Akses Rekaman</>}
+                        </button>
+                      ) : (
+                        <div className="event-card-footer"><span className="event-past-label">Tidak ada rekaman</span></div>
+                      )}
                     </div>
                   );
                 })}
