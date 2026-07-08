@@ -450,6 +450,7 @@ type UserProfile = {
   name: string;
   email: string;
   birthDate: string;
+  showBirthday: boolean;
   photoUrl: string;
   avatarPath: string;
   role: string;
@@ -488,6 +489,7 @@ type UserProfileRow = {
   birth_date: string | null;
   joined_at: string;
   avatar_path: string | null;
+  show_birthday?: boolean | null;
 };
 
 type UserSubscriptionRow = {
@@ -823,7 +825,7 @@ async function updateThreadViewCount(threadId: string, viewCount: number): Promi
   await supabase.from('forum_threads').update({ view_count: viewCount }).eq('id', threadId);
 }
 
-type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply' | 'event_link';
+type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply' | 'event_link' | 'birthday' | 'birthday_wish';
 
 async function insertNotification(recipient: string, type: NotifType, title: string, body: string, link?: string, actorUsername?: string) {
   await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null, actor_username: actorUsername ?? null }]);
@@ -1521,6 +1523,7 @@ function defaultUserProfile(session: AppSession): UserProfile {
     name: session.displayName || session.username,
     email: `${session.username}@ruangsosmed.local`,
     birthDate: '2000-01-01',
+    showBirthday: true,
     photoUrl: '',
     avatarPath: '',
     role: session.role === 'developer' ? 'developer' : 'student',
@@ -1571,6 +1574,7 @@ function mapSupabaseProfile(
     name: profileRow?.name ?? fallback.name,
     email: profileRow?.email ?? fallback.email,
     birthDate: profileRow?.birth_date ?? fallback.birthDate,
+    showBirthday: profileRow?.show_birthday ?? fallback.showBirthday,
     photoUrl: avatarPath ? profileAvatarPublicUrl(avatarPath) : fallback.photoUrl,
     avatarPath,
     role: profileRow?.job_title ?? fallback.role,
@@ -1616,7 +1620,7 @@ async function loadSupabaseUserProfile(session: AppSession) {
   const [{ data: profileRow, error: profileError }, { data: subscriptionRow, error: subscriptionError }] = await Promise.all([
     supabase
       .from('user_profiles')
-      .select('username, name, email, job_title, birth_date, joined_at, avatar_path')
+      .select('username, name, email, job_title, birth_date, joined_at, avatar_path, show_birthday')
       .eq('username', session.username)
       .maybeSingle(),
     supabase
@@ -2184,6 +2188,9 @@ function NotificationBell({ username }: { username: string }) {
         return <svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
       case 'event_link':
         return <svg {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+      case 'birthday':
+      case 'birthday_wish':
+        return <svg {...p}><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3M7 4h.01M12 3h.01M17 4h.01"/></svg>;
       default:
         return <svg {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
     }
@@ -2780,6 +2787,182 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
       </div>
     </div>,
     document.body,
+  );
+}
+
+type BirthdayEventRow = { username: string; year: number; display_name: string | null; avatar_path: string | null; bonus_amount: number; created_at: string };
+type BirthdayWishRow = { id: string; birthday_username: string; birthday_year: number; from_username: string; from_display_name: string | null; from_avatar_path: string | null; message: string; created_at: string };
+
+// Perayaan ulang tahun: popup ke semua member, form ucapan/doa, dan
+// "inbox letter" berisi kumpulan ucapan yang bisa dibaca kapan pun.
+function BirthdayCenter({ session }: { session: AppSession | null }) {
+  const [queue, setQueue] = useState<BirthdayEventRow[]>([]);
+  const [msg, setMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxWishes, setInboxWishes] = useState<BirthdayWishRow[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const myAvatarPath = useRef<string | null>(null);
+
+  const seenKey = (ev: BirthdayEventRow) => `birthday_seen_${session?.username}_${ev.username}_${ev.year}`;
+
+  useEffect(() => {
+    if (!session?.username) { setQueue([]); return; }
+    const year = new Date().getFullYear();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    void (async () => {
+      const { data } = await supabase
+        .from('birthday_events')
+        .select('*')
+        .eq('year', year)
+        .gte('created_at', startOfToday.toISOString())
+        .order('created_at', { ascending: true });
+      const rows = (data ?? []) as BirthdayEventRow[];
+      // Jangan tampilkan popup perayaan diri sendiri, atau yang sudah ditanggapi.
+      setQueue(rows.filter((r) => r.username !== session.username && !localStorage.getItem(seenKey(r))));
+      const { data: prof } = await supabase.from('user_profiles').select('avatar_path').eq('username', session.username).maybeSingle();
+      myAvatarPath.current = (prof as { avatar_path?: string | null } | null)?.avatar_path ?? null;
+    })();
+  }, [session?.username]);
+
+  const openInbox = async () => {
+    if (!session?.username) return;
+    setInboxOpen(true);
+    setInboxLoading(true);
+    const { data } = await supabase
+      .from('birthday_wishes')
+      .select('*')
+      .eq('birthday_username', session.username)
+      .order('created_at', { ascending: false });
+    setInboxWishes((data ?? []) as BirthdayWishRow[]);
+    setInboxLoading(false);
+  };
+
+  // Notifikasi ucapan mengarahkan ke #birthday-inbox → buka inbox letter.
+  useEffect(() => {
+    const check = () => {
+      if (window.location.hash === '#birthday-inbox') {
+        history.replaceState(null, '', '#dashboard');
+        void openInbox();
+      }
+    };
+    check();
+    window.addEventListener('hashchange', check);
+    return () => window.removeEventListener('hashchange', check);
+  }, [session?.username]);
+
+  const current = queue[0] ?? null;
+
+  const dismissCurrent = () => {
+    if (current) localStorage.setItem(seenKey(current), '1');
+    setQueue((q) => q.slice(1));
+    setMsg('');
+  };
+
+  const sendWish = async () => {
+    if (!current || !session || !msg.trim()) return;
+    setSubmitting(true);
+    await supabase.from('birthday_wishes').upsert({
+      birthday_username: current.username,
+      birthday_year: current.year,
+      from_username: session.username,
+      from_display_name: session.displayName,
+      from_avatar_path: myAvatarPath.current,
+      message: msg.trim(),
+    }, { onConflict: 'birthday_username,birthday_year,from_username' });
+    void insertNotification(
+      current.username,
+      'birthday_wish',
+      '💌 Ucapan Ulang Tahun Baru',
+      `${session.displayName} mengirim ucapan untukmu. Buka inbox untuk membacanya.`,
+      '#birthday-inbox',
+      session.username,
+    );
+    void notifyStudent(
+      current.username,
+      `💌 <b>Ucapan ulang tahun baru!</b>\n\n${session.displayName} baru saja menulis ucapan untukmu. Buka inbox ucapan di aplikasi untuk membaca. 🎉`,
+    );
+    setSubmitting(false);
+    dismissCurrent();
+  };
+
+  const avatarNode = (name: string, path: string | null) => (
+    path
+      ? <img src={profileAvatarPublicUrl(path)} alt={name} className="bday-avatar-img" />
+      : <span className="bday-avatar-fallback">{(name || '?').slice(0, 1).toUpperCase()}</span>
+  );
+
+  // Kelompokkan inbox per tahun (terbaru dulu).
+  const wishesByYear = inboxWishes.reduce<Record<number, BirthdayWishRow[]>>((acc, w) => {
+    (acc[w.birthday_year] ??= []).push(w);
+    return acc;
+  }, {});
+  const inboxYears = Object.keys(wishesByYear).map(Number).sort((a, b) => b - a);
+
+  return (
+    <>
+      {current && createPortal(
+        <div className="bday-overlay">
+          <div className="bday-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="bday-confetti">🎉🎂🎈</div>
+            <div className="bday-avatar">{avatarNode(current.display_name ?? current.username, current.avatar_path)}</div>
+            <h3 className="bday-title">Hari ini {current.display_name ?? current.username} ulang tahun! 🎂</h3>
+            <p className="bday-sub">Yuk kirim ucapan atau doa terbaikmu — akan tersimpan di inbox mereka.</p>
+            <textarea
+              className="bday-input"
+              placeholder="Tulis ucapan / doa untuk mereka…"
+              rows={3}
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              autoFocus
+            />
+            <div className="bday-actions">
+              <button type="button" className="bday-btn-skip" onClick={dismissCurrent} disabled={submitting}>Nanti saja</button>
+              <button type="button" className="bday-btn-send" onClick={() => void sendWish()} disabled={submitting || !msg.trim()}>
+                {submitting ? 'Mengirim…' : '💌 Kirim Ucapan'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {inboxOpen && createPortal(
+        <div className="bday-overlay" onClick={() => setInboxOpen(false)}>
+          <div className="bday-inbox" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="bday-inbox-close" onClick={() => setInboxOpen(false)}>×</button>
+            <div className="bday-inbox-head">
+              <span className="bday-inbox-emoji">💌</span>
+              <h3>Inbox Ucapan Ulang Tahun</h3>
+              <p>Kumpulan ucapan & doa dari member untukmu.</p>
+            </div>
+            {inboxLoading ? (
+              <p className="bday-inbox-empty">Memuat ucapan…</p>
+            ) : inboxWishes.length === 0 ? (
+              <p className="bday-inbox-empty">Belum ada ucapan. Semoga ulang tahun berikutnya penuh ucapan hangat! 🎂</p>
+            ) : (
+              inboxYears.map((yr) => (
+                <div key={yr} className="bday-inbox-year">
+                  <div className="bday-inbox-year-label">{yr}</div>
+                  {wishesByYear[yr].map((w) => (
+                    <div key={w.id} className="bday-wish-card">
+                      <div className="bday-wish-avatar">{avatarNode(w.from_display_name ?? w.from_username, w.from_avatar_path)}</div>
+                      <div className="bday-wish-body">
+                        <strong>{w.from_display_name ?? w.from_username}</strong>
+                        <p>{w.message}</p>
+                        <time>{new Date(w.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</time>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -3455,6 +3638,7 @@ function App() {
         )}
         {confirmContext && <CreditConfirmModal ctx={confirmContext} onClose={() => setConfirmContext(null)} />}
         {promoPopup && <PromoPopupModal promo={promoPopup} onClose={() => setPromoPopup(null)} onTopUp={() => setTopUpContext({ feature: 'promo', needed: 0, balance: 0 })} />}
+        {session && <BirthdayCenter session={session} />}
         {searchOpen && <GlobalSearchModal onClose={() => setSearchOpen(false)} />}
         {showReferralClaim && session && (
           <ReferralClaimModal
@@ -6821,7 +7005,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       duration: draft.duration.trim() || '0 menit',
       meta: draft.meta.trim() || 'video class',
       description: draft.description.trim() || 'deskripsi materi',
-      videoUrl: draft.videoUrl.trim() || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+      videoUrl: draft.videoUrl.trim() || PLACEHOLDER_VIDEO_URL,
       thumbnailUrl: draft.thumbnailUrl.trim() || undefined,
       comingSoon: draft.comingSoon,
       availableAt: draft.availableAt || undefined,
@@ -6993,12 +7177,28 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       setSelectedLessonId(persistedLesson.id);
       setPendingAssetFiles([]);
       setLessonEditorOpen(false);
-      if (lessonEditorMode === 'create') {
+
+      // Notifikasi "Materi Baru" hanya saat video BENAR-BENAR rilis:
+      // ada link video asli (bukan placeholder / cover saja) DAN bukan coming soon.
+      // Jadi kalau admin cuma upload cover + tandai coming soon → tidak ada notif;
+      // notif baru terkirim saat link video diisi & status coming soon dilepas.
+      const publishedNow =
+        hasRealVideoUrl(lessonDraft.videoUrl) &&
+        !isLessonComingSoon({ comingSoon: lessonDraft.comingSoon, availableAt: lessonDraft.availableAt } as Lesson);
+      const publishedBefore = editingLesson
+        ? hasRealVideoUrl(editingLesson.videoUrl) && !isLessonComingSoon(editingLesson)
+        : false;
+      if (publishedNow && !publishedBefore) {
         void (async () => {
           const { data: allUsers } = await supabase.from('app_users').select('username').eq('is_active', true);
-          for (const u of allUsers ?? []) {
-            void insertNotification(u.username, 'lesson_new', 'Materi Baru Tersedia!', `"${persistedLesson.title}" baru saja ditambahkan. Yuk mulai belajar!`, '#materi');
-          }
+          const body = `"${persistedLesson.title}" baru saja ditambahkan. Yuk mulai belajar!`;
+          const tgText = `🎬 <b>Materi Baru Tersedia!</b>\n\n📚 <b>${persistedLesson.title}</b>\n\nVideo sudah bisa ditonton. Buka halaman Materi untuk mulai belajar!`;
+          await Promise.all(
+            (allUsers ?? []).flatMap((u) => [
+              insertNotification(u.username, 'lesson_new', 'Materi Baru Tersedia!', body, '#materi'),
+              notifyStudent(u.username, tgText),
+            ]),
+          );
         })();
       }
     })();
@@ -10233,6 +10433,8 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                 />
               </div>
 
+              <div className="book-datetime">
+                <div className="book-datetime-col">
               <p className="aem-section-label">Pilih Tanggal</p>
               <div className="book-cal">
                 <div className="book-cal-head">
@@ -10273,8 +10475,9 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                   })()}
                 </div>
               </div>
-
-              {bookForm.preferred_date && (
+                </div>
+                <div className="book-datetime-col">
+              {bookForm.preferred_date ? (
                 <>
                   <p className="aem-section-label">
                     Pilih Jam · {new Date(`${bookForm.preferred_date}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -10302,7 +10505,11 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                     </div>
                   )}
                 </>
+              ) : (
+                <p className="book-slots-hint">Pilih tanggal dulu untuk melihat jam yang tersedia.</p>
               )}
+                </div>
+              </div>
 
               <p className="aem-section-label">Catatan (opsional)</p>
               <div className="aem-field-box aem-field-box--textarea">
@@ -16620,7 +16827,7 @@ function ProfilePage({
     };
   }, [session]);
 
-  const updateDraftProfile = (field: keyof UserProfile, value: string) => {
+  const updateDraftProfile = (field: keyof UserProfile, value: string | boolean) => {
     setDraftProfile((current) => ({ ...current, [field]: value }));
   };
 
@@ -16708,6 +16915,7 @@ function ProfilePage({
           email: draftProfile.email,
           job_title: draftProfile.role,
           birth_date: draftProfile.birthDate || null,
+          show_birthday: draftProfile.showBirthday,
           joined_at: profile.joinedAt,
           avatar_path: avatarPath || null,
         },
@@ -16831,6 +17039,14 @@ function ProfilePage({
                   <label>
                     tanggal lahir
                     <input type="date" value={draftProfile.birthDate} onChange={(event) => updateDraftProfile('birthDate', event.target.value)} />
+                  </label>
+                  <label className="profile-birthday-toggle">
+                    <input
+                      type="checkbox"
+                      checked={draftProfile.showBirthday}
+                      onChange={(event) => updateDraftProfile('showBirthday', event.target.checked)}
+                    />
+                    <span>Rayakan ulang tahunku — tampilkan popup & bonus koin ke komunitas saat hari-H. Nonaktifkan bila ingin privat.</span>
                   </label>
                   <div className="readonly-profile-field">
                     <span>pertama bergabung</span>
@@ -17275,6 +17491,13 @@ function lessonCoverUrl(lesson: Lesson): string | null {
 function isLessonComingSoon(lesson: Lesson): boolean {
   if (lesson.availableAt && new Date(lesson.availableAt) > new Date()) return true;
   return !!lesson.comingSoon;
+}
+// URL video placeholder default (dipakai saat field video dikosongkan / cuma cover).
+const PLACEHOLDER_VIDEO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+// True kalau lesson punya link video asli (bukan kosong & bukan placeholder default).
+function hasRealVideoUrl(url?: string | null): boolean {
+  const u = (url ?? '').trim();
+  return u.length > 0 && u !== PLACEHOLDER_VIDEO_URL;
 }
 // Label rilis ala Netflix: "Tersedia Minggu, 10 Jul" atau "Coming Soon".
 function lessonReleaseLabel(lesson: Lesson): string {

@@ -18,7 +18,9 @@
 -- ============================================================
 
 -- ── 1. Privasi: toggle tampilkan ulang tahun ────────────────
-alter table public.app_users
+-- birth_date & avatar_path ada di user_profiles, jadi show_birthday
+-- ikut di sana agar sekumpulan dengan data profil.
+alter table public.user_profiles
   add column if not exists show_birthday boolean not null default true;
 
 -- ── 2. Event ulang tahun (idempoten per user per tahun) ─────

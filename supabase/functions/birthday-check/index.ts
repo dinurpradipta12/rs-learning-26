@@ -56,23 +56,37 @@ Deno.serve(async (req) => {
 
   const { md, year } = todayMonthDayWIB();
 
-  // Ambil kandidat: user aktif, boleh dirayakan, punya tanggal lahir.
-  const { data: users, error } = await supabase
-    .from('app_users')
-    .select('username, name, birth_date, avatar_path, telegram_chat_id, show_birthday, is_active')
-    .eq('is_active', true)
-    .eq('show_birthday', true)
-    .not('birth_date', 'is', null);
+  // Profil (birth_date, avatar, show_birthday) ada di user_profiles;
+  // status aktif & telegram ada di app_users. Gabungkan by username.
+  const [{ data: profiles, error: profErr }, { data: accounts, error: accErr }] = await Promise.all([
+    supabase
+      .from('user_profiles')
+      .select('username, name, birth_date, avatar_path, show_birthday')
+      .eq('show_birthday', true)
+      .not('birth_date', 'is', null),
+    supabase
+      .from('app_users')
+      .select('username, telegram_chat_id, is_active'),
+  ]);
 
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (profErr || accErr) {
+    return new Response(JSON.stringify({ error: profErr?.message ?? accErr?.message }), { status: 500 });
   }
 
-  const celebrants = (users ?? []).filter((u) => {
-    const bd = String(u.birth_date ?? '');
-    // birth_date format 'YYYY-MM-DD' → bandingkan 'MM-DD'.
-    return bd.length >= 10 && bd.slice(5, 10) === md;
-  });
+  const accountMap = new Map((accounts ?? []).map((a) => [a.username, a]));
+
+  const celebrants = (profiles ?? [])
+    .filter((p) => {
+      const bd = String(p.birth_date ?? '');
+      // birth_date format 'YYYY-MM-DD' → bandingkan 'MM-DD'.
+      return bd.length >= 10 && bd.slice(5, 10) === md && accountMap.get(p.username)?.is_active;
+    })
+    .map((p) => ({
+      username: p.username,
+      name: p.name,
+      avatar_path: p.avatar_path,
+      telegram_chat_id: accountMap.get(p.username)?.telegram_chat_id ?? null,
+    }));
 
   if (celebrants.length === 0) {
     return new Response(JSON.stringify({ celebrated: 0, message: 'No birthdays today' }), { status: 200 });
