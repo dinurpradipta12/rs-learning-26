@@ -117,8 +117,10 @@ begin
   end if;
 
   if amount > 0 then
+    -- created_by = null: 'system:birthday' bukan username asli & akan ditolak
+    -- foreign key credit_transactions.created_by → app_users.username.
     new_balance := public._add_credits(
-      p_username, amount, 'Bonus: Selamat Ulang Tahun 🎂', 'system:birthday'
+      p_username, amount, 'Bonus: Selamat Ulang Tahun 🎂', null
     );
   end if;
 
