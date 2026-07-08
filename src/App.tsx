@@ -1347,6 +1347,28 @@ function currentSessionToken(): string | undefined {
   return readStoredSession()?.token;
 }
 
+// Simpan konten admin (learning_hub_content) lewat RPC ber-verifikasi role,
+// bukan upsert langsung — mencegah user biasa memanipulasi setting (mis.
+// jumlah reward coin). Mengembalikan { error } agar kompatibel dengan
+// pemanggil lama. Lihat migrasi 20260709_lock_hub_content.sql.
+async function saveHubContent(
+  contentKey: string,
+  contentGroup: string,
+  content: unknown,
+): Promise<{ error: { message: string } | null }> {
+  const token = currentSessionToken();
+  if (!token) return { error: { message: 'Sesi tidak ditemukan. Silakan login ulang.' } };
+  const { data, error } = await supabase.rpc('admin_set_hub_content', {
+    p_token: token,
+    p_content_key: contentKey,
+    p_content_group: contentGroup,
+    p_content: content,
+  });
+  if (error) return { error: { message: error.message } };
+  const res = data as { ok?: boolean } | null;
+  return { error: res?.ok ? null : { message: 'Gagal menyimpan konten.' } };
+}
+
 function persistStoredSession(session: AppSession, rememberMe: boolean) {
   if (typeof window === 'undefined') {
     return;
@@ -1989,12 +2011,7 @@ function useSupabaseJsonState<T>(contentKey: LearningHubContentKey, fallback: T)
 
   const persist = async (nextValue: T) => {
     setValue(nextValue);
-    const { error } = await supabase.from('learning_hub_content').upsert({
-      content_key: contentKey,
-      content_group: 'learning_hub',
-      content: nextValue as never,
-      updated_at: new Date().toISOString(),
-    });
+    const { error } = await saveHubContent(contentKey, 'learning_hub', nextValue);
 
     if (error) {
       console.warn(`supabase save failed for ${contentKey}`, error);
@@ -5983,7 +6000,7 @@ async function loadAppTheme(): Promise<string> {
 }
 
 async function saveAppTheme(themeId: string): Promise<void> {
-  await supabase.from('learning_hub_content').upsert({ content_key: appThemeKey, content_group: 'admin', content: { themeId }, updated_at: new Date().toISOString() });
+  await saveHubContent(appThemeKey, 'admin', { themeId });
 }
 
 function applyAppTheme(themeId: string): void {
@@ -6013,7 +6030,7 @@ async function loadCourseReleaseSettings(): Promise<AllCourseReleaseSettings> {
   return (raw ?? {}) as AllCourseReleaseSettings;
 }
 async function saveCourseReleaseSettings(settings: AllCourseReleaseSettings): Promise<void> {
-  await supabase.from('learning_hub_content').upsert({ content_key: courseReleaseSettingsKey, content_group: 'admin', content: settings, updated_at: new Date().toISOString() });
+  await saveHubContent(courseReleaseSettingsKey, 'admin', settings);
 }
 async function updateLastLessonUploadedAt(courseKey: string): Promise<void> {
   const all = await loadCourseReleaseSettings();
@@ -11990,11 +12007,7 @@ async function loadAdminSettings(): Promise<AdminSettings> {
 }
 
 async function saveAdminSettings(settings: AdminSettings) {
-  await supabase.from('learning_hub_content').upsert({
-    content_key: adminSettingsKey,
-    content_group: 'admin',
-    content: settings,
-  });
+  await saveHubContent(adminSettingsKey, 'admin', settings);
   _adminSettingsCache = settings;
 }
 
@@ -12077,11 +12090,7 @@ async function loadLandingContent(): Promise<LandingContent> {
 }
 
 async function saveLandingContent(content: LandingContent) {
-  await supabase.from('learning_hub_content').upsert({
-    content_key: landingContentKey,
-    content_group: 'landing',
-    content,
-  });
+  await saveHubContent(landingContentKey, 'landing', content);
   _landingContentCache = content;
 }
 
@@ -12626,12 +12635,7 @@ async function loadCertTemplate(courseKey: string): Promise<CertificateTemplate>
 
 async function saveCertTemplate(courseKey: string, template: CertificateTemplate): Promise<string | null> {
   const contentKey = `cert_template_${courseKey}`;
-  const { error } = await supabase.from('learning_hub_content').upsert({
-    content_key: contentKey,
-    content_group: 'cert',
-    content: template,
-    updated_at: new Date().toISOString(),
-  });
+  const { error } = await saveHubContent(contentKey, 'cert', template);
   return error?.message ?? null;
 }
 
@@ -12826,12 +12830,7 @@ async function loadFeatureCosts(): Promise<FeatureCosts> {
 }
 
 async function saveFeatureCosts(costs: FeatureCosts): Promise<void> {
-  await supabase.from('learning_hub_content').upsert({
-    content_key: featureCostsStorageKey,
-    content_group: 'admin',
-    content: costs,
-    updated_at: new Date().toISOString(),
-  });
+  await saveHubContent(featureCostsStorageKey, 'admin', costs);
 }
 
 async function deductCredits(
@@ -13375,7 +13374,7 @@ async function loadHelpSettings(): Promise<HelpSettings> {
   return { ...defaultHelpSettings, ...(raw as HelpSettings) };
 }
 async function saveHelpSettings(s: HelpSettings): Promise<void> {
-  await supabase.from('learning_hub_content').upsert({ content_key: helpSettingsKey, content_group: 'admin', content: s, updated_at: new Date().toISOString() });
+  await saveHubContent(helpSettingsKey, 'admin', s);
 }
 
 function HelpFab({ settings }: { settings: HelpSettings }) {
@@ -13491,7 +13490,7 @@ async function loadBannerSettings(): Promise<BannerSettings> {
 }
 
 async function saveBannerSettings(s: BannerSettings): Promise<void> {
-  await supabase.from('learning_hub_content').upsert({ content_key: bannerKey, content_group: 'admin', content: s, updated_at: new Date().toISOString() });
+  await saveHubContent(bannerKey, 'admin', s);
 }
 
 async function uploadBannerImage(file: File, slideId: string): Promise<string> {
@@ -13624,7 +13623,7 @@ function ThemeEditor() {
     let styleEl = document.getElementById('app-theme-override') as HTMLStyleElement | null;
     if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'app-theme-override'; document.head.appendChild(styleEl); }
     styleEl.textContent = `:root { --accent: ${derived.accent}; --accent-soft: ${derived.accentSoft}; --accent-rgb: ${derived.accentRgb}; --accent-light-rgb: ${derived.accentLightRgb}; --bg: ${derived.bg}; --bg-strong: ${derived.bgStrong}; }`;
-    await supabase.from('learning_hub_content').upsert({ content_key: appThemeKey, content_group: 'admin', content: { themeId: customThemeId, customColor }, updated_at: new Date().toISOString() });
+    await saveHubContent(appThemeKey, 'admin', { themeId: customThemeId, customColor });
     setActiveThemeId(customThemeId);
     setCustomSaving(false);
     setShowCustomModal(false);
@@ -17788,7 +17787,7 @@ async function loadHubEvents(): Promise<HubEvent[]> {
 }
 
 async function saveHubEvents(events: HubEvent[]): Promise<void> {
-  await supabase.from('learning_hub_content').upsert({ content_key: hubEventsKey, content_group: 'admin', content: events, updated_at: new Date().toISOString() });
+  await saveHubContent(hubEventsKey, 'admin', events);
 }
 
 // Halaman publik dari link share event (bisa dibuka tanpa login).
