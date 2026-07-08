@@ -59,6 +59,14 @@ grant execute on function public.admin_set_hub_content(text, text, text, jsonb) 
 /*
 alter table public.learning_hub_content enable row level security;
 
+-- Hapus policy "buka semua" bawaan/lama yang mengizinkan anon/public menulis.
+-- (RLS pakai logika OR — satu policy permisif saja bikin lockdown bocor.)
+drop policy if exists "allow_all_content" on public.learning_hub_content;
+drop policy if exists "lhc_insert"        on public.learning_hub_content;
+drop policy if exists "lhc_update"        on public.learning_hub_content;
+drop policy if exists "lhc_delete"        on public.learning_hub_content;
+drop policy if exists "lhc_select"        on public.learning_hub_content;
+
 drop policy if exists "hub_content_read" on public.learning_hub_content;
 create policy "hub_content_read" on public.learning_hub_content
   for select to anon, authenticated using (true);
@@ -66,4 +74,7 @@ create policy "hub_content_read" on public.learning_hub_content
 drop policy if exists "hub_content_service_write" on public.learning_hub_content;
 create policy "hub_content_service_write" on public.learning_hub_content
   for all to service_role using (true) with check (true);
+
+-- Verifikasi: harus tersisa TEPAT 2 policy (hub_content_read, hub_content_service_write).
+-- select policyname, cmd, roles from pg_policies where tablename='learning_hub_content';
 */
