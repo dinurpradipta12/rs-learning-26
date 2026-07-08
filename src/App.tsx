@@ -44,17 +44,23 @@ async function compressImage(file: File, maxDim = 1280, quality = 0.82): Promise
   }
 }
 
-async function scheduleEventReminders(username: string, ev: { id: string; title: string; date: string; time?: string; link?: string }): Promise<void> {
+async function scheduleEventReminders(username: string, ev: { id: string; title: string; date: string; time?: string; link?: string; startsAtUtc?: string }): Promise<void> {
   // Get user's telegram chat id
   const { data: userRow } = await supabase.from('app_users').select('telegram_chat_id').eq('username', username).maybeSingle();
   const chatId = (userRow as { telegram_chat_id?: string } | null)?.telegram_chat_id;
   if (!chatId) return; // user hasn't linked Telegram — skip
 
-  // Build event datetime (combine date + time, treat as WIB = UTC+7)
-  const [year, month, day] = ev.date.split('-').map(Number);
-  const [hour = 0, minute = 0] = (ev.time ?? '00:00').split(':').map(Number);
-  // Event local time in WIB (UTC+7): subtract 7h to get UTC
-  const eventUtc = new Date(Date.UTC(year, month - 1, day, hour - 7, minute));
+  // Instant absolut event: pakai startsAtUtc (event baru), atau anggap WIB
+  // (UTC+7) untuk event lama tanpa instant.
+  let eventUtc: Date;
+  if (ev.startsAtUtc) {
+    eventUtc = new Date(ev.startsAtUtc);
+  } else {
+    const [year, month, day] = ev.date.split('-').map(Number);
+    const [hour = 0, minute = 0] = (ev.time ?? '00:00').split(':').map(Number);
+    eventUtc = new Date(Date.UTC(year, month - 1, day, hour - 7, minute));
+  }
+  if (isNaN(eventUtc.getTime())) return;
 
   const reminders = [
     { type: 'h1',  scheduled_at: new Date(eventUtc.getTime() - 24 * 60 * 60 * 1000).toISOString() },
@@ -17781,6 +17787,7 @@ type HubEvent = {
   description?: string;
   date: string;
   time?: string;
+  startsAtUtc?: string;  // instant absolut (ISO). Event baru menyimpan ini dari tz device admin.
   type: 'zoom' | 'video' | 'other';
   link?: string;
   coinCost: number;
@@ -17789,6 +17796,56 @@ type HubEvent = {
   recurrence?: HubEventRecurrence;
   recurrenceGroupId?: string;
 };
+
+// ── Waktu event yang sadar-timezone ─────────────────────────
+// Event baru menyimpan `startsAtUtc` (instant, dihitung dari input admin di tz
+// device-nya). Event lama (tanpa startsAtUtc) dianggap WIB (UTC+7). Tampilan
+// diformat di tz device pembaca → admin WITA set 20:00, pembaca WIB lihat 19:00.
+type EventLike = { date?: string; time?: string; startsAtUtc?: string };
+
+function eventInstant(ev: EventLike): Date | null {
+  if (ev.startsAtUtc) { const d = new Date(ev.startsAtUtc); return isNaN(d.getTime()) ? null : d; }
+  if (!ev.date) return null;
+  const hm = ev.time && ev.time.length >= 4 ? ev.time.slice(0, 5) : '00:00';
+  const d = new Date(`${ev.date}T${hm}:00+07:00`); // event lama = WIB
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Hitung startsAtUtc dari date+time yang diisi admin, di tz device admin.
+// Hanya jika keduanya ada (event tanpa jam tetap date-only).
+function computeEventStartUtc(date?: string, time?: string): string | undefined {
+  if (!date || !time) return undefined;
+  const local = new Date(`${date}T${time.slice(0, 5)}`); // string tanpa tz → diinterpretasi tz lokal device
+  return isNaN(local.getTime()) ? undefined : local.toISOString();
+}
+
+// Label singkat timezone device (WIB/WITA/WIT atau GMT±X).
+function deviceTzLabel(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz === 'Asia/Jakarta' || tz === 'Asia/Pontianak') return 'WIB';
+    if (tz === 'Asia/Makassar') return 'WITA';
+    if (tz === 'Asia/Jayapura') return 'WIT';
+  } catch { /* ignore */ }
+  const off = -new Date().getTimezoneOffset() / 60;
+  return `GMT${off >= 0 ? '+' : ''}${off}`;
+}
+
+const EVENT_DATE_FULL: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+
+function formatEventDate(ev: EventLike, opts: Intl.DateTimeFormatOptions = EVENT_DATE_FULL): string {
+  const d = eventInstant(ev);
+  if (!d) return ev.date ?? '';
+  return d.toLocaleDateString('id-ID', opts);
+}
+
+// Kembalikan "HH:MM WIB" di tz device, atau '' kalau event tak punya jam.
+function formatEventTime(ev: EventLike): string {
+  if (!ev.startsAtUtc && !ev.time) return '';
+  const d = eventInstant(ev);
+  if (!d) return ev.time ?? '';
+  return `${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ${deviceTzLabel()}`;
+}
 
 const hubEventsKey = 'hub_events';
 
@@ -17839,8 +17896,8 @@ function EventSharePage({ eventId }: { eventId: string }) {
               <span className="event-share-tag">{typeLabel[ev.type]}</span>
               <h1 className="event-share-title">{ev.title}</h1>
               <div className="event-share-meta">
-                <span><Ic name="calendar" size={14} /> {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                {ev.time && <span><Ic name="clock" size={14} /> {ev.time}</span>}
+                <span><Ic name="calendar" size={14} /> {formatEventDate(ev)}</span>
+                {formatEventTime(ev) && <span><Ic name="clock" size={14} /> {formatEventTime(ev)}</span>}
               </div>
               {ev.description && <p className="event-share-desc">{ev.description}</p>}
               <div className="event-share-cost">
@@ -18105,6 +18162,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       const { error } = await supabase.storage.from('lesson-assets').upload(path, coverUp, { upsert: true, contentType: coverUp.type });
       if (!error) finalDraft = { ...finalDraft, coverUrl: supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl };
     }
+    // Simpan instant absolut dari jam yang diisi admin (di tz device admin).
+    finalDraft = { ...finalDraft, startsAtUtc: computeEventStartUtc(finalDraft.date, finalDraft.time) };
     let updated: HubEvent[];
     // Deteksi link yang baru ditambahkan pada event yang di-edit → notifikasi peserta.
     let linkJustAdded: HubEvent | null = null;
@@ -18125,6 +18184,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
           ...finalDraft,
           id: `evt_${Date.now()}_${i}`,
           date: d,
+          startsAtUtc: computeEventStartUtc(d, finalDraft.time),
           recurrenceGroupId: groupId,
         }));
         updated = [...events, ...newEvents];
@@ -18149,12 +18209,12 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
     const rows = (data ?? []) as Array<{ username: string; display_name: string | null }>;
     const seen = new Set<string>();
     const unique = rows.filter((r) => (seen.has(r.username) ? false : (seen.add(r.username), true)));
-    const timeStr = ev.time ? ` pukul ${ev.time.slice(0, 5)}` : '';
+    const whenStr = `${formatEventDate(ev)}${formatEventTime(ev) ? ` pukul ${formatEventTime(ev)}` : ''}`;
     await Promise.all(
       unique.flatMap((r) => {
         const nama = r.display_name || r.username;
         const tgText = ev.link
-          ? `👋 Halo ${nama}!\n\n🎥 <b>${ev.title}</b> siap dimulai (${ev.date}${timeStr}).\n\n🔗 Join kelas sekarang: ${ev.link}`
+          ? `👋 Halo ${nama}!\n\n🎥 <b>${ev.title}</b> siap dimulai (${whenStr}).\n\n🔗 Join kelas sekarang: ${ev.link}`
           : `👋 Halo ${nama}!\n\n🎥 <b>${ev.title}</b> — link kelas akan segera dikirim.`;
         return [
           insertNotification(r.username, 'event_link', 'Kelas Siap Dimulai! 🎥', `Klik untuk join kelas "${ev.title}" sekarang.`, `#kelas/${ev.id}`),
@@ -18234,8 +18294,16 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
 
   const now = new Date();
   const activeEvents = events.filter((e) => e.isActive !== false);
-  const upcoming = activeEvents.filter((e) => new Date(`${e.date}T${e.time || '23:59'}`) >= now).sort((a, b) => a.date.localeCompare(b.date));
-  const past = activeEvents.filter((e) => new Date(`${e.date}T${e.time || '23:59'}`) < now).sort((a, b) => b.date.localeCompare(a.date));
+  // Instant untuk urut/filter (tz-aware). Event tanpa jam dianggap sampai akhir
+  // hari WIB agar tetap "upcoming" sepanjang hari itu.
+  const evSortMs = (e: HubEvent) => eventInstant(e)?.getTime() ?? 0;
+  const evIsPast = (e: HubEvent) => {
+    if (!e.startsAtUtc && !e.time && e.date) return new Date(`${e.date}T23:59:00+07:00`).getTime() < now.getTime();
+    const d = eventInstant(e);
+    return d ? d.getTime() < now.getTime() : false;
+  };
+  const upcoming = activeEvents.filter((e) => !evIsPast(e)).sort((a, b) => evSortMs(a) - evSortMs(b));
+  const past = activeEvents.filter((e) => evIsPast(e)).sort((a, b) => evSortMs(b) - evSortMs(a));
 
   return (
     <div className="events-page">
@@ -18354,7 +18422,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                         </div>
                         <div className="events-list-meta">
                           <span>{typeIcon(ev.type)} {typeLabel[ev.type]}</span>
-                          <span><Ic name="calendar" size={12} /> {new Date(ev.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.time && ` · ${ev.time}`}</span>
+                          <span><Ic name="calendar" size={12} /> {formatEventDate(ev, { day: 'numeric', month: 'short', year: 'numeric' })}{formatEventTime(ev) && ` · ${formatEventTime(ev)}`}</span>
                           <span>{ev.coinCost === 0 ? <span className="events-free-badge">Gratis</span> : <span className="admin-credits-cell"><CoinIcon size={12} /> {ev.coinCost}</span>}</span>
                         </div>
                         {ev.description && <p className="events-list-desc">{ev.description}</p>}
@@ -18384,7 +18452,7 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
           {!canManage && upcoming.length > 0 && (() => {
             const joinedUpcoming = upcoming.filter((ev) => isJoined(ev));
             const openUpcoming = upcoming.filter((ev) => !isJoined(ev));
-            const renderCard = (ev: CalendarEvent) => {
+            const renderCard = (ev: HubEvent) => {
               const joined = isJoined(ev);
               return (
                 <div key={ev.id} className={`event-card${joined ? ' joined' : ''}`}>
@@ -18396,8 +18464,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                   <h4 className="event-card-title">{ev.title}</h4>
                   {ev.description && <p className="event-card-desc">{ev.description}</p>}
                   <div className="event-card-date">
-                    <Ic name="calendar" size={13} /> {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                    {ev.time && <> · <Ic name="clock" size={13} /> {ev.time}</>}
+                    <Ic name="calendar" size={13} /> {formatEventDate(ev)}
+                    {formatEventTime(ev) && <> · <Ic name="clock" size={13} /> {formatEventTime(ev)}</>}
                   </div>
                   <span className={`event-link-capsule${ev.link ? ' available' : ' pending'}`}>
                     {ev.link
@@ -18482,8 +18550,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                       <h4 className="event-card-title">{ev.title}</h4>
                       {ev.description && <p className="event-card-desc">{ev.description}</p>}
                       <div className="event-card-date">
-                        📅 {new Date(ev.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                        {ev.time && <> · {ev.time}</>}
+                        📅 {formatEventDate(ev)}
+                        {formatEventTime(ev) && <> · {formatEventTime(ev)}</>}
                       </div>
                       {/* Event lampau: link tidak bisa diklik lagi. Yang tersedia
                           hanya kode akses (bisa disalin) untuk klaim rekaman kapan pun. */}
@@ -18529,8 +18597,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             <div style={{ padding: '0 0 16px' }}>
               <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 6 }}>{joinTarget.title}</p>
               <p style={{ color: 'var(--muted)', fontSize: '0.88rem', marginBottom: 16 }}>
-                <Ic name="calendar" size={13} /> {new Date(joinTarget.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
-                {joinTarget.time && ` · ${joinTarget.time}`}
+                <Ic name="calendar" size={13} /> {formatEventDate(joinTarget, { weekday: 'long', day: 'numeric', month: 'long' })}
+                {formatEventTime(joinTarget) && ` · ${formatEventTime(joinTarget)}`}
               </p>
               {joinTarget.coinCost > 0 && !userPerks.credit_exempt && !userPerks.free_event ? (
                 <p style={{ fontSize: '0.9rem' }}>Biaya akses: <strong><CoinIcon size={13} /> {joinTarget.coinCost} Ruang Coin</strong></p>
@@ -18560,8 +18628,8 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
             <h3 className="admin-modal-title" style={{ textAlign: 'center' }}>Kelas Siap Dimulai!</h3>
             <p style={{ fontWeight: 700, fontSize: '1.02rem', margin: '6px 0 4px' }}>{classTarget.title}</p>
             <p style={{ color: 'var(--muted)', fontSize: '0.88rem', marginBottom: 16 }}>
-              <Ic name="calendar" size={13} /> {new Date(classTarget.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
-              {classTarget.time && ` · ${classTarget.time}`}
+              <Ic name="calendar" size={13} /> {formatEventDate(classTarget, { weekday: 'long', day: 'numeric', month: 'long' })}
+              {formatEventTime(classTarget) && ` · ${formatEventTime(classTarget)}`}
             </p>
             {classTarget.link ? (
               <a href={classTarget.link} target="_blank" rel="noopener noreferrer" className="button primary" style={{ width: '100%', display: 'inline-flex', justifyContent: 'center', gap: 8 }} onClick={() => setClassTarget(null)}>
