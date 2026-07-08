@@ -39,16 +39,17 @@ begin
   end if;
 
   -- Idempoten: kalau sudah unlock, jangan charge lagi.
+  -- (id/asset_id bertipe uuid → bandingkan sebagai text agar aman dari tipe.)
   if exists (
     select 1 from public.user_asset_unlocks
-    where username = caller.username and asset_id = p_asset_id
+    where username = caller.username and asset_id::text = p_asset_id
   ) then
     return json_build_object('ok', true, 'already', true);
   end if;
 
   select coalesce(coin_cost, 10), coalesce(feature_claimable, true), title
     into v_cost, v_feature_claimable, v_title
-  from public.shared_assets where id = p_asset_id;
+  from public.shared_assets where id::text = p_asset_id;
   if not found then
     raise exception 'Asset tidak ditemukan';
   end if;
@@ -73,7 +74,7 @@ begin
   end if;
 
   insert into public.user_asset_unlocks (username, asset_id)
-  values (caller.username, p_asset_id)
+  values (caller.username, p_asset_id::uuid)
   on conflict do nothing;
 
   return json_build_object('ok', true, 'newBalance', v_new_balance);
