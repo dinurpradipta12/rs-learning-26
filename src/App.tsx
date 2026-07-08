@@ -1620,7 +1620,7 @@ async function loadSupabaseUserProfile(session: AppSession) {
   const [{ data: profileRow, error: profileError }, { data: subscriptionRow, error: subscriptionError }] = await Promise.all([
     supabase
       .from('user_profiles')
-      .select('username, name, email, job_title, birth_date, joined_at, avatar_path, show_birthday')
+      .select('username, name, email, job_title, birth_date, joined_at, avatar_path')
       .eq('username', session.username)
       .maybeSingle(),
     supabase
@@ -1635,9 +1635,19 @@ async function loadSupabaseUserProfile(session: AppSession) {
     return readUserProfile(session);
   }
 
+  // Best-effort: kolom show_birthday mungkin belum ada (sebelum migrasi
+  // dijalankan). Baca terpisah agar tidak merusak load profil utama.
+  let showBirthday: boolean | null = null;
+  const { data: sbRow } = await supabase
+    .from('user_profiles')
+    .select('show_birthday')
+    .eq('username', session.username)
+    .maybeSingle();
+  if (sbRow && 'show_birthday' in sbRow) showBirthday = (sbRow as { show_birthday?: boolean | null }).show_birthday ?? null;
+
   return mapSupabaseProfile(
     session,
-    (profileRow ?? null) as UserProfileRow | null,
+    (profileRow ? { ...profileRow, show_birthday: showBirthday } : null) as UserProfileRow | null,
     (subscriptionRow ?? null) as UserSubscriptionRow | null,
   );
 }
@@ -17026,7 +17036,6 @@ function ProfilePage({
           email: draftProfile.email,
           job_title: draftProfile.role,
           birth_date: draftProfile.birthDate || null,
-          show_birthday: draftProfile.showBirthday,
           joined_at: profile.joinedAt,
           avatar_path: avatarPath || null,
         },
@@ -17038,6 +17047,15 @@ function ProfilePage({
         window.alert(`gagal menyimpan profile: ${error.message}`);
         return;
       }
+
+      // Best-effort: simpan preferensi privasi ulang tahun secara terpisah,
+      // agar kegagalan (mis. kolom belum ada sebelum migrasi) tidak menggagalkan
+      // penyimpanan profil utama.
+      const { error: sbError } = await supabase
+        .from('user_profiles')
+        .update({ show_birthday: draftProfile.showBirthday })
+        .eq('username', session.username);
+      if (sbError) console.warn('show_birthday not saved (kolom mungkin belum ada)', sbError.message);
 
       const nextProfile = {
         ...draftProfile,
