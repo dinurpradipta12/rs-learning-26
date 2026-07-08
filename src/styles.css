@@ -15290,6 +15290,12 @@ body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
 }
 .pc-image-title { font-size: 1.2rem; font-weight: 800; margin: 4px 0 0; }
 .pc-image-body { font-size: 0.9rem; margin: 0; opacity: 0.9; }
+/* Dark mode: modal dipaksa gelap, jadi teks template gambar (yang default
+   berwarna gelap) harus di-override agar tetap terbaca. !important untuk
+   menang atas warna inline. */
+body.dark .pc-image-title { color: var(--text) !important; }
+body.dark .pc-image-body { color: rgba(200,190,230,0.85) !important; }
+body.dark .pc-image .promo-dismiss { color: var(--muted) !important; }
 
 .promo-preset-btn {
   margin-top: 12px; width: 100%; padding: 10px 14px; border-radius: 10px; cursor: pointer;
