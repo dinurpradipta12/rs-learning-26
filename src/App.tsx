@@ -11933,7 +11933,7 @@ const defaultBookingAvailability: BookingAvailability = {
   slots: ['10:00', '11:00', '13:00', '14:00', '15:00', '16:00'],
 };
 
-type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards; checkin_day7?: CheckinDay7; booking?: BookingAvailability };
+type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards; checkin_day7?: CheckinDay7; booking?: BookingAvailability; birthday_bonus?: number };
 
 let _adminSettingsCache: AdminSettings | null = null;
 async function loadAdminSettings(): Promise<AdminSettings> {
@@ -11957,6 +11957,7 @@ async function loadAdminSettings(): Promise<AdminSettings> {
     coin_rewards: { ...defaultCoinRewards, ...(raw.coin_rewards ?? {}) },
     checkin_day7: { ...defaultCheckinDay7, ...(raw.checkin_day7 ?? {}) },
     booking: { ...defaultBookingAvailability, ...(raw.booking ?? {}) },
+    birthday_bonus: raw.birthday_bonus ?? 100,
   };
   return _adminSettingsCache;
 }
@@ -14000,6 +14001,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [promoIconLocalUrl, setPromoIconLocalUrl] = useState<string | null>(null);
   const [promoImageFile, setPromoImageFile] = useState<File | null>(null);
   const [promoImageLocalUrl, setPromoImageLocalUrl] = useState<string | null>(null);
+  const [birthdayBonus, setBirthdayBonus] = useState(100);
   const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
   const [referralUsage, setReferralUsage] = useState<Record<string, number>>({});
   const [editingReferral, setEditingReferral] = useState<(ReferralCode & { idx: number }) | null>(null);
@@ -14122,6 +14124,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setReferralUsage(usageCounts);
 
     setPromo(settings.promo ?? { ...defaultPromo });
+    setBirthdayBonus(settings.birthday_bonus ?? 100);
     setSelectedPackage(settings.packages[1] ?? settings.packages[0]);
 
     const profileMap: Record<string, { email: string; perks: UserPerks; referralPerks: UserPerks; referralPerksExpiresAt: string | null; avatarUrl: string | null; name: string | null; referralCode: string | null }> = {};
@@ -14302,7 +14305,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
       if (promoImageLocalUrl) { URL.revokeObjectURL(promoImageLocalUrl); setPromoImageLocalUrl(null); }
     }
     const settings = await loadAdminSettings();
-    await saveAdminSettings({ ...settings, promo: savedPromo });
+    await saveAdminSettings({ ...settings, promo: savedPromo, birthday_bonus: birthdayBonus });
     setPromoSaving(false);
     setPromoSaved(true);
     setTimeout(() => setPromoSaved(false), 2000);
@@ -15516,6 +15519,18 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                     <button type="button" className="promo-preset-btn" onClick={applyBirthdayReminderPreset}>
                       🎂 Preset: Ingatkan Isi Tanggal Lahir
                     </button>
+                    <label className="promo-birthday-bonus">
+                      🎂 Bonus koin ulang tahun
+                      <input
+                        className="admin-modal-input"
+                        type="number"
+                        min="0"
+                        value={birthdayBonus || ''}
+                        onChange={(e) => setBirthdayBonus(parseInt(e.target.value, 10) || 0)}
+                        placeholder="100"
+                      />
+                      <span className="promo-birthday-bonus-hint">Diberikan otomatis ke user saat hari ulang tahunnya (via cron harian). Simpan untuk menerapkan.</span>
+                    </label>
                   </div>
 
                   {(promo.styleTemplate ?? 'default') === 'image' && (
