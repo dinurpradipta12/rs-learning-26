@@ -125,3 +125,31 @@ end;
 $$;
 
 grant execute on function public.award_birthday_bonus(text, integer, text, text) to service_role;
+
+
+-- ── 5. pg_cron: jalankan edge function `birthday-check` tiap pagi ────
+-- Prasyarat (aktifkan di Supabase Dashboard → Database → Extensions):
+--   1. pg_cron
+--   2. pg_net (untuk HTTP call dari SQL)
+-- Ganti <PROJECT_REF> dan <SERVICE_ROLE_KEY> dengan nilai proyekmu, lalu
+-- jalankan blok di bawah SEKALI. Jadwal '0 0 * * *' UTC = 07:00 WIB.
+--
+-- Deploy fungsinya lebih dulu:
+--   supabase functions deploy birthday-check
+--
+/*
+SELECT cron.schedule(
+  'birthday-check',
+  '0 0 * * *',                  -- tiap hari 00:00 UTC (07:00 WIB)
+  $$
+    SELECT net.http_post(
+      url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/birthday-check',
+      headers := jsonb_build_object(
+        'Content-Type',  'application/json',
+        'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+      ),
+      body    := '{}'::jsonb
+    );
+  $$
+);
+*/
