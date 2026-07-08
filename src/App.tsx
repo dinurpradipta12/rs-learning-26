@@ -18641,13 +18641,21 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
     setUnlockLoading(true);
     setUnlockError('');
     const cost = unlockTarget.coin_cost ?? 10;
-    const result = await deductCredits(session.username, cost, `Buka asset: ${unlockTarget.title}`, 'usage');
-    if (result.ok) {
-      await supabase.from('user_asset_unlocks').upsert({ username: session.username, asset_id: unlockTarget.id });
+    // Unlock atomik di server (potong coin + catat unlock dalam satu transaksi).
+    // Mencegah bypass paywall lewat penulisan user_asset_unlocks langsung.
+    const token = currentSessionToken();
+    const { data, error } = await supabase.rpc('unlock_asset', {
+      p_token: token,
+      p_asset_id: unlockTarget.id,
+    });
+    const result = (data ?? {}) as { ok?: boolean; balance?: number; error?: string };
+    if (!error && result.ok) {
       setUnlockedIds(prev => new Set([...prev, unlockTarget.id]));
       setUnlockTarget(null);
     } else {
-      setUnlockError(`Ruang Coin tidak cukup. Kamu punya ${result.balance ?? 0} coin, butuh ${cost} coin.`);
+      setUnlockError(
+        result.error ?? error?.message ?? `Ruang Coin tidak cukup. Kamu punya ${result.balance ?? 0} coin, butuh ${cost} coin.`,
+      );
     }
     setUnlockLoading(false);
   };
