@@ -15172,6 +15172,18 @@ body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
 .book-slot.selected strong, .book-slot.selected span { color: #fff; }
 .book-slot.taken { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
 .book-slots-empty { font-size: 0.82rem; color: var(--muted); padding: 6px 0; }
+.book-slots-hint { font-size: 0.82rem; color: var(--muted); padding: 8px 0; }
+
+/* Layout landscape: kalender & pilihan jam berdampingan */
+.booking-modal { max-width: 780px; }
+.book-datetime { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; align-items: start; }
+.book-datetime-col { min-width: 0; }
+.book-datetime-col .aem-section-label { margin-top: 0; }
+.book-datetime .book-slots { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+@media (max-width: 640px) {
+  .booking-modal { max-width: 460px; }
+  .book-datetime { grid-template-columns: 1fr; gap: 4px; }
+}
 
 /* Admin: editor ketersediaan jadwal 1:1 */
 .booking-avail-days { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
@@ -15196,3 +15208,97 @@ body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
   padding: 6px 12px; border: 1px dashed var(--accent); background: transparent;
   color: var(--accent); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
 }
+
+/* ── Birthday Appreciation ─────────────────────────────────── */
+.bday-overlay {
+  position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 10, 30, 0.55); backdrop-filter: blur(4px); padding: 20px;
+}
+.bday-modal {
+  background: var(--card, #fff); border-radius: 22px; width: 100%; max-width: 400px; padding: 28px 24px 22px;
+  text-align: center; box-shadow: 0 24px 70px rgba(0,0,0,0.28); position: relative;
+  background-image: linear-gradient(180deg, rgba(255,145,190,0.14), transparent 40%);
+}
+.bday-confetti { font-size: 1.8rem; letter-spacing: 4px; margin-bottom: 6px; }
+.bday-avatar {
+  width: 92px; height: 92px; margin: 4px auto 12px; border-radius: 50%; overflow: hidden;
+  border: 3px solid var(--accent); display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft, rgba(92,110,248,0.12));
+}
+.bday-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.bday-avatar-fallback { font-size: 2.2rem; font-weight: 800; color: var(--accent); }
+.bday-title { font-size: 1.12rem; font-weight: 800; margin: 0 0 6px; color: var(--text); }
+.bday-sub { font-size: 0.86rem; color: var(--muted); margin: 0 0 14px; }
+.bday-input {
+  width: 100%; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px;
+  font-family: inherit; font-size: 0.9rem; resize: vertical; color: var(--text); background: var(--card);
+}
+.bday-input:focus { outline: none; border-color: var(--accent); }
+.bday-actions { display: flex; gap: 10px; margin-top: 14px; }
+.bday-btn-skip {
+  flex: 0 0 auto; padding: 12px 16px; border-radius: 12px; border: 1.5px solid var(--line);
+  background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.bday-btn-send {
+  flex: 1; padding: 12px 16px; border-radius: 12px; border: none; cursor: pointer; font-family: inherit;
+  background: var(--accent); color: #fff; font-weight: 700; font-size: 0.92rem;
+}
+.bday-btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.bday-inbox {
+  background: var(--card, #fff); border-radius: 22px; width: 100%; max-width: 480px; max-height: 86vh;
+  overflow-y: auto; padding: 26px 22px; position: relative; box-shadow: 0 24px 70px rgba(0,0,0,0.28);
+}
+.bday-inbox-close {
+  position: absolute; top: 14px; right: 16px; border: none; background: transparent; font-size: 1.6rem;
+  line-height: 1; color: var(--muted); cursor: pointer;
+}
+.bday-inbox-head { text-align: center; margin-bottom: 18px; }
+.bday-inbox-emoji { font-size: 2rem; }
+.bday-inbox-head h3 { margin: 6px 0 4px; font-size: 1.15rem; font-weight: 800; color: var(--text); }
+.bday-inbox-head p { margin: 0; font-size: 0.84rem; color: var(--muted); }
+.bday-inbox-empty { text-align: center; color: var(--muted); font-size: 0.88rem; padding: 24px 0; }
+.bday-inbox-year { margin-bottom: 16px; }
+.bday-inbox-year-label {
+  font-size: 0.72rem; font-weight: 800; color: var(--accent); text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+.bday-wish-card { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.bday-wish-avatar {
+  flex: 0 0 42px; width: 42px; height: 42px; border-radius: 50%; overflow: hidden; display: flex;
+  align-items: center; justify-content: center; background: var(--accent-soft, rgba(92,110,248,0.12));
+}
+.bday-wish-avatar .bday-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.bday-wish-avatar .bday-avatar-fallback { font-size: 1.1rem; }
+.bday-wish-body { flex: 1; min-width: 0; }
+.bday-wish-body strong { font-size: 0.9rem; color: var(--text); }
+.bday-wish-body p { margin: 3px 0 4px; font-size: 0.9rem; color: var(--text); white-space: pre-wrap; }
+.bday-wish-body time { font-size: 0.72rem; color: var(--muted); }
+
+.profile-birthday-toggle {
+  flex-direction: row !important; align-items: flex-start; gap: 10px; cursor: pointer;
+  font-size: 0.82rem; color: var(--muted); line-height: 1.4;
+}
+.profile-birthday-toggle input { width: auto; margin-top: 2px; flex: 0 0 auto; }
+
+/* ── Promo: template gambar custom ─────────────────────────── */
+.pc-image { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+.pc-image-banner { width: 100%; border-radius: 14px; max-height: 300px; object-fit: cover; display: block; }
+.pc-image-placeholder {
+  width: 100%; height: 160px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.05); color: var(--muted); font-size: 0.9rem; border: 1.5px dashed var(--line);
+}
+.pc-image-title { font-size: 1.2rem; font-weight: 800; margin: 4px 0 0; }
+.pc-image-body { font-size: 0.9rem; margin: 0; opacity: 0.9; }
+
+.promo-preset-btn {
+  margin-top: 12px; width: 100%; padding: 10px 14px; border-radius: 10px; cursor: pointer;
+  border: 1.5px dashed var(--accent); background: var(--accent-soft, rgba(92,110,248,0.08));
+  color: var(--accent); font-weight: 700; font-size: 0.85rem; font-family: inherit;
+}
+.promo-image-section { margin-bottom: 4px; }
+.promo-image-upload-wrap { display: flex; flex-direction: column; gap: 10px; }
+.promo-image-preview { width: 100%; max-height: 220px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); }
+.promo-image-upload-actions { display: flex; gap: 10px; align-items: center; }
+.promo-birthday-bonus { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; font-weight: 600; font-size: 0.85rem; }
+.promo-birthday-bonus-hint { font-weight: 400; font-size: 0.76rem; color: var(--muted); }

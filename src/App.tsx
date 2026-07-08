@@ -450,6 +450,7 @@ type UserProfile = {
   name: string;
   email: string;
   birthDate: string;
+  showBirthday: boolean;
   photoUrl: string;
   avatarPath: string;
   role: string;
@@ -488,6 +489,7 @@ type UserProfileRow = {
   birth_date: string | null;
   joined_at: string;
   avatar_path: string | null;
+  show_birthday?: boolean | null;
 };
 
 type UserSubscriptionRow = {
@@ -823,7 +825,7 @@ async function updateThreadViewCount(threadId: string, viewCount: number): Promi
   await supabase.from('forum_threads').update({ view_count: viewCount }).eq('id', threadId);
 }
 
-type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply';
+type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply' | 'event_link' | 'birthday' | 'birthday_wish';
 
 async function insertNotification(recipient: string, type: NotifType, title: string, body: string, link?: string, actorUsername?: string) {
   await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null, actor_username: actorUsername ?? null }]);
@@ -1521,6 +1523,7 @@ function defaultUserProfile(session: AppSession): UserProfile {
     name: session.displayName || session.username,
     email: `${session.username}@ruangsosmed.local`,
     birthDate: '2000-01-01',
+    showBirthday: true,
     photoUrl: '',
     avatarPath: '',
     role: session.role === 'developer' ? 'developer' : 'student',
@@ -1571,6 +1574,7 @@ function mapSupabaseProfile(
     name: profileRow?.name ?? fallback.name,
     email: profileRow?.email ?? fallback.email,
     birthDate: profileRow?.birth_date ?? fallback.birthDate,
+    showBirthday: profileRow?.show_birthday ?? fallback.showBirthday,
     photoUrl: avatarPath ? profileAvatarPublicUrl(avatarPath) : fallback.photoUrl,
     avatarPath,
     role: profileRow?.job_title ?? fallback.role,
@@ -1631,9 +1635,19 @@ async function loadSupabaseUserProfile(session: AppSession) {
     return readUserProfile(session);
   }
 
+  // Best-effort: kolom show_birthday mungkin belum ada (sebelum migrasi
+  // dijalankan). Baca terpisah agar tidak merusak load profil utama.
+  let showBirthday: boolean | null = null;
+  const { data: sbRow } = await supabase
+    .from('user_profiles')
+    .select('show_birthday')
+    .eq('username', session.username)
+    .maybeSingle();
+  if (sbRow && 'show_birthday' in sbRow) showBirthday = (sbRow as { show_birthday?: boolean | null }).show_birthday ?? null;
+
   return mapSupabaseProfile(
     session,
-    (profileRow ?? null) as UserProfileRow | null,
+    (profileRow ? { ...profileRow, show_birthday: showBirthday } : null) as UserProfileRow | null,
     (subscriptionRow ?? null) as UserSubscriptionRow | null,
   );
 }
@@ -2182,6 +2196,11 @@ function NotificationBell({ username }: { username: string }) {
         return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2.5 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.5 2.5 0 0 1-2.5-1.5"/><line x1="12" y1="6" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="18"/></svg>;
       case 'thread_reply':
         return <svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
+      case 'event_link':
+        return <svg {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+      case 'birthday':
+      case 'birthday_wish':
+        return <svg {...p}><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3M7 4h.01M12 3h.01M17 4h.01"/></svg>;
       default:
         return <svg {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
     }
@@ -2337,6 +2356,22 @@ function PromoContent({ promo, onCta, onDismiss, isPreview }: {
     : <div className="promo-icon">{promo.icon || '🚀'}</div>;
 
   const tpl = promo.styleTemplate ?? 'default';
+
+  if (tpl === 'image') {
+    return (
+      <div className="pc-image">
+        {promo.imageUrl
+          ? <img src={promo.imageUrl} alt={promo.title || ''} className="pc-image-banner" />
+          : <div className="pc-image-placeholder">🖼️ Upload gambar popup</div>}
+        {promo.title && <h2 className="pc-image-title" style={{ color: tc }}>{promo.title}</h2>}
+        {promo.body && <p className="pc-image-body" style={{ color: tc }}>{promo.body}</p>}
+        {promo.ctaAction !== 'dismiss' && promo.ctaText && (
+          <button className="promo-cta" style={{ background: bc, color: btc, ...ps }} onClick={onCta}>{promo.ctaText}</button>
+        )}
+        <button className="promo-dismiss" style={{ color: tc, ...ps }} onClick={onDismiss}>{promo.dismissText}</button>
+      </div>
+    );
+  }
 
   if (tpl === 'flash_sale') {
     return (
@@ -2778,6 +2813,182 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
       </div>
     </div>,
     document.body,
+  );
+}
+
+type BirthdayEventRow = { username: string; year: number; display_name: string | null; avatar_path: string | null; bonus_amount: number; created_at: string };
+type BirthdayWishRow = { id: string; birthday_username: string; birthday_year: number; from_username: string; from_display_name: string | null; from_avatar_path: string | null; message: string; created_at: string };
+
+// Perayaan ulang tahun: popup ke semua member, form ucapan/doa, dan
+// "inbox letter" berisi kumpulan ucapan yang bisa dibaca kapan pun.
+function BirthdayCenter({ session }: { session: AppSession | null }) {
+  const [queue, setQueue] = useState<BirthdayEventRow[]>([]);
+  const [msg, setMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxWishes, setInboxWishes] = useState<BirthdayWishRow[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const myAvatarPath = useRef<string | null>(null);
+
+  const seenKey = (ev: BirthdayEventRow) => `birthday_seen_${session?.username}_${ev.username}_${ev.year}`;
+
+  useEffect(() => {
+    if (!session?.username) { setQueue([]); return; }
+    const year = new Date().getFullYear();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    void (async () => {
+      const { data } = await supabase
+        .from('birthday_events')
+        .select('*')
+        .eq('year', year)
+        .gte('created_at', startOfToday.toISOString())
+        .order('created_at', { ascending: true });
+      const rows = (data ?? []) as BirthdayEventRow[];
+      // Jangan tampilkan popup perayaan diri sendiri, atau yang sudah ditanggapi.
+      setQueue(rows.filter((r) => r.username !== session.username && !localStorage.getItem(seenKey(r))));
+      const { data: prof } = await supabase.from('user_profiles').select('avatar_path').eq('username', session.username).maybeSingle();
+      myAvatarPath.current = (prof as { avatar_path?: string | null } | null)?.avatar_path ?? null;
+    })();
+  }, [session?.username]);
+
+  const openInbox = async () => {
+    if (!session?.username) return;
+    setInboxOpen(true);
+    setInboxLoading(true);
+    const { data } = await supabase
+      .from('birthday_wishes')
+      .select('*')
+      .eq('birthday_username', session.username)
+      .order('created_at', { ascending: false });
+    setInboxWishes((data ?? []) as BirthdayWishRow[]);
+    setInboxLoading(false);
+  };
+
+  // Notifikasi ucapan mengarahkan ke #birthday-inbox → buka inbox letter.
+  useEffect(() => {
+    const check = () => {
+      if (window.location.hash === '#birthday-inbox') {
+        history.replaceState(null, '', '#dashboard');
+        void openInbox();
+      }
+    };
+    check();
+    window.addEventListener('hashchange', check);
+    return () => window.removeEventListener('hashchange', check);
+  }, [session?.username]);
+
+  const current = queue[0] ?? null;
+
+  const dismissCurrent = () => {
+    if (current) localStorage.setItem(seenKey(current), '1');
+    setQueue((q) => q.slice(1));
+    setMsg('');
+  };
+
+  const sendWish = async () => {
+    if (!current || !session || !msg.trim()) return;
+    setSubmitting(true);
+    await supabase.from('birthday_wishes').upsert({
+      birthday_username: current.username,
+      birthday_year: current.year,
+      from_username: session.username,
+      from_display_name: session.displayName,
+      from_avatar_path: myAvatarPath.current,
+      message: msg.trim(),
+    }, { onConflict: 'birthday_username,birthday_year,from_username' });
+    void insertNotification(
+      current.username,
+      'birthday_wish',
+      '💌 Ucapan Ulang Tahun Baru',
+      `${session.displayName} mengirim ucapan untukmu. Buka inbox untuk membacanya.`,
+      '#birthday-inbox',
+      session.username,
+    );
+    void notifyStudent(
+      current.username,
+      `💌 <b>Ucapan ulang tahun baru!</b>\n\n${session.displayName} baru saja menulis ucapan untukmu. Buka inbox ucapan di aplikasi untuk membaca. 🎉`,
+    );
+    setSubmitting(false);
+    dismissCurrent();
+  };
+
+  const avatarNode = (name: string, path: string | null) => (
+    path
+      ? <img src={profileAvatarPublicUrl(path)} alt={name} className="bday-avatar-img" />
+      : <span className="bday-avatar-fallback">{(name || '?').slice(0, 1).toUpperCase()}</span>
+  );
+
+  // Kelompokkan inbox per tahun (terbaru dulu).
+  const wishesByYear = inboxWishes.reduce<Record<number, BirthdayWishRow[]>>((acc, w) => {
+    (acc[w.birthday_year] ??= []).push(w);
+    return acc;
+  }, {});
+  const inboxYears = Object.keys(wishesByYear).map(Number).sort((a, b) => b - a);
+
+  return (
+    <>
+      {current && createPortal(
+        <div className="bday-overlay">
+          <div className="bday-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="bday-confetti">🎉🎂🎈</div>
+            <div className="bday-avatar">{avatarNode(current.display_name ?? current.username, current.avatar_path)}</div>
+            <h3 className="bday-title">Hari ini {current.display_name ?? current.username} ulang tahun! 🎂</h3>
+            <p className="bday-sub">Yuk kirim ucapan atau doa terbaikmu — akan tersimpan di inbox mereka.</p>
+            <textarea
+              className="bday-input"
+              placeholder="Tulis ucapan / doa untuk mereka…"
+              rows={3}
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              autoFocus
+            />
+            <div className="bday-actions">
+              <button type="button" className="bday-btn-skip" onClick={dismissCurrent} disabled={submitting}>Nanti saja</button>
+              <button type="button" className="bday-btn-send" onClick={() => void sendWish()} disabled={submitting || !msg.trim()}>
+                {submitting ? 'Mengirim…' : '💌 Kirim Ucapan'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {inboxOpen && createPortal(
+        <div className="bday-overlay" onClick={() => setInboxOpen(false)}>
+          <div className="bday-inbox" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="bday-inbox-close" onClick={() => setInboxOpen(false)}>×</button>
+            <div className="bday-inbox-head">
+              <span className="bday-inbox-emoji">💌</span>
+              <h3>Inbox Ucapan Ulang Tahun</h3>
+              <p>Kumpulan ucapan & doa dari member untukmu.</p>
+            </div>
+            {inboxLoading ? (
+              <p className="bday-inbox-empty">Memuat ucapan…</p>
+            ) : inboxWishes.length === 0 ? (
+              <p className="bday-inbox-empty">Belum ada ucapan. Semoga ulang tahun berikutnya penuh ucapan hangat! 🎂</p>
+            ) : (
+              inboxYears.map((yr) => (
+                <div key={yr} className="bday-inbox-year">
+                  <div className="bday-inbox-year-label">{yr}</div>
+                  {wishesByYear[yr].map((w) => (
+                    <div key={w.id} className="bday-wish-card">
+                      <div className="bday-wish-avatar">{avatarNode(w.from_display_name ?? w.from_username, w.from_avatar_path)}</div>
+                      <div className="bday-wish-body">
+                        <strong>{w.from_display_name ?? w.from_username}</strong>
+                        <p>{w.message}</p>
+                        <time>{new Date(w.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</time>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -3453,6 +3664,7 @@ function App() {
         )}
         {confirmContext && <CreditConfirmModal ctx={confirmContext} onClose={() => setConfirmContext(null)} />}
         {promoPopup && <PromoPopupModal promo={promoPopup} onClose={() => setPromoPopup(null)} onTopUp={() => setTopUpContext({ feature: 'promo', needed: 0, balance: 0 })} />}
+        {session && <BirthdayCenter session={session} />}
         {searchOpen && <GlobalSearchModal onClose={() => setSearchOpen(false)} />}
         {showReferralClaim && session && (
           <ReferralClaimModal
@@ -6819,7 +7031,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       duration: draft.duration.trim() || '0 menit',
       meta: draft.meta.trim() || 'video class',
       description: draft.description.trim() || 'deskripsi materi',
-      videoUrl: draft.videoUrl.trim() || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+      videoUrl: draft.videoUrl.trim() || PLACEHOLDER_VIDEO_URL,
       thumbnailUrl: draft.thumbnailUrl.trim() || undefined,
       comingSoon: draft.comingSoon,
       availableAt: draft.availableAt || undefined,
@@ -6991,12 +7203,28 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
       setSelectedLessonId(persistedLesson.id);
       setPendingAssetFiles([]);
       setLessonEditorOpen(false);
-      if (lessonEditorMode === 'create') {
+
+      // Notifikasi "Materi Baru" hanya saat video BENAR-BENAR rilis:
+      // ada link video asli (bukan placeholder / cover saja) DAN bukan coming soon.
+      // Jadi kalau admin cuma upload cover + tandai coming soon → tidak ada notif;
+      // notif baru terkirim saat link video diisi & status coming soon dilepas.
+      const publishedNow =
+        hasRealVideoUrl(lessonDraft.videoUrl) &&
+        !isLessonComingSoon({ comingSoon: lessonDraft.comingSoon, availableAt: lessonDraft.availableAt } as Lesson);
+      const publishedBefore = editingLesson
+        ? hasRealVideoUrl(editingLesson.videoUrl) && !isLessonComingSoon(editingLesson)
+        : false;
+      if (publishedNow && !publishedBefore) {
         void (async () => {
           const { data: allUsers } = await supabase.from('app_users').select('username').eq('is_active', true);
-          for (const u of allUsers ?? []) {
-            void insertNotification(u.username, 'lesson_new', 'Materi Baru Tersedia!', `"${persistedLesson.title}" baru saja ditambahkan. Yuk mulai belajar!`, '#materi');
-          }
+          const body = `"${persistedLesson.title}" baru saja ditambahkan. Yuk mulai belajar!`;
+          const tgText = `🎬 <b>Materi Baru Tersedia!</b>\n\n📚 <b>${persistedLesson.title}</b>\n\nVideo sudah bisa ditonton. Buka halaman Materi untuk mulai belajar!`;
+          await Promise.all(
+            (allUsers ?? []).flatMap((u) => [
+              insertNotification(u.username, 'lesson_new', 'Materi Baru Tersedia!', body, '#materi'),
+              notifyStudent(u.username, tgText),
+            ]),
+          );
         })();
       }
     })();
@@ -7983,7 +8211,7 @@ function LmsSidebar({
 
         <div className="lms-lesson-list">
           {materialLessons.map((lesson, index) => {
-            const comingSoon = isLessonComingSoon(lesson) && !canEdit;
+            const comingSoon = isLessonComingSoon(lesson);
             const isLocked = !isLessonUnlocked(index) || comingSoon;
             const isActive = lesson.id === selectedLessonId;
             const isDone = completedLessons.has(lesson.id);
@@ -10231,6 +10459,8 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                 />
               </div>
 
+              <div className="book-datetime">
+                <div className="book-datetime-col">
               <p className="aem-section-label">Pilih Tanggal</p>
               <div className="book-cal">
                 <div className="book-cal-head">
@@ -10271,8 +10501,9 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                   })()}
                 </div>
               </div>
-
-              {bookForm.preferred_date && (
+                </div>
+                <div className="book-datetime-col">
+              {bookForm.preferred_date ? (
                 <>
                   <p className="aem-section-label">
                     Pilih Jam · {new Date(`${bookForm.preferred_date}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -10300,7 +10531,11 @@ function CalendarPage({ canManage = false, sessionUsername = '', featureCosts = 
                     </div>
                   )}
                 </>
+              ) : (
+                <p className="book-slots-hint">Pilih tanggal dulu untuk melihat jam yang tersedia.</p>
               )}
+                </div>
+              </div>
 
               <p className="aem-section-label">Catatan (opsional)</p>
               <div className="aem-field-box aem-field-box--textarea">
@@ -11557,6 +11792,7 @@ type PromoPopup = {
   enabled: boolean;
   icon: string;
   iconUrl?: string;
+  imageUrl?: string;  // gambar banner custom (template 'image')
   title: string;
   subtitle: string;
   body: string;
@@ -11573,7 +11809,7 @@ type PromoPopup = {
   textColor?: string;
   btnColor?: string;
   btnTextColor?: string;
-  styleTemplate?: 'default' | 'flash_sale' | 'premium' | 'pastel' | 'dark_announcement';
+  styleTemplate?: 'default' | 'flash_sale' | 'premium' | 'pastel' | 'dark_announcement' | 'image';
 };
 
 const defaultPromo: PromoPopup = {
@@ -11620,6 +11856,10 @@ const PROMO_TEMPLATES: Record<NonNullable<PromoPopup['styleTemplate']>, {
   dark_announcement: {
     label: 'Announcement', emoji: '📢', desc: 'Serius & informatif',
     patch: { useGradient: false, bgColor: '#1c1c2e', textColor: '#e2e8f0', btnColor: '#3b82f6', btnTextColor: '#ffffff' },
+  },
+  image: {
+    label: 'Gambar Custom', emoji: '🖼️', desc: 'Banner gambar sendiri',
+    patch: { useGradient: false, bgColor: '#ffffff', textColor: '#1a1a1a', btnColor: '#6c47ff', btnTextColor: '#ffffff' },
   },
 };
 
@@ -11703,7 +11943,7 @@ const defaultBookingAvailability: BookingAvailability = {
   slots: ['10:00', '11:00', '13:00', '14:00', '15:00', '16:00'],
 };
 
-type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards; checkin_day7?: CheckinDay7; booking?: BookingAvailability };
+type AdminSettings = { packages: CreditPackage[]; payment: PaymentInfo; referralCodes?: ReferralCode[]; promo?: PromoPopup; coin_rate?: number; student_bot_token?: string; coin_rewards?: CoinRewards; checkin_day7?: CheckinDay7; booking?: BookingAvailability; birthday_bonus?: number };
 
 let _adminSettingsCache: AdminSettings | null = null;
 async function loadAdminSettings(): Promise<AdminSettings> {
@@ -11727,6 +11967,7 @@ async function loadAdminSettings(): Promise<AdminSettings> {
     coin_rewards: { ...defaultCoinRewards, ...(raw.coin_rewards ?? {}) },
     checkin_day7: { ...defaultCheckinDay7, ...(raw.checkin_day7 ?? {}) },
     booking: { ...defaultBookingAvailability, ...(raw.booking ?? {}) },
+    birthday_bonus: raw.birthday_bonus ?? 100,
   };
   return _adminSettingsCache;
 }
@@ -13768,6 +14009,9 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [promoIconUploading, setPromoIconUploading] = useState(false);
   const [promoIconFile, setPromoIconFile] = useState<File | null>(null);
   const [promoIconLocalUrl, setPromoIconLocalUrl] = useState<string | null>(null);
+  const [promoImageFile, setPromoImageFile] = useState<File | null>(null);
+  const [promoImageLocalUrl, setPromoImageLocalUrl] = useState<string | null>(null);
+  const [birthdayBonus, setBirthdayBonus] = useState(100);
   const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
   const [referralUsage, setReferralUsage] = useState<Record<string, number>>({});
   const [editingReferral, setEditingReferral] = useState<(ReferralCode & { idx: number }) | null>(null);
@@ -13890,6 +14134,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setReferralUsage(usageCounts);
 
     setPromo(settings.promo ?? { ...defaultPromo });
+    setBirthdayBonus(settings.birthday_bonus ?? 100);
     setSelectedPackage(settings.packages[1] ?? settings.packages[0]);
 
     const profileMap: Record<string, { email: string; perks: UserPerks; referralPerks: UserPerks; referralPerksExpiresAt: string | null; avatarUrl: string | null; name: string | null; referralCode: string | null }> = {};
@@ -14047,22 +14292,46 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
       setPromoIconFile(null);
       if (promoIconLocalUrl) { URL.revokeObjectURL(promoIconLocalUrl); setPromoIconLocalUrl(null); }
     }
+    if (promoImageFile) {
+      // Banner gambar custom — resolusi lebih besar dari icon.
+      const imgUp = await compressImage(promoImageFile, 1080, 0.85);
+      const ext = imgUp.name.split('.').pop() ?? 'jpg';
+      const path = `promo-images/promo-img-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('lesson-assets').upload(path, imgUp, { upsert: true, contentType: imgUp.type });
+      if (!error) {
+        const url = supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
+        savedPromo = { ...savedPromo, imageUrl: url };
+        setPromo((p) => ({ ...p, imageUrl: url }));
+      } else {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(promoImageFile);
+        });
+        savedPromo = { ...savedPromo, imageUrl: base64 };
+        setPromo((p) => ({ ...p, imageUrl: base64 }));
+      }
+      setPromoImageFile(null);
+      if (promoImageLocalUrl) { URL.revokeObjectURL(promoImageLocalUrl); setPromoImageLocalUrl(null); }
+    }
     const settings = await loadAdminSettings();
-    await saveAdminSettings({ ...settings, promo: savedPromo });
+    await saveAdminSettings({ ...settings, promo: savedPromo, birthday_bonus: birthdayBonus });
     setPromoSaving(false);
     setPromoSaved(true);
     setTimeout(() => setPromoSaved(false), 2000);
+    return savedPromo;
   };
 
   const handleBroadcastPromo = async () => {
     if (!promo.enabled) { window.alert('Aktifkan promo terlebih dahulu sebelum broadcast.'); return; }
     setPromoBroadcasting(true);
-    // Simpan dulu agar user offline juga dapat saat login
-    await handleSavePromo();
+    // Simpan dulu agar user offline juga dapat saat login. Pakai hasil save
+    // (sudah termasuk URL gambar/icon yang baru di-upload), bukan state lama.
+    const broadcastPromo = (await handleSavePromo()) ?? promo;
     // Kirim realtime broadcast ke semua client yang online
     const channel = supabase.channel('promo-broadcast');
     await channel.subscribe();
-    await channel.send({ type: 'broadcast', event: 'show-promo', payload: { promo } });
+    await channel.send({ type: 'broadcast', event: 'show-promo', payload: { promo: broadcastPromo } });
     await supabase.removeChannel(channel);
 
     // Blast ke semua student yang sudah link Telegram (token di server)
@@ -14083,6 +14352,29 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setPromoIconFile(file);
     setPromoIconLocalUrl(localUrl);
     setPromo((p) => ({ ...p, iconUrl: localUrl }));
+  };
+
+  const handlePromoImageUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const localUrl = URL.createObjectURL(file);
+    setPromoImageFile(file);
+    setPromoImageLocalUrl(localUrl);
+    setPromo((p) => ({ ...p, imageUrl: localUrl }));
+  };
+
+  // Preset cepat: broadcast ajakan mengisi tanggal lahir (template gambar custom).
+  const applyBirthdayReminderPreset = () => {
+    setPromo((p) => applyPromoTemplate({
+      ...p,
+      enabled: true,
+      target: 'all_users',
+      title: 'Sudah Isi Tanggal Lahir? 🎂',
+      subtitle: '',
+      body: 'Lengkapi tanggal lahirmu di menu Profil supaya kami bisa merayakan ulang tahunmu bersama komunitas — plus bonus Ruang Coin di hari spesialmu!',
+      ctaText: 'Isi Sekarang',
+      ctaAction: 'dismiss',
+      dismissText: 'Nanti saja',
+    }, 'image'));
   };
 
   const updateDraftPkg = (idx: number, field: keyof CreditPackage, value: string) => {
@@ -15234,7 +15526,44 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                         );
                       })}
                     </div>
+                    <button type="button" className="promo-preset-btn" onClick={applyBirthdayReminderPreset}>
+                      🎂 Preset: Ingatkan Isi Tanggal Lahir
+                    </button>
+                    <label className="promo-birthday-bonus">
+                      🎂 Bonus koin ulang tahun
+                      <input
+                        className="admin-modal-input"
+                        type="number"
+                        min="0"
+                        value={birthdayBonus || ''}
+                        onChange={(e) => setBirthdayBonus(parseInt(e.target.value, 10) || 0)}
+                        placeholder="100"
+                      />
+                      <span className="promo-birthday-bonus-hint">Diberikan otomatis ke user saat hari ulang tahunnya (via cron harian). Simpan untuk menerapkan.</span>
+                    </label>
                   </div>
+
+                  {(promo.styleTemplate ?? 'default') === 'image' && (
+                    <div className="promo-image-section">
+                      <p className="admin-section-label" style={{ margin: '0 0 8px' }}>GAMBAR BANNER CUSTOM</p>
+                      <div className="promo-image-upload-wrap">
+                        {promo.imageUrl
+                          ? <img src={promo.imageUrl} alt="banner" className="promo-image-preview" />
+                          : <span className="promo-icon-placeholder">Belum ada gambar banner</span>
+                        }
+                        <div className="promo-image-upload-actions">
+                          <label className="promo-icon-upload-btn">
+                            Pilih Gambar
+                            <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePromoImageUpload(f); }} />
+                          </label>
+                          {promo.imageUrl && (
+                            <button type="button" className="promo-icon-remove" onClick={() => setPromo((p) => ({ ...p, imageUrl: undefined }))}>Hapus</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="admin-promo-row">
                     <label>Ikon (PNG)
@@ -15267,6 +15596,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       premium:    { judul: 'Judul Elegan', judulPh: 'Akses Premium Eksklusif', sub: 'Subjudul', subPh: 'Tingkatkan pengalamanmu', body: 'Deskripsi Premium', bodyPh: 'Dapatkan akses tak terbatas ke semua konten.' },
                       pastel:     { judul: 'Sapaan Ramah', judulPh: 'Hei, selamat datang! 👋', sub: 'Subjudul', subPh: 'Yuk mulai belajar bareng', body: 'Isi Pesan', bodyPh: 'Kami senang kamu bergabung!' },
                       dark_announcement: { judul: 'Judul Pengumuman', judulPh: 'Fitur Baru Telah Hadir', sub: 'Subjudul', subPh: 'Update versi terbaru', body: 'Poin-poin Pengumuman (1 baris = 1 poin)', bodyPh: 'Fitur A sudah bisa diakses\nFitur B dalam pengembangan\nHubungi kami untuk info lebih lanjut' },
+                      image:      { judul: 'Judul (opsional)', judulPh: 'Judul di bawah gambar', sub: 'Subjudul (tidak dipakai)', subPh: '', body: 'Isi Pesan (opsional)', bodyPh: 'Teks pendukung di bawah gambar…' },
                       default:    { judul: 'Judul', judulPh: 'Selamat Datang!', sub: 'Subjudul', subPh: 'Mulai perjalanan belajarmu', body: 'Isi Pesan', bodyPh: 'Deskripsi penawaran...' },
                     }[tpl] ?? { judul: 'Judul', judulPh: '', sub: 'Subjudul', subPh: '', body: 'Isi Pesan', bodyPh: '' };
                     return (
@@ -16618,7 +16948,7 @@ function ProfilePage({
     };
   }, [session]);
 
-  const updateDraftProfile = (field: keyof UserProfile, value: string) => {
+  const updateDraftProfile = (field: keyof UserProfile, value: string | boolean) => {
     setDraftProfile((current) => ({ ...current, [field]: value }));
   };
 
@@ -16717,6 +17047,15 @@ function ProfilePage({
         window.alert(`gagal menyimpan profile: ${error.message}`);
         return;
       }
+
+      // Best-effort: simpan preferensi privasi ulang tahun secara terpisah,
+      // agar kegagalan (mis. kolom belum ada sebelum migrasi) tidak menggagalkan
+      // penyimpanan profil utama.
+      const { error: sbError } = await supabase
+        .from('user_profiles')
+        .update({ show_birthday: draftProfile.showBirthday })
+        .eq('username', session.username);
+      if (sbError) console.warn('show_birthday not saved (kolom mungkin belum ada)', sbError.message);
 
       const nextProfile = {
         ...draftProfile,
@@ -16829,6 +17168,14 @@ function ProfilePage({
                   <label>
                     tanggal lahir
                     <input type="date" value={draftProfile.birthDate} onChange={(event) => updateDraftProfile('birthDate', event.target.value)} />
+                  </label>
+                  <label className="profile-birthday-toggle">
+                    <input
+                      type="checkbox"
+                      checked={draftProfile.showBirthday}
+                      onChange={(event) => updateDraftProfile('showBirthday', event.target.checked)}
+                    />
+                    <span>Rayakan ulang tahunku — tampilkan popup & bonus koin ke komunitas saat hari-H. Nonaktifkan bila ingin privat.</span>
                   </label>
                   <div className="readonly-profile-field">
                     <span>pertama bergabung</span>
@@ -17274,6 +17621,13 @@ function isLessonComingSoon(lesson: Lesson): boolean {
   if (lesson.availableAt && new Date(lesson.availableAt) > new Date()) return true;
   return !!lesson.comingSoon;
 }
+// URL video placeholder default (dipakai saat field video dikosongkan / cuma cover).
+const PLACEHOLDER_VIDEO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+// True kalau lesson punya link video asli (bukan kosong & bukan placeholder default).
+function hasRealVideoUrl(url?: string | null): boolean {
+  const u = (url ?? '').trim();
+  return u.length > 0 && u !== PLACEHOLDER_VIDEO_URL;
+}
 // Label rilis ala Netflix: "Tersedia Minggu, 10 Jul" atau "Coming Soon".
 function lessonReleaseLabel(lesson: Lesson): string {
   if (lesson.availableAt && new Date(lesson.availableAt) > new Date()) {
@@ -17713,7 +18067,13 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       if (!error) finalDraft = { ...finalDraft, coverUrl: supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl };
     }
     let updated: HubEvent[];
+    // Deteksi link yang baru ditambahkan pada event yang di-edit → notifikasi peserta.
+    let linkJustAdded: HubEvent | null = null;
     if (editingIdx !== null) {
+      const prev = events[editingIdx];
+      if (finalDraft.link?.trim() && finalDraft.link.trim() !== (prev.link ?? '').trim()) {
+        linkJustAdded = { ...prev, ...finalDraft };
+      }
       updated = events.map((e, i) => i === editingIdx ? { ...e, ...finalDraft } : e);
     } else {
       const recurrence = finalDraft.recurrence ?? 'none';
@@ -17732,6 +18092,30 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       }
     }
     await saveHubEvents(updated);
+    // Kirim notifikasi ke peserta yang sudah join event ini bahwa link sudah tersedia.
+    if (linkJustAdded) {
+      void (async () => {
+        const { data } = await supabase
+          .from('event_participants')
+          .select('username')
+          .eq('event_id', linkJustAdded!.id);
+        const usernames = [...new Set((data ?? []).map((r: { username: string }) => r.username))];
+        const tgText = `🔗 <b>Link Event Sudah Tersedia!</b>\n\n🎯 <b>${linkJustAdded!.title}</b>\n🗓 ${linkJustAdded!.date}${linkJustAdded!.time ? ` pukul ${linkJustAdded!.time.slice(0, 5)}` : ''}\n\nKlik untuk join kelas: ${linkJustAdded!.link}`;
+        await Promise.all(
+          usernames.flatMap((u) => [
+            insertNotification(
+              u,
+              'event_link',
+              'Link Event Sudah Tersedia!',
+              `Link untuk "${linkJustAdded!.title}" sudah ditambahkan. Buka halaman Events untuk join kelas.`,
+              '#events',
+            ),
+            // Kirim juga ke Telegram user (kalau sudah connect telegram_chat_id).
+            notifyStudent(u, tgText),
+          ]),
+        );
+      })();
+    }
     setEvents(updated);
     setCoverFile(null);
     setShowForm(false);
