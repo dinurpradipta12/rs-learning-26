@@ -15302,3 +15302,25 @@ body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
 .promo-image-upload-actions { display: flex; gap: 10px; align-items: center; }
 .promo-birthday-bonus { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; font-weight: 600; font-size: 0.85rem; }
 .promo-birthday-bonus-hint { font-weight: 400; font-size: 0.76rem; color: var(--muted); }
+
+/* ── Birthday: topi di avatar + menu inbox ─────────────────── */
+.account-trigger { position: relative; }
+.account-birthday-hat {
+  position: absolute; top: -6px; right: -4px; font-size: 20px; line-height: 1;
+  transform: rotate(12deg); pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
+  animation: bday-hat-pop 0.5s ease-out;
+}
+@keyframes bday-hat-pop {
+  0% { transform: rotate(12deg) scale(0); }
+  70% { transform: rotate(12deg) scale(1.25); }
+  100% { transform: rotate(12deg) scale(1); }
+}
+.account-menu-birthday {
+  color: #fff !important;
+  background: linear-gradient(135deg, #ff6ba6 0%, #b06bff 100%) !important;
+  font-weight: 700 !important;
+  border-radius: 10px; margin-bottom: 4px;
+}
+.account-menu-birthday:hover { filter: brightness(1.05); }
+.account-menu-birthday .account-menu-icon { font-size: 17px; }

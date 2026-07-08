@@ -3007,6 +3007,7 @@ function App() {
   const [showReferralClaim, setShowReferralClaim] = useState(false);
   const [checkinModal, setCheckinModal] = useState<{ dailyCoins: number; day7: CheckinDay7 } | null>(null);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [isBirthdayToday, setIsBirthdayToday] = useState(false);
   const [ownRing, setOwnRing] = useState<RingTier>(null);
   const [userCredits, setUserCredits] = useState<number | null>(null);
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -3194,6 +3195,10 @@ function App() {
       ]);
       if (!isActive) return;
       setProfileAvatarUrl(nextProfile.photoUrl);
+      // Ulang tahun hari ini? cocokkan bulan-tanggal dengan hari ini.
+      const now = new Date();
+      const todayMd = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      setIsBirthdayToday(!!nextProfile.birthDate && nextProfile.birthDate.slice(5, 10) === todayMd);
       setUserCredits(creditsData?.balance ?? null);
     })();
 
@@ -3519,10 +3524,22 @@ function App() {
                 alt={session.displayName}
                 className="account-avatar"
               />
+              {isBirthdayToday && <span className="account-birthday-hat" title="Selamat ulang tahun!">🎉</span>}
             </button>
 
             {isAccountMenuOpen && (
               <div className="account-menu" role="menu" aria-label="menu profil">
+                {isBirthdayToday && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="account-menu-birthday"
+                    onClick={() => { setIsAccountMenuOpen(false); window.location.hash = '#birthday-inbox'; }}
+                  >
+                    <span className="account-menu-icon" aria-hidden>🎂</span>
+                    inbox ucapan ulang tahun
+                  </button>
+                )}
                 <a
                   href="#profil-settings"
                   role="menuitem"
