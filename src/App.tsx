@@ -827,8 +827,21 @@ async function updateThreadViewCount(threadId: string, viewCount: number): Promi
 
 type NotifType = 'booking_approved' | 'booking_rejected' | 'lesson_new' | 'credits_added' | 'thread_reply' | 'event_link' | 'birthday' | 'birthday_wish';
 
-async function insertNotification(recipient: string, type: NotifType, title: string, body: string, link?: string, actorUsername?: string) {
-  await supabase.from('notifications').insert([{ recipient_username: recipient, type, title, body, link: link ?? null, actor_username: actorUsername ?? null }]);
+// Kirim notifikasi lewat RPC tervalidasi (verifikasi pengirim, tolak link
+// eksternal, actor dipaksa = pengirim). Param actorUsername dipertahankan
+// untuk kompatibilitas pemanggil, tapi diabaikan (server yang menentukan).
+// Lihat migrasi 20260711_lock_notifications.sql.
+async function insertNotification(recipient: string, type: NotifType, title: string, body: string, link?: string, _actorUsername?: string) {
+  const token = currentSessionToken();
+  if (!token) return;
+  await supabase.rpc('send_notification', {
+    p_token: token,
+    p_recipient: recipient,
+    p_type: type,
+    p_title: title,
+    p_body: body,
+    p_link: link ?? null,
+  });
 }
 
 // ── Confirm Modal ─────────────────────────────────────────────
@@ -2641,13 +2654,7 @@ function TopUpModal({ context, onClose, session, initialPackageId }: { context: 
     const { data: devs } = await supabase.from('app_users').select('username').eq('role', 'developer');
     if (devs) {
       for (const dev of devs) {
-        await supabase.from('notifications').insert([{
-          recipient_username: dev.username,
-          type: 'credits_added',
-          title: 'Bukti Topup Dikirim',
-          body: `${session?.displayName ?? 'User'} mengupload bukti topup ${activePkgSnapshot.credits} coin`,
-          link: '#inbox-topup',
-        }]);
+        await insertNotification(dev.username, 'credits_added', 'Bukti Topup Dikirim', `${session?.displayName ?? 'User'} mengupload bukti topup ${activePkgSnapshot.credits} coin`, '#inbox-topup');
       }
     }
 
@@ -17455,7 +17462,7 @@ function ProfilePage({
                     [[{ text: '✅ Approve', callback_data: `at:${topupSavedId}` }]],
                   );
                   const { data: devs } = await supabase.from('app_users').select('username').eq('role', 'developer');
-                  if (devs) for (const dev of devs) await supabase.from('notifications').insert([{ recipient_username: dev.username, type: 'credits_added', title: 'Bukti Topup Dikirim', body: `${session.displayName} upload bukti topup ${topupPkgSnapshot.credits} coin`, link: '#inbox-topup' }]);
+                  if (devs) for (const dev of devs) await insertNotification(dev.username, 'credits_added', 'Bukti Topup Dikirim', `${session.displayName} upload bukti topup ${topupPkgSnapshot.credits} coin`, '#inbox-topup');
                   setTopupStep('uploaded');
                 }
                 setTopupProofUploading(false);
