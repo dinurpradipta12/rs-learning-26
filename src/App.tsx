@@ -2347,6 +2347,22 @@ function PromoContent({ promo, onCta, onDismiss, isPreview }: {
 
   const tpl = promo.styleTemplate ?? 'default';
 
+  if (tpl === 'image') {
+    return (
+      <div className="pc-image">
+        {promo.imageUrl
+          ? <img src={promo.imageUrl} alt={promo.title || ''} className="pc-image-banner" />
+          : <div className="pc-image-placeholder">🖼️ Upload gambar popup</div>}
+        {promo.title && <h2 className="pc-image-title" style={{ color: tc }}>{promo.title}</h2>}
+        {promo.body && <p className="pc-image-body" style={{ color: tc }}>{promo.body}</p>}
+        {promo.ctaAction !== 'dismiss' && promo.ctaText && (
+          <button className="promo-cta" style={{ background: bc, color: btc, ...ps }} onClick={onCta}>{promo.ctaText}</button>
+        )}
+        <button className="promo-dismiss" style={{ color: tc, ...ps }} onClick={onDismiss}>{promo.dismissText}</button>
+      </div>
+    );
+  }
+
   if (tpl === 'flash_sale') {
     return (
       <div className="pc-flash">
@@ -11766,6 +11782,7 @@ type PromoPopup = {
   enabled: boolean;
   icon: string;
   iconUrl?: string;
+  imageUrl?: string;  // gambar banner custom (template 'image')
   title: string;
   subtitle: string;
   body: string;
@@ -11782,7 +11799,7 @@ type PromoPopup = {
   textColor?: string;
   btnColor?: string;
   btnTextColor?: string;
-  styleTemplate?: 'default' | 'flash_sale' | 'premium' | 'pastel' | 'dark_announcement';
+  styleTemplate?: 'default' | 'flash_sale' | 'premium' | 'pastel' | 'dark_announcement' | 'image';
 };
 
 const defaultPromo: PromoPopup = {
@@ -11829,6 +11846,10 @@ const PROMO_TEMPLATES: Record<NonNullable<PromoPopup['styleTemplate']>, {
   dark_announcement: {
     label: 'Announcement', emoji: '📢', desc: 'Serius & informatif',
     patch: { useGradient: false, bgColor: '#1c1c2e', textColor: '#e2e8f0', btnColor: '#3b82f6', btnTextColor: '#ffffff' },
+  },
+  image: {
+    label: 'Gambar Custom', emoji: '🖼️', desc: 'Banner gambar sendiri',
+    patch: { useGradient: false, bgColor: '#ffffff', textColor: '#1a1a1a', btnColor: '#6c47ff', btnTextColor: '#ffffff' },
   },
 };
 
@@ -13977,6 +13998,8 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
   const [promoIconUploading, setPromoIconUploading] = useState(false);
   const [promoIconFile, setPromoIconFile] = useState<File | null>(null);
   const [promoIconLocalUrl, setPromoIconLocalUrl] = useState<string | null>(null);
+  const [promoImageFile, setPromoImageFile] = useState<File | null>(null);
+  const [promoImageLocalUrl, setPromoImageLocalUrl] = useState<string | null>(null);
   const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
   const [referralUsage, setReferralUsage] = useState<Record<string, number>>({});
   const [editingReferral, setEditingReferral] = useState<(ReferralCode & { idx: number }) | null>(null);
@@ -14256,22 +14279,46 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
       setPromoIconFile(null);
       if (promoIconLocalUrl) { URL.revokeObjectURL(promoIconLocalUrl); setPromoIconLocalUrl(null); }
     }
+    if (promoImageFile) {
+      // Banner gambar custom — resolusi lebih besar dari icon.
+      const imgUp = await compressImage(promoImageFile, 1080, 0.85);
+      const ext = imgUp.name.split('.').pop() ?? 'jpg';
+      const path = `promo-images/promo-img-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('lesson-assets').upload(path, imgUp, { upsert: true, contentType: imgUp.type });
+      if (!error) {
+        const url = supabase.storage.from('lesson-assets').getPublicUrl(path).data.publicUrl;
+        savedPromo = { ...savedPromo, imageUrl: url };
+        setPromo((p) => ({ ...p, imageUrl: url }));
+      } else {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(promoImageFile);
+        });
+        savedPromo = { ...savedPromo, imageUrl: base64 };
+        setPromo((p) => ({ ...p, imageUrl: base64 }));
+      }
+      setPromoImageFile(null);
+      if (promoImageLocalUrl) { URL.revokeObjectURL(promoImageLocalUrl); setPromoImageLocalUrl(null); }
+    }
     const settings = await loadAdminSettings();
     await saveAdminSettings({ ...settings, promo: savedPromo });
     setPromoSaving(false);
     setPromoSaved(true);
     setTimeout(() => setPromoSaved(false), 2000);
+    return savedPromo;
   };
 
   const handleBroadcastPromo = async () => {
     if (!promo.enabled) { window.alert('Aktifkan promo terlebih dahulu sebelum broadcast.'); return; }
     setPromoBroadcasting(true);
-    // Simpan dulu agar user offline juga dapat saat login
-    await handleSavePromo();
+    // Simpan dulu agar user offline juga dapat saat login. Pakai hasil save
+    // (sudah termasuk URL gambar/icon yang baru di-upload), bukan state lama.
+    const broadcastPromo = (await handleSavePromo()) ?? promo;
     // Kirim realtime broadcast ke semua client yang online
     const channel = supabase.channel('promo-broadcast');
     await channel.subscribe();
-    await channel.send({ type: 'broadcast', event: 'show-promo', payload: { promo } });
+    await channel.send({ type: 'broadcast', event: 'show-promo', payload: { promo: broadcastPromo } });
     await supabase.removeChannel(channel);
 
     // Blast ke semua student yang sudah link Telegram (token di server)
@@ -14292,6 +14339,29 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
     setPromoIconFile(file);
     setPromoIconLocalUrl(localUrl);
     setPromo((p) => ({ ...p, iconUrl: localUrl }));
+  };
+
+  const handlePromoImageUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const localUrl = URL.createObjectURL(file);
+    setPromoImageFile(file);
+    setPromoImageLocalUrl(localUrl);
+    setPromo((p) => ({ ...p, imageUrl: localUrl }));
+  };
+
+  // Preset cepat: broadcast ajakan mengisi tanggal lahir (template gambar custom).
+  const applyBirthdayReminderPreset = () => {
+    setPromo((p) => applyPromoTemplate({
+      ...p,
+      enabled: true,
+      target: 'all_users',
+      title: 'Sudah Isi Tanggal Lahir? 🎂',
+      subtitle: '',
+      body: 'Lengkapi tanggal lahirmu di menu Profil supaya kami bisa merayakan ulang tahunmu bersama komunitas — plus bonus Ruang Coin di hari spesialmu!',
+      ctaText: 'Isi Sekarang',
+      ctaAction: 'dismiss',
+      dismissText: 'Nanti saja',
+    }, 'image'));
   };
 
   const updateDraftPkg = (idx: number, field: keyof CreditPackage, value: string) => {
@@ -15443,7 +15513,32 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                         );
                       })}
                     </div>
+                    <button type="button" className="promo-preset-btn" onClick={applyBirthdayReminderPreset}>
+                      🎂 Preset: Ingatkan Isi Tanggal Lahir
+                    </button>
                   </div>
+
+                  {(promo.styleTemplate ?? 'default') === 'image' && (
+                    <div className="promo-image-section">
+                      <p className="admin-section-label" style={{ margin: '0 0 8px' }}>GAMBAR BANNER CUSTOM</p>
+                      <div className="promo-image-upload-wrap">
+                        {promo.imageUrl
+                          ? <img src={promo.imageUrl} alt="banner" className="promo-image-preview" />
+                          : <span className="promo-icon-placeholder">Belum ada gambar banner</span>
+                        }
+                        <div className="promo-image-upload-actions">
+                          <label className="promo-icon-upload-btn">
+                            Pilih Gambar
+                            <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePromoImageUpload(f); }} />
+                          </label>
+                          {promo.imageUrl && (
+                            <button type="button" className="promo-icon-remove" onClick={() => setPromo((p) => ({ ...p, imageUrl: undefined }))}>Hapus</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="admin-promo-row">
                     <label>Ikon (PNG)
@@ -15476,6 +15571,7 @@ function AdminPage({ session, featureCosts, onFeatureCostsChange }: { session: A
                       premium:    { judul: 'Judul Elegan', judulPh: 'Akses Premium Eksklusif', sub: 'Subjudul', subPh: 'Tingkatkan pengalamanmu', body: 'Deskripsi Premium', bodyPh: 'Dapatkan akses tak terbatas ke semua konten.' },
                       pastel:     { judul: 'Sapaan Ramah', judulPh: 'Hei, selamat datang! 👋', sub: 'Subjudul', subPh: 'Yuk mulai belajar bareng', body: 'Isi Pesan', bodyPh: 'Kami senang kamu bergabung!' },
                       dark_announcement: { judul: 'Judul Pengumuman', judulPh: 'Fitur Baru Telah Hadir', sub: 'Subjudul', subPh: 'Update versi terbaru', body: 'Poin-poin Pengumuman (1 baris = 1 poin)', bodyPh: 'Fitur A sudah bisa diakses\nFitur B dalam pengembangan\nHubungi kami untuk info lebih lanjut' },
+                      image:      { judul: 'Judul (opsional)', judulPh: 'Judul di bawah gambar', sub: 'Subjudul (tidak dipakai)', subPh: '', body: 'Isi Pesan (opsional)', bodyPh: 'Teks pendukung di bawah gambar…' },
                       default:    { judul: 'Judul', judulPh: 'Selamat Datang!', sub: 'Subjudul', subPh: 'Mulai perjalanan belajarmu', body: 'Isi Pesan', bodyPh: 'Deskripsi penawaran...' },
                     }[tpl] ?? { judul: 'Judul', judulPh: '', sub: 'Subjudul', subPh: '', body: 'Isi Pesan', bodyPh: '' };
                     return (
