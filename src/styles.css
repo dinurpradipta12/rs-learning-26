@@ -11170,10 +11170,11 @@ body.dark .topup-payment-info { background: rgba(255,255,255,0.04); border-color
 .promo-overlay {
   position: fixed; inset: 0; z-index: 9990;
   background: rgba(0,0,0,.5); backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
+  display: flex; overflow-y: auto; padding: 24px 16px;
 }
 .promo-modal {
   position: relative;
+  margin: auto;  /* center saat muat, bisa di-scroll saat lebih tinggi dari layar */
   border-radius: 24px;
   padding: 40px 32px 32px;
   max-width: 400px; width: 90%;
@@ -15211,9 +15212,10 @@ body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
 
 /* ── Birthday Appreciation ─────────────────────────────────── */
 .bday-overlay {
-  position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center;
-  background: rgba(15, 10, 30, 0.55); backdrop-filter: blur(4px); padding: 20px;
+  position: fixed; inset: 0; z-index: 1200; display: flex; overflow-y: auto;
+  background: rgba(15, 10, 30, 0.55); backdrop-filter: blur(4px); padding: 20px 16px;
 }
+.bday-modal, .bday-inbox { margin: auto; }
 .bday-modal {
   background: var(--card, #fff); border-radius: 22px; width: 100%; max-width: 400px; padding: 28px 24px 22px;
   text-align: center; box-shadow: 0 24px 70px rgba(0,0,0,0.28); position: relative;
