@@ -3402,7 +3402,13 @@ function App() {
       window.location.hash = '#events';
       return;
     }
-    if (sessionStorage.getItem('pending_join_event') && page !== 'events') {
+    // Notifikasi broadcast kelas → buka popup card kelas di halaman Events.
+    if (hash.startsWith('#kelas/')) {
+      sessionStorage.setItem('pending_class_event', hash.slice('#kelas/'.length));
+      window.location.hash = '#events';
+      return;
+    }
+    if ((sessionStorage.getItem('pending_join_event') || sessionStorage.getItem('pending_class_event')) && page !== 'events') {
       window.location.hash = '#events';
     }
   }, [session, hash, page, initialEventId, initialLessonId]);
@@ -17929,6 +17935,9 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [joinTarget, setJoinTarget] = useState<HubEvent | null>(null);
+  const [classTarget, setClassTarget] = useState<HubEvent | null>(null);
+  const [broadcastingId, setBroadcastingId] = useState<string | null>(null);
+  const [broadcastSentId, setBroadcastSentId] = useState<string | null>(null);
   const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
   const copyShareLink = (id: string) => {
     const url = `${window.location.origin}/?event=${id}`;
@@ -18028,6 +18037,13 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
         const target = evs.find((e) => e.id === pendingJoinId && e.isActive !== false);
         if (target && !canManage) { setJoinTarget(target); setJoinError(''); }
       }
+      // Handoff dari notifikasi broadcast kelas (#kelas/<id>): buka popup card kelas.
+      const pendingClassId = sessionStorage.getItem('pending_class_event');
+      if (pendingClassId) {
+        sessionStorage.removeItem('pending_class_event');
+        const target = evs.find((e) => e.id === pendingClassId);
+        if (target) setClassTarget(target);
+      }
       // Handoff dari halaman Kalender: buka edit event yang diklik.
       if (canManage) {
         const editId = sessionStorage.getItem('edit_hub_event_id');
@@ -18115,34 +18131,50 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       }
     }
     await saveHubEvents(updated);
-    // Kirim notifikasi ke peserta yang sudah join event ini bahwa link sudah tersedia.
-    if (linkJustAdded) {
-      void (async () => {
-        const { data } = await supabase
-          .from('event_participants')
-          .select('username')
-          .eq('event_id', linkJustAdded!.id);
-        const usernames = [...new Set((data ?? []).map((r: { username: string }) => r.username))];
-        const tgText = `🔗 <b>Link Event Sudah Tersedia!</b>\n\n🎯 <b>${linkJustAdded!.title}</b>\n🗓 ${linkJustAdded!.date}${linkJustAdded!.time ? ` pukul ${linkJustAdded!.time.slice(0, 5)}` : ''}\n\nKlik untuk join kelas: ${linkJustAdded!.link}`;
-        await Promise.all(
-          usernames.flatMap((u) => [
-            insertNotification(
-              u,
-              'event_link',
-              'Link Event Sudah Tersedia!',
-              `Link untuk "${linkJustAdded!.title}" sudah ditambahkan. Buka halaman Events untuk join kelas.`,
-              '#events',
-            ),
-            // Kirim juga ke Telegram user (kalau sudah connect telegram_chat_id).
-            notifyStudent(u, tgText),
-          ]),
-        );
-      })();
-    }
+    // Auto-broadcast ke peserta saat link baru ditambahkan.
+    if (linkJustAdded) void broadcastEventLink(linkJustAdded);
     setEvents(updated);
     setCoverFile(null);
     setShowForm(false);
     setSaving(false);
+  };
+
+  // Broadcast ke semua peserta event: notif in-app (mengarah ke #kelas/<id>
+  // → popup card + tombol join) + Telegram (sapaan + link zoom).
+  const broadcastEventLink = async (ev: HubEvent): Promise<number> => {
+    const { data } = await supabase
+      .from('event_participants')
+      .select('username, display_name')
+      .eq('event_id', ev.id);
+    const rows = (data ?? []) as Array<{ username: string; display_name: string | null }>;
+    const seen = new Set<string>();
+    const unique = rows.filter((r) => (seen.has(r.username) ? false : (seen.add(r.username), true)));
+    const timeStr = ev.time ? ` pukul ${ev.time.slice(0, 5)}` : '';
+    await Promise.all(
+      unique.flatMap((r) => {
+        const nama = r.display_name || r.username;
+        const tgText = ev.link
+          ? `👋 Halo ${nama}!\n\n🎥 <b>${ev.title}</b> siap dimulai (${ev.date}${timeStr}).\n\n🔗 Join kelas sekarang: ${ev.link}`
+          : `👋 Halo ${nama}!\n\n🎥 <b>${ev.title}</b> — link kelas akan segera dikirim.`;
+        return [
+          insertNotification(r.username, 'event_link', 'Kelas Siap Dimulai! 🎥', `Klik untuk join kelas "${ev.title}" sekarang.`, `#kelas/${ev.id}`),
+          notifyStudent(r.username, tgText),
+        ];
+      }),
+    );
+    return unique.length;
+  };
+
+  const handleBroadcast = async (ev: HubEvent) => {
+    if (!ev.link) { window.alert('Tambahkan link kelas dulu di Edit event sebelum broadcast.'); return; }
+    const ok = await confirmDialog('Kirim broadcast link kelas ke semua peserta event ini (notif app + Telegram)?');
+    if (!ok) return;
+    setBroadcastingId(ev.id);
+    const n = await broadcastEventLink(ev);
+    setBroadcastingId(null);
+    setBroadcastSentId(ev.id);
+    setTimeout(() => setBroadcastSentId((c) => (c === ev.id ? null : c)), 2500);
+    window.alert(n > 0 ? `Broadcast terkirim ke ${n} peserta.` : 'Belum ada peserta yang mengikuti event ini.');
   };
 
   const handleDelete = async (idx: number) => {
@@ -18329,6 +18361,15 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                       </div>
                       <div className="events-list-actions events-list-actions--icons">
                         <button type="button" className="admin-icon-btn" onClick={() => copyShareLink(ev.id)} title={copiedShareId === ev.id ? 'Tersalin!' : 'Salin link share event'}>{copiedShareId === ev.id ? <Ic name="check" size={16} /> : <Ic name="link" size={16} />}</button>
+                        <button
+                          type="button"
+                          className={`admin-icon-btn${broadcastSentId === ev.id ? ' broadcast-sent' : ''}`}
+                          disabled={broadcastingId === ev.id}
+                          onClick={() => void handleBroadcast(ev)}
+                          title={ev.link ? 'Broadcast link kelas ke peserta (app + Telegram)' : 'Tambahkan link dulu untuk broadcast'}
+                        >
+                          {broadcastSentId === ev.id ? <Ic name="check" size={16} /> : broadcastingId === ev.id ? <Ic name="clock" size={16} /> : <Ic name="megaphone" size={16} />}
+                        </button>
                         <button type="button" className="admin-icon-btn" onClick={() => openEdit(idx)} title="Edit event"><Ic name="edit" size={16} /></button>
                         <button type="button" className="admin-icon-btn danger" onClick={() => void confirmDialog('Hapus event ini? Tindakan tidak bisa dibatalkan.').then((ok) => { if (ok) void handleDelete(idx); })} title="Hapus event"><Ic name="trash" size={16} /></button>
                         {ev.recurrenceGroupId && (
@@ -18490,6 +18531,31 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
                 {joinLoading ? 'Memproses…' : 'Konfirmasi'}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Popup card kelas dari notifikasi broadcast (#kelas/<id>) */}
+      {classTarget && createPortal(
+        <div className="admin-modal-overlay" onClick={() => setClassTarget(null)}>
+          <div className="admin-modal event-class-card" style={{ maxWidth: 420, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="checkin-close" onClick={() => setClassTarget(null)}>✕</button>
+            {classTarget.coverUrl && <img src={classTarget.coverUrl} alt={classTarget.title} className="event-card-cover" style={{ marginBottom: 12 }} />}
+            <div style={{ fontSize: '1.6rem', marginBottom: 4 }}>🎥</div>
+            <h3 className="admin-modal-title" style={{ textAlign: 'center' }}>Kelas Siap Dimulai!</h3>
+            <p style={{ fontWeight: 700, fontSize: '1.02rem', margin: '6px 0 4px' }}>{classTarget.title}</p>
+            <p style={{ color: 'var(--muted)', fontSize: '0.88rem', marginBottom: 16 }}>
+              <Ic name="calendar" size={13} /> {new Date(classTarget.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {classTarget.time && ` · ${classTarget.time}`}
+            </p>
+            {classTarget.link ? (
+              <a href={classTarget.link} target="_blank" rel="noopener noreferrer" className="button primary" style={{ width: '100%', display: 'inline-flex', justifyContent: 'center', gap: 8 }} onClick={() => setClassTarget(null)}>
+                <Ic name="video" size={16} /> Join Kelas Sekarang
+              </a>
+            ) : (
+              <p style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>Link kelas belum tersedia — tunggu info dari admin ya.</p>
+            )}
           </div>
         </div>,
         document.body,
