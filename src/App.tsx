@@ -3565,17 +3565,17 @@ function App() {
 
             {isAccountMenuOpen && (
               <div className="account-menu" role="menu" aria-label="menu profil">
-                {isBirthdayToday && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="account-menu-birthday"
-                    onClick={() => { setIsAccountMenuOpen(false); window.location.hash = '#birthday-inbox'; }}
-                  >
-                    <span className="account-menu-icon" aria-hidden>🎂</span>
-                    inbox ucapan ulang tahun
-                  </button>
-                )}
+                {/* Selalu tersedia (ucapan bisa dibaca kapan pun); warna
+                    mencolok hanya di hari ulang tahun. */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={isBirthdayToday ? 'account-menu-birthday' : undefined}
+                  onClick={() => { setIsAccountMenuOpen(false); window.location.hash = '#birthday-inbox'; }}
+                >
+                  <span className="account-menu-icon" aria-hidden>🎂</span>
+                  inbox ucapan ulang tahun
+                </button>
                 <a
                   href="#profil-settings"
                   role="menuitem"
