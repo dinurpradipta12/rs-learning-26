@@ -15338,3 +15338,7 @@ body.dark .pc-image .promo-dismiss { color: var(--muted) !important; }
   color: #7a4d00; background: linear-gradient(135deg, #ffe08a, #ffb347);
   box-shadow: 0 4px 14px rgba(255,150,40,0.35);
 }
+.bday-announce {
+  font-size: 1.05rem; font-weight: 800; text-align: center; margin-bottom: 8px;
+  color: var(--accent); letter-spacing: 0.3px;
+}

@@ -2988,7 +2988,7 @@ function BirthdayCenter({ session }: { session: AppSession | null }) {
       {current && createPortal(
         <div className="bday-overlay">
           <div className="bday-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="bday-confetti">🎉🎂🎈</div>
+            <div className="bday-announce">Ehem-ehem, perhatiaaaan! 📢</div>
             <div className="bday-avatar">{avatarNode(current.display_name ?? current.username, current.avatar_path)}</div>
             <h3 className="bday-title">Hari ini {current.display_name ?? current.username} ulang tahun! 🎂</h3>
             <p className="bday-sub">Yuk kirim ucapan atau doa terbaikmu — akan tersimpan di inbox mereka.</p>
