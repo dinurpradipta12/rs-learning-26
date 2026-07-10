@@ -3424,21 +3424,27 @@ function App() {
       return;
     }
     // Link share event via query param (?event=<id>) — dipakai agar preview OG jalan.
+    // Beritahu EventsPage yang mungkin SUDAH ter-mount (hash #events → #events
+    // tidak memicu remount), supaya flag langsung dikonsumsi & tidak nyangkut.
+    const notifyPending = () => window.dispatchEvent(new Event('rs:pending-event'));
     if (initialEventId) {
       sessionStorage.setItem('pending_join_event', initialEventId);
       window.history.replaceState({}, '', window.location.pathname);
       window.location.hash = '#events';
+      notifyPending();
       return;
     }
     if (hash.startsWith('#event/')) {
       sessionStorage.setItem('pending_join_event', hash.slice('#event/'.length));
       window.location.hash = '#events';
+      notifyPending();
       return;
     }
     // Notifikasi broadcast kelas → buka popup card kelas di halaman Events.
     if (hash.startsWith('#kelas/')) {
       sessionStorage.setItem('pending_class_event', hash.slice('#kelas/'.length));
       window.location.hash = '#events';
+      notifyPending();
       return;
     }
     if ((sessionStorage.getItem('pending_join_event') || sessionStorage.getItem('pending_class_event')) && page !== 'events') {
@@ -18110,24 +18116,29 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
       });
   }, [session?.username, canManage]);
 
+  // Konsumsi flag handoff (link share / notifikasi kelas). Flag SELALU dihapus
+  // begitu dibaca — walau event-nya tidak ketemu — karena selama flag masih ada,
+  // guard di App memaksa hash kembali ke #events (bikin nav macet).
+  const consumePendingEvents = (evs: HubEvent[]) => {
+    const pendingJoinId = sessionStorage.getItem('pending_join_event');
+    if (pendingJoinId) {
+      sessionStorage.removeItem('pending_join_event');
+      const target = evs.find((e) => e.id === pendingJoinId && e.isActive !== false);
+      if (target && !canManage) { setJoinTarget(target); setJoinError(''); }
+    }
+    const pendingClassId = sessionStorage.getItem('pending_class_event');
+    if (pendingClassId) {
+      sessionStorage.removeItem('pending_class_event');
+      const target = evs.find((e) => e.id === pendingClassId);
+      if (target) setClassTarget(target);
+    }
+  };
+
   useEffect(() => {
     void loadHubEvents().then((evs) => {
       setEvents(evs);
       setLoading(false);
-      // Handoff dari link share event: buka popup konfirmasi ikut event.
-      const pendingJoinId = sessionStorage.getItem('pending_join_event');
-      if (pendingJoinId) {
-        sessionStorage.removeItem('pending_join_event');
-        const target = evs.find((e) => e.id === pendingJoinId && e.isActive !== false);
-        if (target && !canManage) { setJoinTarget(target); setJoinError(''); }
-      }
-      // Handoff dari notifikasi broadcast kelas (#kelas/<id>): buka popup card kelas.
-      const pendingClassId = sessionStorage.getItem('pending_class_event');
-      if (pendingClassId) {
-        sessionStorage.removeItem('pending_class_event');
-        const target = evs.find((e) => e.id === pendingClassId);
-        if (target) setClassTarget(target);
-      }
+      consumePendingEvents(evs);
       // Handoff dari halaman Kalender: buka edit event yang diklik.
       if (canManage) {
         const editId = sessionStorage.getItem('edit_hub_event_id');
@@ -18144,8 +18155,22 @@ function EventsPage({ canManage, session, featureCosts, userPerks = {}, onCredit
           }
         }
       }
+    }).catch((err: unknown) => {
+      console.warn('gagal memuat events', err);
+      setLoading(false);
+      // Jangan biarkan flag menjebak navigasi kalau load gagal.
+      sessionStorage.removeItem('pending_join_event');
+      sessionStorage.removeItem('pending_class_event');
     });
   }, []);
+
+  // Kalau user SUDAH berada di halaman Events saat notifikasi kelas/link share
+  // diklik, EventsPage tidak remount → App mengirim event kustom ini.
+  useEffect(() => {
+    const onPending = () => { if (!loading) consumePendingEvents(events); };
+    window.addEventListener('rs:pending-event', onPending);
+    return () => window.removeEventListener('rs:pending-event', onPending);
+  }, [events, loading, canManage]);
 
   const openAdd = () => { setDraft(emptyDraft()); setEditingIdx(null); setCoverFile(null); setCoverPreview(''); setShowForm(true); };
   const openEdit = (idx: number) => { const { id: _id, ...rest } = events[idx]; setDraft(rest); setEditingIdx(idx); setCoverFile(null); setCoverPreview(rest.coverUrl ?? ''); setShowForm(true); };
