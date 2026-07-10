@@ -15332,3 +15332,9 @@ body.dark .pc-image .promo-dismiss { color: var(--muted) !important; }
 }
 .account-menu-birthday:hover { filter: brightness(1.05); }
 .account-menu-birthday .account-menu-icon { font-size: 17px; }
+.bday-bonus-badge {
+  display: inline-flex; align-items: center; gap: 8px; margin: 12px auto 4px;
+  padding: 10px 18px; border-radius: 999px; font-weight: 800; font-size: 0.95rem;
+  color: #7a4d00; background: linear-gradient(135deg, #ffe08a, #ffb347);
+  box-shadow: 0 4px 14px rgba(255,150,40,0.35);
+}

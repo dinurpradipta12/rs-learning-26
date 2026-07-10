@@ -2853,6 +2853,7 @@ type BirthdayWishRow = { id: string; birthday_username: string; birthday_year: n
 // "inbox letter" berisi kumpulan ucapan yang bisa dibaca kapan pun.
 function BirthdayCenter({ session }: { session: AppSession | null }) {
   const [queue, setQueue] = useState<BirthdayEventRow[]>([]);
+  const [selfBirthday, setSelfBirthday] = useState<BirthdayEventRow | null>(null);
   const [msg, setMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -2875,8 +2876,11 @@ function BirthdayCenter({ session }: { session: AppSession | null }) {
         .gte('created_at', startOfToday.toISOString())
         .order('created_at', { ascending: true });
       const rows = (data ?? []) as BirthdayEventRow[];
-      // Jangan tampilkan popup perayaan diri sendiri, atau yang sudah ditanggapi.
+      // Popup perayaan untuk user LAIN (kirim ucapan).
       setQueue(rows.filter((r) => r.username !== session.username && !localStorage.getItem(seenKey(r))));
+      // Popup ucapan untuk DIRI SENDIRI (selamat + bonus koin).
+      const mine = rows.find((r) => r.username === session.username);
+      setSelfBirthday(mine && !localStorage.getItem(`birthday_self_seen_${session.username}_${mine.year}`) ? mine : null);
       const { data: prof } = await supabase.from('user_profiles').select('avatar_path').eq('username', session.username).maybeSingle();
       myAvatarPath.current = (prof as { avatar_path?: string | null } | null)?.avatar_path ?? null;
     })();
@@ -2956,8 +2960,31 @@ function BirthdayCenter({ session }: { session: AppSession | null }) {
   }, {});
   const inboxYears = Object.keys(wishesByYear).map(Number).sort((a, b) => b - a);
 
+  const dismissSelfBirthday = () => {
+    if (selfBirthday && session) localStorage.setItem(`birthday_self_seen_${session.username}_${selfBirthday.year}`, '1');
+    setSelfBirthday(null);
+  };
+
   return (
     <>
+      {selfBirthday && createPortal(
+        <div className="bday-overlay" onClick={dismissSelfBirthday}>
+          <div className="bday-modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div className="bday-confetti">🎉🎂🎈</div>
+            <h3 className="bday-title">Selamat Ulang Tahun, {selfBirthday.display_name ?? selfBirthday.username}! 🥳</h3>
+            <p className="bday-sub">Semoga panjang umur, sehat, dan makin sukses. Dari keluarga Ruang Sosmed 💛</p>
+            {selfBirthday.bonus_amount > 0 && (
+              <div className="bday-bonus-badge"><CoinIcon size={18} /> +{selfBirthday.bonus_amount} Ruang Coin bonus ulang tahun!</div>
+            )}
+            <p className="bday-sub" style={{ fontSize: '0.82rem', marginTop: 10 }}>Cek inbox ucapan 💌 untuk membaca doa dari member lain.</p>
+            <div className="bday-actions">
+              <button type="button" className="bday-btn-send" style={{ flex: 1 }} onClick={dismissSelfBirthday}>Terima kasih! 🎈</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {current && createPortal(
         <div className="bday-overlay">
           <div className="bday-modal" onClick={(e) => e.stopPropagation()}>
