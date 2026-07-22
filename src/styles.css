@@ -742,8 +742,10 @@ p {
 
 .shell {
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 100px clamp(32px, 4vw, 72px) 28px clamp(32px, 4vw, 72px);
 }
 
@@ -13572,6 +13574,7 @@ body.dark .update-toast {
   display: flex;
   flex-direction: row;
   height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
   margin: -20px -24px -24px;
   overflow: hidden;
   border-top: 1px solid var(--line);
@@ -15096,6 +15099,60 @@ body.dark .notif-toast--blue { background: #111a2e; border-color: #1e3a8a; }
 .reset-pw-copy:hover { transform: translateY(-1px); }
 .reset-pw-copy.copied { background: #16a34a; }
 body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
+
+/* Mobile/tablet scroll safety: avoid fixed 100vh traps on browser chrome resize. */
+@media (max-width: 1024px) {
+  html,
+  body {
+    min-height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .shell {
+    min-height: 100svh;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .forum-detail {
+    height: auto;
+    min-height: min(520px, calc(100svh - 128px));
+    max-height: none;
+    overflow: visible;
+  }
+
+  .forum-detail-scroll {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .lpb-shell {
+    height: auto;
+    min-height: calc(100svh - 32px);
+    flex-direction: column;
+    overflow: visible;
+    margin: 0;
+  }
+
+  .lpb-preview {
+    min-height: 60svh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .lpb-sidebar {
+    width: 100%;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .lpb-preview-viewport {
+    min-height: 60svh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
 
 /* ── Kurikulum lesson dengan cover (gaya Netflix) ── */
 .lms-lesson-btn { gap: 12px; align-items: center; }
