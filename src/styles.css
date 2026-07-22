@@ -15154,6 +15154,429 @@ body.dark .reset-pw-code { background: rgba(92,110,248,0.16); }
   }
 }
 
+/* Phone-only landing layout. Tablet and desktop keep the existing layout. */
+@media (max-width: 600px) {
+  .landing-shell {
+    background: linear-gradient(180deg, #eaf1ff 0%, #f7faff 38%, #ffffff 100%);
+  }
+
+  .landing {
+    width: 100%;
+    padding: 0 16px;
+  }
+
+  .landing-nav {
+    padding: 16px 0 10px;
+    gap: 12px;
+  }
+
+  .landing-nav-logo {
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  .landing-nav-actions {
+    gap: 8px;
+  }
+
+  .landing-login-link,
+  .landing-nav-actions .landing-cta.small {
+    min-height: 40px;
+    padding: 8px 15px;
+    font-size: 0.86rem;
+    box-shadow: 0 8px 20px rgba(47, 107, 255, 0.22);
+  }
+
+  .landing-hero {
+    max-width: none;
+    padding: 42px 0 34px;
+    text-align: left;
+  }
+
+  .landing-title {
+    max-width: 11ch;
+    margin-bottom: 18px;
+    font-size: clamp(2.3rem, 11vw, 2.85rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+  }
+
+  .landing-sub {
+    max-width: none;
+    margin: 0 0 24px;
+    font-size: 0.98rem;
+    line-height: 1.62;
+  }
+
+  .landing-cta {
+    min-height: 48px;
+    white-space: normal;
+  }
+
+  .landing-cta-hero,
+  .landing-final .landing-cta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .landing-block {
+    padding: 38px 0;
+  }
+
+  .landing-h2,
+  .landing-h2.center {
+    max-width: none;
+    margin-bottom: 24px;
+    text-align: left;
+    font-size: clamp(1.65rem, 8vw, 2.05rem);
+    line-height: 1.12;
+  }
+
+  .landing-pain-section {
+    text-align: left;
+  }
+
+  .landing-pain-eyebrow {
+    margin-bottom: 8px;
+    font-size: 0.74rem;
+  }
+
+  .landing-pain-grid,
+  .landing-pricing-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 22px;
+  }
+
+  .landing-pain-card,
+  .landing-step-card,
+  .landing-price-card,
+  .landing-faq details {
+    border-radius: 16px;
+  }
+
+  .landing-pain-card {
+    padding: 20px;
+  }
+
+  .landing-pain-icon {
+    font-size: 1.55rem;
+  }
+
+  .landing-feature {
+    gap: 18px;
+    margin-bottom: 34px;
+  }
+
+  .landing-feature-text h3 {
+    font-size: clamp(1.35rem, 7vw, 1.75rem);
+    line-height: 1.16;
+  }
+
+  .landing-feature-text p {
+    max-width: none;
+    font-size: 0.95rem;
+    line-height: 1.62;
+  }
+
+  .landing-feature-text .landing-cta.small {
+    width: 100%;
+  }
+
+  .landing-feature-media {
+    border-radius: 18px;
+  }
+
+  .landing-feature-media,
+  .landing-media-empty.tall {
+    aspect-ratio: 4 / 3;
+  }
+
+  .landing-pricing-sub {
+    margin: -10px 0 24px;
+    text-align: left;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  .landing-price-card {
+    padding: 24px 20px 20px;
+    text-align: left;
+  }
+
+  .landing-price-card.featured {
+    transform: none;
+  }
+
+  .landing-price-badge {
+    left: 20px;
+    transform: none;
+  }
+
+  .landing-price-coins {
+    font-size: 1.65rem;
+  }
+
+  .landing-faq {
+    padding: 38px 0;
+  }
+
+  .landing-faq details {
+    padding: 15px 16px;
+  }
+
+  .landing-faq summary {
+    padding-right: 24px;
+    font-size: 0.95rem;
+    line-height: 1.42;
+  }
+
+  .landing-final {
+    margin: 18px 0 12px;
+    padding: 34px 20px;
+    border-radius: 20px;
+    text-align: left;
+  }
+
+  .landing-final p {
+    font-size: 0.96rem;
+    line-height: 1.6;
+  }
+
+  .landing-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 22px 0 34px;
+  }
+
+  .shell:not(.landing-shell):not(.auth-shell) {
+    padding: 96px 16px calc(112px + env(safe-area-inset-bottom, 0px));
+    min-height: 100svh;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  html,
+  body,
+  .shell,
+  .layout,
+  .db-root {
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
+  }
+
+  .layout,
+  .page,
+  .db-root,
+  .db-layout,
+  .db-main,
+  .db-sidebar {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .layout,
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .db-layout {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .db-sidebar {
+    flex-shrink: 1;
+  }
+
+  .db-root,
+  .db-main {
+    gap: 16px;
+  }
+
+  .db-banner-wrap {
+    margin-bottom: 16px;
+  }
+
+  .db-card,
+  .db-hero {
+    border-radius: 18px;
+  }
+
+  .db-card {
+    padding: 18px 16px;
+    gap: 12px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .db-card-head {
+    min-width: 0;
+  }
+
+  .db-card-head .eyebrow {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .db-card-head .mini-link {
+    max-width: 76px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .db-card-sub {
+    display: none;
+  }
+
+  .db-tutorial-video {
+    margin: 0;
+    border-radius: 12px;
+  }
+
+  .db-grid {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .db-event-row {
+    align-items: flex-start;
+  }
+
+  .db-event-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .db-event-info strong,
+  .db-thread-title,
+  .db-qna-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .db-event-info strong,
+  .db-qna-title {
+    -webkit-line-clamp: 2;
+  }
+
+  .db-thread-title {
+    -webkit-line-clamp: 1;
+  }
+
+  .db-event-info span:not(.db-event-cat),
+  .db-thread-replies {
+    display: none;
+  }
+
+  .db-event-btn {
+    max-width: 92px;
+    padding: 5px 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .db-event-list .db-event-row:nth-child(n + 3),
+  .db-thread-list .db-thread-row:nth-child(n + 3),
+  .db-asset-list .db-asset-row:nth-child(n + 4) {
+    display: none;
+  }
+
+  .db-qna-card {
+    padding: 12px;
+  }
+
+  .db-qna-card-top {
+    align-items: flex-start;
+  }
+
+  .db-qna-count {
+    display: none;
+  }
+
+  .forum-category-filters {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .forum-thread-list {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .forum-category-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .forum-filter-btn {
+    flex: 0 0 auto;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+  }
+
+  .forum-thread-card {
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  .forum-thread-card-author {
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .forum-thread-author-name,
+  .forum-thread-card-time,
+  .forum-category-tag {
+    max-width: 100%;
+  }
+
+  .forum-thread-title,
+  .forum-thread-excerpt {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .forum-thread-title {
+    -webkit-line-clamp: 2;
+  }
+
+  .forum-thread-excerpt {
+    -webkit-line-clamp: 2;
+    margin-bottom: 8px;
+  }
+
+  .forum-card-last-reply,
+  .forum-avatar-stack,
+  .forum-thread-stats {
+    display: none;
+  }
+
+  .forum-thread-footer {
+    gap: 8px;
+  }
+
+  .forum-qna-banner {
+    font-size: 0.72rem;
+    line-height: 1.35;
+    white-space: normal;
+  }
+}
+
 /* ── Kurikulum lesson dengan cover (gaya Netflix) ── */
 .lms-lesson-btn { gap: 12px; align-items: center; }
 .lms-lesson-num {
