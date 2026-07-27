@@ -18850,7 +18850,12 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
     const cost = unlockTarget.coin_cost ?? 10;
     // Unlock atomik di server (potong coin + catat unlock dalam satu transaksi).
     // Mencegah bypass paywall lewat penulisan user_asset_unlocks langsung.
-    const token = currentSessionToken();
+    const token = session.token ?? currentSessionToken();
+    if (!token) {
+      setUnlockError('Sesi kamu belum punya token keamanan. Logout lalu login ulang dulu, kemudian coba buka asset lagi.');
+      setUnlockLoading(false);
+      return;
+    }
     const { data, error } = await supabase.rpc('unlock_asset', {
       p_token: token,
       p_asset_id: unlockTarget.id,
@@ -18860,8 +18865,11 @@ function AssetManagerPage({ canEdit, session, userPerks }: { canEdit: boolean; s
       setUnlockedIds(prev => new Set([...prev, unlockTarget.id]));
       setUnlockTarget(null);
     } else {
+      const missingRpc = error?.message?.includes('Could not find the function public.unlock_asset');
       setUnlockError(
-        result.error ?? error?.message ?? `Ruang Coin tidak cukup. Kamu punya ${result.balance ?? 0} coin, butuh ${cost} coin.`,
+        result.error
+          ?? (missingRpc ? 'Fungsi server unlock_asset belum terpasang di Supabase. Jalankan migration 20260710_lock_asset_unlocks.sql dulu.' : error?.message)
+          ?? `Ruang Coin tidak cukup. Kamu punya ${result.balance ?? 0} coin, butuh ${cost} coin.`,
       );
     }
     setUnlockLoading(false);
