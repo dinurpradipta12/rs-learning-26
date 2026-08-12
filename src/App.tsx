@@ -1366,6 +1366,22 @@ function currentSessionToken(): string | undefined {
   return readStoredSession()?.token;
 }
 
+const appSessionExpiredEvent = 'rs:session-expired';
+
+type AppRpcError = { code?: string; message?: string } | null;
+type AppRpcResult = { ok?: boolean; error?: string } | null;
+
+function isAppSessionExpired(error: AppRpcError, result?: AppRpcResult): boolean {
+  return result?.error === 'SESSION_EXPIRED'
+    || (error?.code === '42501' && /access denied/i.test(error.message ?? ''));
+}
+
+function notifyAppSessionExpired() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(appSessionExpiredEvent));
+  }
+}
+
 // Simpan konten admin (learning_hub_content) lewat RPC ber-verifikasi role,
 // bukan upsert langsung — mencegah user biasa memanipulasi setting (mis.
 // jumlah reward coin). Mengembalikan { error } agar kompatibel dengan
@@ -1737,7 +1753,11 @@ function persistLocalAuthUsers(users: LocalAuthUser[]) {
 }
 
 function isMissingSupabaseFunctionError(error: unknown, functionName: string) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error
+    ? error.message
+    : (typeof error === 'object' && error !== null && 'message' in error)
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error);
 
   return (
     message.includes(`Could not find the function public.${functionName}`) ||
@@ -3160,26 +3180,79 @@ function App() {
     }
   }, [session?.username]);
 
-  // Validasi session saat app load — paksa logout jika user sudah dihapus / nonaktif
+  // Validasi sesi server saat app dibuka, saat tab kembali aktif, dan berkala.
+  // RPC refresh memakai sliding expiry 30 hari. Token yang memang sudah
+  // kedaluwarsa tidak pernah dihidupkan lagi: user diminta login satu kali.
   useEffect(() => {
     if (!session) return;
+    let active = true;
+
     const forceLogout = (msg: string) => {
+      if (!active) return;
       clearStoredSession();
+      setCheckinModal(null);
+      setConfirmContext(null);
       setSession(null);
       window.location.hash = '#login';
       setKickedMessage(msg);
     };
-    supabase
-      .from('app_users')
-      .select('username, is_active')
-      .eq('username', session.username)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) forceLogout('Akun kamu telah dihapus oleh admin.');
-        else if (!data.is_active) forceLogout('Akun kamu telah dinonaktifkan oleh admin.');
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    const validateAccount = async () => {
+      const { data } = await supabase
+        .from('app_users')
+        .select('username, is_active')
+        .eq('username', session.username)
+        .maybeSingle();
+      if (!active) return;
+      if (!data) forceLogout('Akun kamu telah dihapus oleh admin.');
+      else if (!data.is_active) forceLogout('Akun kamu telah dinonaktifkan oleh admin.');
+    };
+
+    const refreshSession = async () => {
+      const token = session.token ?? currentSessionToken();
+      if (!token) {
+        forceLogout('Sesi keamanan kamu belum tersedia. Silakan login kembali.');
+        return;
+      }
+
+      const { data, error } = await supabase.rpc('refresh_app_session', { p_token: token });
+      const result = data as AppRpcResult;
+      if (!active) return;
+
+      // Aman saat frontend sempat terdeploy lebih dulu daripada migration:
+      // tetap jalankan guard akun lama dan jangan memutus sesi yang valid.
+      if (error && isMissingSupabaseFunctionError(error, 'refresh_app_session')) {
+        await validateAccount();
+        return;
+      }
+
+      if (isAppSessionExpired(error, result) || (!error && result?.ok === false)) {
+        forceLogout('Sesi kamu telah berakhir. Silakan login kembali sekali untuk melanjutkan.');
+        return;
+      }
+
+      if (!error) await validateAccount();
+    };
+
+    const handleExpired = () => {
+      forceLogout('Sesi kamu telah berakhir. Silakan login kembali sekali untuk melanjutkan.');
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshSession();
+    };
+
+    window.addEventListener(appSessionExpiredEvent, handleExpired);
+    document.addEventListener('visibilitychange', handleVisibility);
+    void refreshSession();
+    const refreshInterval = window.setInterval(() => void refreshSession(), 6 * 60 * 60 * 1000);
+
+    return () => {
+      active = false;
+      window.removeEventListener(appSessionExpiredEvent, handleExpired);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearInterval(refreshInterval);
+    };
+  }, [session?.username, session?.token]);
 
   // Realtime: force logout jika user yang sedang login dihapus saat sesi aktif
   useEffect(() => {
@@ -6531,16 +6604,51 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [isLessonsLoading, setIsLessonsLoading] = useState(true);
   const paidVideosKey = `paid_videos_${sessionUsername}`;
-  const chargedVideos = useRef<Set<string>>(new Set(
+  const [paidVideoIds, setPaidVideoIds] = useState<Set<string>>(() => new Set(
     (() => { try { return JSON.parse(localStorage.getItem(paidVideosKey) ?? '[]') as string[]; } catch { return []; } })()
   ));
+  const paidVideoIdsRef = useRef(paidVideoIds);
+  const [videoUnlocksLoading, setVideoUnlocksLoading] = useState(true);
+  const [videoUnlockingId, setVideoUnlockingId] = useState<string | null>(null);
+  const [videoUnlockError, setVideoUnlockError] = useState('');
   const markVideoPaid = (lessonId: string) => {
-    chargedVideos.current.add(lessonId);
-    try {
-      const existing = JSON.parse(localStorage.getItem(paidVideosKey) ?? '[]') as string[];
-      if (!existing.includes(lessonId)) localStorage.setItem(paidVideosKey, JSON.stringify([...existing, lessonId]));
-    } catch { /* ignore */ }
+    if (paidVideoIdsRef.current.has(lessonId)) return;
+    const next = new Set(paidVideoIdsRef.current);
+    next.add(lessonId);
+    paidVideoIdsRef.current = next;
+    setPaidVideoIds(next);
+    try { localStorage.setItem(paidVideosKey, JSON.stringify([...next])); } catch { /* ignore */ }
   };
+
+  useEffect(() => {
+    let active = true;
+    const token = currentSessionToken();
+    if (!token) {
+      setVideoUnlocksLoading(false);
+      return () => { active = false; };
+    }
+
+    void supabase.rpc('get_my_video_unlocks', { p_token: token }).then(({ data, error }) => {
+      if (!active) return;
+      const result = data as { ok?: boolean; lessonKeys?: string[]; error?: string } | null;
+      if (isAppSessionExpired(error, result)) {
+        notifyAppSessionExpired();
+      } else if (!error && result?.ok && Array.isArray(result.lessonKeys)) {
+        setPaidVideoIds((previous) => {
+          const next = new Set(previous);
+          for (const lessonKey of result.lessonKeys ?? []) next.add(lessonKey);
+          paidVideoIdsRef.current = next;
+          try { localStorage.setItem(paidVideosKey, JSON.stringify([...next])); } catch { /* ignore */ }
+          return next;
+        });
+      } else if (error && !isMissingSupabaseFunctionError(error, 'get_my_video_unlocks')) {
+        console.warn('video unlocks load failed', error.message);
+      }
+      setVideoUnlocksLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [paidVideosKey, sessionUsername]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [youtubeUnlocked, setYoutubeUnlocked] = useState(() => {
     // if selected lesson was already paid, unlock YouTube immediately
@@ -6621,6 +6729,57 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeChecking, setCodeChecking] = useState(false);
+  const unlockPaidVideo = async (lesson: Lesson): Promise<boolean> => {
+    if (videoUnlockingId) return false;
+    const token = currentSessionToken();
+    if (!token) {
+      setVideoUnlockError('Sesi kamu telah berakhir. Silakan login kembali.');
+      notifyAppSessionExpired();
+      return false;
+    }
+
+    setVideoUnlockingId(lesson.id);
+    setVideoUnlockError('');
+    try {
+      const { data, error } = await supabase.rpc('unlock_video', {
+        p_token: token,
+        p_lesson_key: lesson.id,
+      });
+      const result = data as {
+        ok?: boolean;
+        newBalance?: number;
+        needed?: number;
+        balance?: number;
+        error?: string;
+      } | null;
+
+      if (isAppSessionExpired(error, result)) {
+        setVideoUnlockError('Sesi kamu telah berakhir. Silakan login kembali.');
+        notifyAppSessionExpired();
+        return false;
+      }
+
+      if (error || !result?.ok) {
+        if (result?.error === 'INSUFFICIENT_CREDITS') {
+          onInsufficientCredits('Video Learning', result.needed ?? featureCosts.video_learning, result.balance ?? 0);
+        } else {
+          const missingRpc = error && isMissingSupabaseFunctionError(error, 'unlock_video');
+          setVideoUnlockError(
+            missingRpc
+              ? 'Penyimpanan akses video belum dipasang di server. Jalankan migration 20260812_video_unlocks_session_refresh.sql.'
+              : (result?.error === 'VIDEO_NOT_FOUND' ? 'Video tidak ditemukan di server.' : (error?.message ?? result?.error ?? 'Gagal membuka video. Coba lagi.')),
+          );
+        }
+        return false;
+      }
+
+      markVideoPaid(lesson.id);
+      if (result.newBalance !== undefined) onCreditChange(result.newBalance);
+      return true;
+    } finally {
+      setVideoUnlockingId(null);
+    }
+  };
   const unlockCodeLesson = (lessonId: string) => {
     const next = new Set(codeUnlockedLessons); next.add(lessonId);
     setCodeUnlockedLessons(next);
@@ -6648,24 +6807,22 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   };
   const payCodeLessonWithCoin = () => {
     if (!selectedLesson) return;
-    const lessonId = selectedLesson.id;
+    const lesson = selectedLesson;
+    const lessonId = lesson.id;
     const videoFree = userPerks.credit_exempt || userPerks.free_video;
     if (videoFree || featureCosts.video_learning <= 0) {
       unlockCodeLesson(lessonId);
       return;
     }
+    if (videoUnlocksLoading || videoUnlockingId) return;
     onRequestConfirm({
       feature: 'Video Learning',
       cost: featureCosts.video_learning,
       onConfirm: () => {
-        void deductCredits(sessionUsername, featureCosts.video_learning, `Akses video: ${selectedLesson.title}`, 'video_learning').then((res) => {
-          if (!res.ok) {
-            onInsufficientCredits('Video Learning', res.needed ?? featureCosts.video_learning, res.balance ?? 0);
-          } else {
-            if (res.newBalance !== undefined) onCreditChange(res.newBalance);
-            markVideoPaid(lessonId);
+        void unlockPaidVideo(lesson).then((ok) => {
+          if (ok) {
             unlockCodeLesson(lessonId);
-            void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: lessonId, video_title: selectedLesson.title });
+            void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: lessonId, video_title: lesson.title });
           }
         });
       },
@@ -6675,7 +6832,10 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
   const reviewPopoverRef = useRef<HTMLDivElement | null>(null);
   const selectedLesson =
     materialLessons.find((lesson) => lesson.id === selectedLessonId) ?? materialLessons[0] ?? null;
-  const isCodeLocked = !!selectedLesson?.unlockEventId && !canEdit && !codeUnlockedLessons.has(selectedLesson.id);
+  const isCodeLocked = !!selectedLesson?.unlockEventId
+    && !canEdit
+    && !codeUnlockedLessons.has(selectedLesson.id)
+    && !paidVideoIds.has(selectedLesson.id);
   const selectedLessonIndex = selectedLesson
     ? materialLessons.findIndex((lesson) => lesson.id === selectedLesson.id)
     : -1;
@@ -6970,10 +7130,11 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
 
   useEffect(() => {
     setIsEmbedLoaded(false);
+    setVideoUnlockError('');
     // if this lesson was already paid, or unlocked via event access code, unlock immediately
-    const alreadyPaid = selectedLesson ? (chargedVideos.current.has(selectedLesson.id) || codeUnlockedLessons.has(selectedLesson.id)) : false;
+    const alreadyPaid = selectedLesson ? (paidVideoIds.has(selectedLesson.id) || codeUnlockedLessons.has(selectedLesson.id)) : false;
     setYoutubeUnlocked(alreadyPaid);
-  }, [selectedLesson?.id, selectedLesson?.videoUrl, selectedLessonMedia?.kind, codeUnlockedLessons]);
+  }, [selectedLesson?.id, selectedLesson?.videoUrl, selectedLessonMedia?.kind, codeUnlockedLessons, paidVideoIds]);
 
   const handleReviewSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -7681,11 +7842,21 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                         <div className="event-code-method">
                           <span className="event-code-method-badge">🪙 Tidak ikut event?</span>
                           <p className="event-code-method-desc">Buka rekaman dengan Ruang Coin.</p>
-                          <button type="button" className="button secondary event-code-pay-btn" onClick={() => payCodeLessonWithCoin()}>
+                          <button
+                            type="button"
+                            className="button secondary event-code-pay-btn"
+                            disabled={!(userPerks.credit_exempt || userPerks.free_video || featureCosts.video_learning <= 0) && (videoUnlocksLoading || !!videoUnlockingId)}
+                            onClick={() => payCodeLessonWithCoin()}
+                          >
                             {(userPerks.credit_exempt || userPerks.free_video || featureCosts.video_learning <= 0)
                               ? 'Buka Gratis'
-                              : <>Bayar <CoinIcon size={13} /> {featureCosts.video_learning} Ruang Coin</>}
+                              : videoUnlocksLoading
+                                ? 'Memeriksa akses…'
+                                : videoUnlockingId === selectedLesson.id
+                                  ? 'Memproses…'
+                                  : <>Bayar <CoinIcon size={13} /> {featureCosts.video_learning} Ruang Coin</>}
                           </button>
+                          {videoUnlockError && <p className="event-code-error">{videoUnlockError}</p>}
                         </div>
                       </div>
                     </div>
@@ -7711,30 +7882,27 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                           tabIndex={0}
                           aria-label="Play video"
                           onClick={() => {
-                            const lessonId = selectedLesson.id;
+                            const lesson = selectedLesson;
+                            const lessonId = lesson.id;
                             const videoFree = userPerks.credit_exempt || userPerks.free_video;
-                            if (!canEdit && !chargedVideos.current.has(lessonId) && featureCosts.video_learning > 0 && !videoFree) {
+                            if (videoUnlocksLoading || videoUnlockingId) return;
+                            if (!canEdit && !paidVideoIdsRef.current.has(lessonId) && featureCosts.video_learning > 0 && !videoFree) {
                               onRequestConfirm({
                                 feature: 'Video Learning',
                                 cost: featureCosts.video_learning,
                                 onConfirm: () => {
-                                  markVideoPaid(lessonId);
-                                  void deductCredits(sessionUsername, featureCosts.video_learning, `Akses video: ${selectedLesson.title}`, 'video_learning')
-                                    .then((res) => {
-                                      if (!res.ok) {
-                                        chargedVideos.current.delete(lessonId);
-                                        onInsufficientCredits('Video Learning', res.needed ?? featureCosts.video_learning, res.balance ?? 0);
-                                      } else {
-                                        if (res.newBalance !== undefined) onCreditChange(res.newBalance);
-                                        setYoutubeUnlocked(true);
-                                        void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: selectedLesson.id, video_title: selectedLesson.title });
-                                      }
+                                  void unlockPaidVideo(lesson).then((ok) => {
+                                    if (ok) {
+                                      setYoutubeUnlocked(true);
+                                      void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: lesson.id, video_title: lesson.title });
+                                    }
                                     });
                                 },
                               });
                             } else {
+                              setVideoUnlockError('');
                               setYoutubeUnlocked(true);
-                              void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: selectedLesson.id, video_title: selectedLesson.title });
+                              void supabase.from('video_views').insert({ username: sessionUsername, lesson_key: lesson.id, video_title: lesson.title });
                             }
                           }}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
@@ -7748,15 +7916,18 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                           />
                           {(() => {
                             const videoFreeCheck = userPerks.credit_exempt || userPerks.free_video;
-                            if (!canEdit && !videoFreeCheck && featureCosts.video_learning > 0) {
+                            const needsPaidAccess = !canEdit && !videoFreeCheck && featureCosts.video_learning > 0;
+                            if (needsPaidAccess) {
                               return (
                                 <div className="video-lock-overlay">
                                   <div className="video-lock-badge">
-                                    <span className="video-lock-icon">🔒</span>
-                                    <span className="video-lock-cost"><CoinIcon size={13} /> {featureCosts.video_learning} Ruang Coin</span>
+                                    <span className="video-lock-icon">{videoUnlocksLoading ? '⏳' : '🔒'}</span>
+                                    <span className="video-lock-cost">
+                                      {videoUnlocksLoading ? 'Memeriksa akses…' : <><CoinIcon size={13} /> {featureCosts.video_learning} Ruang Coin</>}
+                                    </span>
                                   </div>
-                                  <div className="video-lock-play">▶ Putar Video</div>
-                                  <p className="video-lock-hint">Ruang Coin akan dipotong saat video dimulai</p>
+                                  <div className="video-lock-play">{videoUnlockingId === selectedLesson.id ? 'Memproses…' : '▶ Putar Video'}</div>
+                                  <p className="video-lock-hint">{videoUnlockError || 'Ruang Coin hanya dipotong satu kali untuk akses permanen'}</p>
                                 </div>
                               );
                             }
@@ -7775,22 +7946,22 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                         poster={posterForLesson(selectedLesson.title)}
                         src={selectedLessonMedia.url}
                         onPlay={() => {
-                          const lessonId = selectedLesson.id;
+                          const lesson = selectedLesson;
+                          const lessonId = lesson.id;
                           const videoFree = userPerks.credit_exempt || userPerks.free_video;
-                          if (!canEdit && !chargedVideos.current.has(lessonId) && featureCosts.video_learning > 0 && !videoFree) {
+                          const needsPaidAccess = !canEdit && !paidVideoIdsRef.current.has(lessonId) && featureCosts.video_learning > 0 && !videoFree;
+                          if (needsPaidAccess && (videoUnlocksLoading || videoUnlockingId)) {
+                            videoRef.current?.pause();
+                            return;
+                          }
+                          if (needsPaidAccess) {
                             videoRef.current?.pause();
                             onRequestConfirm({
                               feature: 'Video Learning',
                               cost: featureCosts.video_learning,
                               onConfirm: () => {
-                                markVideoPaid(lessonId);
-                                void deductCredits(sessionUsername, featureCosts.video_learning, `Akses video: ${selectedLesson.title}`, 'video_learning')
-                                  .then((res) => {
-                                    if (!res.ok) {
-                                      chargedVideos.current.delete(lessonId);
-                                      onInsufficientCredits('Video Learning', res.needed ?? featureCosts.video_learning, res.balance ?? 0);
-                                    } else {
-                                      if (res.newBalance !== undefined) onCreditChange(res.newBalance);
+                                void unlockPaidVideo(lesson).then((ok) => {
+                                    if (ok) {
                                       setIsVideoPlaying(true);
                                       setIsTheaterMode(true);
                                       void videoRef.current?.play();
@@ -7810,17 +7981,19 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
                       />
                       {!isVideoPlaying && (() => {
                         const videoFreeCheck = userPerks.credit_exempt || userPerks.free_video;
-                        const isLocked = !canEdit && !videoFreeCheck && featureCosts.video_learning > 0 && !chargedVideos.current.has(selectedLesson.id);
+                        const isLocked = !canEdit && !videoFreeCheck && featureCosts.video_learning > 0 && !paidVideoIds.has(selectedLesson.id);
                         return (
                           <div className="video-overlay" aria-hidden="true">
                             {isLocked ? (
                               <div className="video-lock-overlay">
                                 <div className="video-lock-badge">
-                                  <span className="video-lock-icon">🔒</span>
-                                  <span className="video-lock-cost"><CoinIcon size={13} /> {featureCosts.video_learning} Ruang Coin</span>
+                                  <span className="video-lock-icon">{videoUnlocksLoading ? '⏳' : '🔒'}</span>
+                                  <span className="video-lock-cost">
+                                    {videoUnlocksLoading ? 'Memeriksa akses…' : <><CoinIcon size={13} /> {featureCosts.video_learning} Ruang Coin</>}
+                                  </span>
                                 </div>
-                                <div className="video-lock-play">▶ Putar Video</div>
-                                <p className="video-lock-hint">Ruang Coin akan dipotong saat video dimulai</p>
+                                <div className="video-lock-play">{videoUnlockingId === selectedLesson.id ? 'Memproses…' : '▶ Putar Video'}</div>
+                                <p className="video-lock-hint">{videoUnlockError || 'Ruang Coin hanya dipotong satu kali untuk akses permanen'}</p>
                               </div>
                             ) : (
                               <div className="play-button">▶</div>
@@ -7842,7 +8015,7 @@ function LmsPage({ canEdit, sessionUsername, sessionDisplayName, featureCosts, u
               {/* Action bar */}
               <div className="lms-action-bar">
                 <div className="lms-action-bar-left">
-                  {(canEdit || (userPerks.credit_exempt || userPerks.free_video) || featureCosts.video_learning === 0 || chargedVideos.current.has(selectedLesson.id)) && (
+                  {(canEdit || (userPerks.credit_exempt || userPerks.free_video) || featureCosts.video_learning === 0 || paidVideoIds.has(selectedLesson.id)) && (
                     <button type="button" className="lms-bar-btn" onClick={markCurrentLessonComplete} disabled={currentLessonCompleted}>
                       <span className={`lms-bar-icon ${currentLessonCompleted ? 'done' : ''}`}>{currentLessonCompleted ? '✓' : '♡'}</span>
                       {currentLessonCompleted ? 'Selesai' : 'Tandai Selesai'}
@@ -12409,10 +12582,21 @@ function DailyCheckinModal({ username, dailyCoins, day7, onCoinChange, onFeature
     const isDay7 = d === 7;
     // Streak, jumlah coin, & bonus fitur hari ke-7 dihitung & ditulis SERVER.
     const token = currentSessionToken();
-    if (!token) { setClaiming(false); return; }
+    if (!token) {
+      setClaimError('Sesi kamu telah berakhir. Silakan login kembali.');
+      setClaiming(false);
+      notifyAppSessionExpired();
+      return;
+    }
     setClaimError('');
     const { data, error } = await supabase.rpc('claim_daily_checkin', { p_token: token });
     const res = data as { ok?: boolean; newBalance?: number; day?: number; coins?: number; error?: string } | null;
+    if (isAppSessionExpired(error, res)) {
+      setClaimError('Sesi kamu telah berakhir. Silakan login kembali.');
+      setClaiming(false);
+      notifyAppSessionExpired();
+      return;
+    }
     if (error || !res?.ok) {
       setClaimError(
         error?.message?.includes('claim_daily_checkin')
